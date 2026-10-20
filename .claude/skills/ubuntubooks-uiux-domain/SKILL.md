@@ -70,6 +70,10 @@ UI/UX 에이전트가 만드는 결과물(도메인 지식, 페르소나, 리뷰
 
 ## 2. 파일 구조
 
+경로 기준은 `docs/PIPELINE.md`(산출물 레지스트리)다. 아래 파일의 ID는 `UX-*`이고, 다른 에이전트는 그 ID로 읽는다. 파일을 추가·이름 변경하면 레지스트리를 같은 커밋에서 고친다.
+위 그림의 번호와 다른 스킬의 단계 이름은 이렇게 대응한다: ① = `pm-agent` + `architect-agent`, ② = `db-agent`, ③ = `backend-agent`, ④ = `frontend-impl`, ⑤ = `qa-agent`.
+검수할 산출물은 레지스트리의 브리핑 경로에서 읽는다: ④ `docs/05-frontend/briefing-<TKT>.md`, ⑤ `docs/06-qa/briefing-*.md`, ① `docs/01-pm/`, `docs/02-arch/`.
+
 ```
 docs/uiux/
 ├── domain/

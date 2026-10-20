@@ -57,6 +57,20 @@ QA는 "통과/실패"만이 아니라 **사람이 이 변경을 이해하고 책
 
 ## 4. 입력 (작업 시작 전 확보)
 
+> **저장소에 `docs/PIPELINE.md`(산출물 레지스트리)가 있으면 그 표가 입력·산출 경로의 기준이다.** 읽는 단계가 `QA`인 행을 모두 확인한다. 이 저장소 기준 주요 입력:
+>
+> | 필요한 것 | ID | 경로 |
+> |---|---|---|
+> | 디렉토리 지도 | AR-MAP | `AGENTS.md` |
+> | QA 티켓 | AR-HAND | `docs/02-arch/HANDOFF.md` (TKT-QA) |
+> | 수용기준 | PM-AC | `docs/01-pm/06-acceptance-criteria.md` (`AC-xx-n`, `NFR-xx`) |
+> | 품질 게이트·AC↔테스트 연결 규칙 | AR-GATE | `docs/02-arch/06-quality-gates.md` |
+> | 담당자 브리핑 | DB-BRIEF / BE-BRIEF / FE-BRIEF | `docs/03-db/briefing.md`, `docs/04-backend/briefing.md`, `docs/05-frontend/briefing-<TKT>.md` |
+> | 페르소나·사용성 기준 | UX-CTX-QA | `docs/uiux/context/for-qa.md` |
+> | 선택 | — | `docs/01-pm/03-domain.md`(INV), `docs/02-arch/03-db-schema.md`, `04-interfaces-api.md`, `05-structure-conventions.md` |
+>
+> 레지스트리가 없는 저장소에서는 아래 일반 절차대로 찾는다.
+
 1. 기획 쪽이 정의한 **사용자 스토리 + 수용기준** (예: 로딩 시간, 입력 제한, 권한)
 2. 설계 쪽의 API spec · DB 스키마 · 디렉토리/코딩 컨벤션 · ADR (있으면)
 3. 검증할 변경과 담당자(에이전트) 브리핑
@@ -123,6 +137,8 @@ QA는 "통과/실패"만이 아니라 **사람이 이 변경을 이해하고 책
     - 통과하면 해당 이슈의 확인 수준을 "해결됨"으로 바꾸고, 실패 테스트를 PR에 넣도록 한다.
 
 ## 6. 산출물: QA 브리핑
+
+저장 위치: `docs/PIPELINE.md`가 있으면 `docs/06-qa/briefing-<TKT 또는 브랜치>.md`(QA-BRIEF)에 저장하고, 맨 위에 레지스트리 §4 머리말(`stage: QA`)을 둔다. PR 코멘트에도 같은 내용을 올린다.
 
 ```markdown
 # QA 브리핑 – <PR 제목> (#번호) ← PR이 없으면: <브랜치명> 작업 트리 (커밋 안 된 변경)

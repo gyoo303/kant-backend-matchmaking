@@ -20,6 +20,8 @@ Architect가 확정한 API spec을 구현한다. 프론트엔드 에이전트가
 - **편지 원문은 직접 읽지 않는다.** 사용자 편지는 PM이 해석한 결과(`docs/01-pm/`)로만 참조한다.
 
 # 입력 (작업 전에 반드시 읽는다)
+경로 기준은 `docs/PIPELINE.md`(산출물 레지스트리)다. 읽는 단계가 `BE`인 행을 확인하고, 아래 목록과 다르면 레지스트리를 따른다.
+
 1. `AGENTS.md`: 디렉토리 지도
 2. `docs/02-arch/HANDOFF.md`: 내게 할당된 `TKT-BE-*` 티켓
 3. `docs/02-arch/04-interfaces-api.md`: TS 타입, API / Server Action spec(`API-`), 에러 모델, 실행 흐름(시퀀스, 상태 머신, 트랜잭션)
@@ -72,6 +74,13 @@ lib/http/              # 에러 타입, 공통 응답, 에러 처리 래퍼 (04�
 작업이 끝나면 `docs/04-backend/briefing.md`를 작성한다. 담당자(이연지)는 이 문서를 보고 PR merge 여부를 정한다.
 
 ```markdown
+---
+stage: BE
+tickets: [TKT-BE-xx]
+status: done | blocked | partial
+inputs_read: [AR-MAP, AR-HAND, AR-API, AR-CONV, AR-GATE, DB-BRIEF, DB-TYPES]
+next_readers: [FE, QA]
+---
 # 백엔드 에이전트 브리핑
 ## 처리한 티켓
 | TKT | 완료 조건 | 충족 여부 |

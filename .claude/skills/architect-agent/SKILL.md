@@ -50,6 +50,8 @@ description: 소프트웨어 팩토리의 2단계 Architect 에이전트. PM 에
 
 **산출물**: `docs/02-arch/` (단, `AGENTS.md`는 저장소 루트)
 
+경로 기준은 `docs/PIPELINE.md`(산출물 레지스트리)다. 아래 파일을 추가·이름 변경하면 레지스트리의 해당 행(`AR-*`)을 같은 커밋에서 고친다.
+
 | 파일 | 내용 | 태스크 |
 |---|---|---|
 | `01-drivers.md` | 아키텍처 드라이버: 제약, 품질 속성 우선순위, 핵심 리스크 | A1 |
@@ -153,7 +155,7 @@ description: 소프트웨어 팩토리의 2단계 Architect 에이전트. PM 에
   6. 주석 처리된 옛 코드, 쓰지 않는 파일 남기기 (이력은 Git에 맡긴다)
   7. 기능 변경과 구조 리팩토링을 한 커밋에 섞기
   8. 도메인 함수 안에서 `new Date()`, `Math.random()`, `fetch()`, DB 쿼리 직접 호출
-- **AGENTS.md** (저장소 루트, ≤60줄): 디렉토리별 책임 1줄, 주요 진입 파일, "이 작업은 이 폴더만 본다" 표(DB/Backend/Frontend/QA별), 설계 문서 위치. 하위 에이전트는 파일 전체 탐색 대신 이 지도부터 읽는다. 구조가 바뀌면 같은 커밋에서 갱신한다.
+- **AGENTS.md** (저장소 루트, ≤60줄): 맨 위의 Next.js 자동 생성 블록(`next dev`가 다시 씀)은 지우거나 고치지 않고, 그 **아래**에 `## 디렉토리 지도` 섹션으로 쓴다. 내용: 디렉토리별 책임 1줄, 주요 진입 파일, "이 작업은 이 폴더만 본다" 표(DB/Backend/Frontend/QA별), 설계 문서 위치. 하위 에이전트는 파일 전체 탐색 대신 이 지도부터 읽는다. 구조가 바뀌면 같은 커밋에서 갱신한다.
 - `.gitignore`에 `node_modules`, `.next`, `.env*`(단 `.env.example` 제외), 빌드 산출물, Supabase 로컬 임시 파일을 포함한다(KANT-C16). 필요한 환경변수는 `.env.example`에 이름과 용도만 나열한다.
 
 ### A7. 품질 게이트 & 테스트 전략
@@ -184,6 +186,15 @@ description: 소프트웨어 팩토리의 2단계 Architect 에이전트. PM 에
   - 하지 말 것: 스키마 임의 변경 (변경 필요 시 Architect에 질문)
   ```
   - 티켓은 1~2시간 단위로 쪼갠다. 티켓 간 선후관계를 표시한다(DB → Backend → Frontend → QA).
+  - **DB·BE·FE·QA 모든 단계에 티켓을 쓴다.** "읽을 것"과 "산출"은 `docs/PIPELINE.md`의 경로·ID를 그대로 쓴다. 예:
+    ```
+    TKT-FE-01: 상품 목록 화면
+    - 읽을 것: AGENTS.md, 07-screens.md#SCR-02, 04-interfaces-api.md#API-01, docs/04-backend/briefing.md, docs/uiux/design-principles.md
+    - 산출: app/products/page.tsx, docs/05-frontend/briefing-TKT-FE-01.md
+    TKT-QA-01: M1 검증
+    - 읽을 것: 06-acceptance-criteria.md#AC-02, 06-quality-gates.md, docs/05-frontend/briefing-TKT-FE-01.md, docs/uiux/context/for-qa.md
+    - 산출: docs/06-qa/briefing-TKT-QA-01.md
+    ```
   - PM 마일스톤 순서(M1 → M5)를 따른다. M1 티켓 안에서는 KANT 증빙 경로(R2 → R3 → R4 → R5/R6/R7 → R8 → R9)를 먼저 배치한다.
   - README 티켓(KANT-R10, C17)에 목차를 확정해 둔다: 소개, 컴포넌트 트리, 로컬 실행 명령, 환경변수·Supabase 설정, 결제 테스트 방법, 결과 캡처.
 - 최종 브리핑: 주요 ADR 요약, 남은 리스크(RISK-ID), 마일스톤별 티켓 수. 사용자 승인을 받는다.

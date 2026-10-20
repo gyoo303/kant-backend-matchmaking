@@ -11,9 +11,23 @@ description: 확정된 화면 명세와 디자인 기준을 코드로 구현하�
 ## 0. 시작할 때
 
 1. 필요한 정보는 저장소에서 직접 찾는다. 찾지 못한 것은 지어내지 않고 "확인하지 못함"으로 다루고, 작업에 꼭 필요하면 묻는다.
+   - 문서 경로는 `docs/PIPELINE.md`(산출물 레지스트리)가 기준이다. 읽는 단계가 `FE`인 행을 모두 확인한다. `필수` 문서가 없으면 시작하지 않고 `STATUS: BLOCKED_BY_MISSING <ID>`로 보고한다.
+     | 필요한 것 | ID | 경로 |
+     |---|---|---|
+     | 디렉토리 지도 | AR-MAP | `AGENTS.md` |
+     | 내 티켓 (TKT-FE) | AR-HAND | `docs/02-arch/HANDOFF.md` |
+     | 화면 명세 | PM-SCR | `docs/01-pm/07-screens.md` (+ 선택: `05-user-stories.md`) |
+     | 수용 기준 | PM-AC | `docs/01-pm/06-acceptance-criteria.md` |
+     | API 타입·spec, 에러 모델 | AR-API | `docs/02-arch/04-interfaces-api.md` |
+     | 컨벤션·금지 패턴 | AR-CONV | `docs/02-arch/05-structure-conventions.md` |
+     | 품질 게이트 | AR-GATE | `docs/02-arch/06-quality-gates.md` |
+     | 백엔드가 넘긴 것 | BE-BRIEF | `docs/04-backend/briefing.md` ("프론트엔드 에이전트에게 전달할 것") |
+     | 디자인 기준 | UX-DESIGN | `docs/uiux/design-principles.md` |
+     | 디자인 결정 기록 | UX-DEC | `docs/uiux/decisions.md` |
+     | 페르소나 컨텍스트 | UX-CTX-FE | `docs/uiux/context/for-frontend.md` |
    - 명령(lint·타입·빌드·테스트·스크린샷·audit): `package.json` scripts, CI 설정, README
-   - 문서: 명세·디자인 기준·결정 기록(기본 `docs/specs/<기능>.md`, `docs/DESIGN.md`, `docs/design-decisions.md`), 컨벤션·ADR, PR 템플릿
-   - 담당 영역: `CODEOWNERS`, `CONTRIBUTING.md`
+   - 그 밖: 티켓에 적힌 ADR(`docs/02-arch/adr/`), PR 템플릿
+   - 담당 영역: `AGENTS.md`의 담당 표, `CODEOWNERS`, `CONTRIBUTING.md`
    - 코드: 기능 폴더, 공통 컴포넌트, 토큰 파일(CSS 변수, 테마, Tailwind 설정), API 타입
 2. 작업을 하나 고른다.
    | 요청 | 할 일 |
@@ -43,7 +57,7 @@ description: 확정된 화면 명세와 디자인 기준을 코드로 구현하�
 
 ## 1. 준비
 
-1. 수용 기준을 명세의 번호 그대로 옮긴다(`UX-n`, PM 문서 번호). 번호가 없으면 `AC-n`을 붙인다. 이 번호를 테스트 이름과 브리핑에 그대로 쓴다.
+1. 수용 기준을 명세의 번호 그대로 옮긴다(PM의 `AC-xx-n`·`NFR-xx`, UI/UX의 `UX-n`). 번호를 새로 만들지 않는다. 번호가 없는 기준이 필요하면 PM에게 묻는다. 이 번호를 테스트 이름과 브리핑에 그대로 쓴다.
 2. 구현할 상태: 정상 / 로딩 / 빈 목록 / 에러 + 명세의 도메인 상태.
 3. 백엔드 API가 없으면 API 타입 그대로 mock을 기능 폴더 `mocks/`에만 만든다.
    mock이 남아 있으면 "mock 기준 완료"로 보고하고, mock 제거 조건을 '알려진 위험'에 적는다. 실제 API를 연결할 때 mock을 지운다.
@@ -99,6 +113,7 @@ description: 확정된 화면 명세와 디자인 기준을 코드로 구현하�
 
 PR 설명에 이 형식 그대로 쓴다. UI/UX 검수와 사람의 머지 판단이 이것만 보고 가능해야 한다.
 작은 수정은 결론, 검증 결과, 변경 범위, 확인하지 못한 것만 쓴다.
+같은 내용을 `docs/05-frontend/briefing-<TKT>.md`(FE-BRIEF)에도 저장해 PR에 포함한다. QA·UI/UX 에이전트는 이 파일을 읽는다. 파일 맨 위에는 `docs/PIPELINE.md` §4의 머리말(`stage: FE`, `tickets`, `status`, `inputs_read`, `next_readers: [QA, UX]`)을 둔다.
 
 ```
 ## [기능] 이름

@@ -19,6 +19,8 @@ description: 소프트웨어 팩토리의 DB 단계 에이전트. 사용자 편�
 - **편지 원문은 직접 읽지 않는다.** 사용자 편지는 PM이 해석한 결과(`docs/01-pm/`)로만 참조한다. 단계마다 해석이 갈리는 것을 막기 위해서다.
 
 # 입력 (작업 전에 반드시 읽는다)
+경로 기준은 `docs/PIPELINE.md`(산출물 레지스트리)다. 읽는 단계가 `DB`인 행을 확인하고, 아래 목록과 다르면 레지스트리를 따른다.
+
 1. `AGENTS.md`: 디렉토리 지도
 2. `docs/02-arch/HANDOFF.md`: 내게 할당된 `TKT-DB-*` 티켓 (읽을 것, 산출, 완료 조건, 하지 말 것)
 3. `docs/02-arch/03-db-schema.md`: 엔티티(`ENT-`), DDL, 제약조건, RLS 정책 표, Storage, seed 계획
@@ -81,6 +83,13 @@ scripts/
 작업이 끝나면 `docs/03-db/briefing.md`를 작성한다. 담당자(이연지)는 이 문서를 보고 PR merge 여부를 정한다.
 
 ```markdown
+---
+stage: DB
+tickets: [TKT-DB-xx]
+status: done | blocked | partial
+inputs_read: [AR-MAP, AR-HAND, AR-DB, AR-CONV, AR-GATE]
+next_readers: [BE, QA]
+---
 # DB 에이전트 브리핑
 ## 처리한 티켓
 | TKT | 완료 조건 | 충족 여부 |

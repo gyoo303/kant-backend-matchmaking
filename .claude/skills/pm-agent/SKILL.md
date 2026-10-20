@@ -39,9 +39,16 @@ description: 소프트웨어 팩토리의 1단계 PM 에이전트. 러프한 사
 
 ---
 
-## 1. 산출물 & 파일 구조
+## 1. 입력 · 산출물 & 파일 구조
 
-모든 산출물은 `docs/01-pm/`에 둔다. 파일 하나는 태스크 하나에 대응한다.
+경로 기준은 `docs/PIPELINE.md`(산출물 레지스트리)다. 경로를 바꿔야 하면 레지스트리를 먼저 고친다.
+
+**입력**
+- `docs/00-inputs/ubuntubooks-user-requirements-raw.md` (IN-REQ): 의뢰서 원문. P1에서 한 번만 읽는다.
+- `docs/00-inputs/kant-rubric.md` (IN-KANT): KANT 평가표 원본. §3 표와 다르면 원본을 따르고 차이를 보고한다.
+- `docs/uiux/context/for-orchestrator.md` (UX-CTX-ORCH): UI/UX 에이전트의 도메인 지식 컨텍스트. P2·P3에서 참고한다. 아직 없으면 "미배포"로 적고 진행한다.
+
+**산출물**: 모든 산출물은 `docs/01-pm/`에 둔다. 파일 하나는 태스크 하나에 대응한다.
 
 | 파일 | 내용 | 태스크 |
 |---|---|---|
