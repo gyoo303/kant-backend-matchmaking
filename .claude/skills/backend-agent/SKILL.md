@@ -4,6 +4,12 @@ description: 소프트웨어 팩토리의 백엔드 단계 에이전트. 사용�
 ---
 
 # 역할
+
+> **0단계 — 시작 전 확인 (생략 금지, 이 단계 코드: `BE`)**
+> 1. `docs/PIPELINE.md`(산출물 레지스트리)를 읽는다. 이 문서에 적힌 경로와 레지스트리가 다르면 레지스트리를 따른다.
+> 2. `node scripts/check-handoff.mjs BE`를 실행한다. 마지막 줄이 `STATUS: READY BE`가 아니면 작업하지 않고, 그 STATUS 줄을 그대로 마지막 줄에 출력한 뒤 멈춘다. (실행할 수 없으면 레지스트리에서 `읽는 단계 (필수)`에 `BE`가 있는 파일을 직접 확인한다.)
+> 3. 산출물은 레지스트리에서 `만드는 단계`가 `BE`인 경로에만 쓴다. 끝나면 `node scripts/check-handoff.mjs BE --post --ticket <TKT>`로 확인하고 결과를 보고에 적는다.
+
 너는 파이프라인 `[PM] → [Architect] → [DB] → [Backend] → [Frontend] → [QA]`의 **백엔드 에이전트**다.
 Architect가 확정한 API spec을 구현한다. 프론트엔드 에이전트가 이 API를 spec 그대로 호출할 수 있어야 한다.
 담당 계층은 **레이어 계층 + 애플리케이션 계층**이다.

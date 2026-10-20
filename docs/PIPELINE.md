@@ -22,7 +22,7 @@
 
 ## 2. 사용 규칙
 
-1. **작업 시작 전**: 아래 표에서 `읽는 단계`에 내 코드가 있는 행을 모두 찾는다. `필수`인 파일이 없으면 작업을 시작하지 않고 `STATUS: BLOCKED_BY_MISSING <ID 목록>`으로 보고한다. `선택`은 필요할 때 해당 ID 섹션만 읽는다.
+1. **작업 시작 전**: `node scripts/check-handoff.mjs <내 코드>`를 실행한다. 이 스크립트는 아래 표에서 `읽는 단계 (필수)`에 내 코드가 있는 행을 찾아 파일이 있는지, 브리핑 머리말이 `blocked`가 아닌지, 승인 대기 결정(`[PENDING]` D-xx, `Proposed` ADR)이 없는지 확인한다. 마지막 줄이 `STATUS: READY`가 아니면 작업하지 않고 그 줄을 보고한다. `선택`은 필요할 때 해당 ID 섹션만 읽는다.
 2. **작업 후**: `만드는 단계`가 나인 경로에만 쓴다. 표에 없는 경로에 다음 단계가 읽어야 할 문서를 만들지 않는다. 새 문서가 필요하면 이 표에 행을 추가한다.
 3. **브리핑**: DB·BE·FE·QA는 단계 폴더에 브리핑을 남긴다(§4 형식). PR 설명에 쓰는 내용도 같은 파일로 저장한다. PR 설명만으로는 다음 에이전트가 읽을 수 없다.
 4. **수용기준 번호**: 모든 단계는 PM의 `AC-xx-n`, `NFR-xx`를 그대로 쓴다. 새 번호 체계를 만들지 않는다. UI/UX 명세 항목은 `UX-n`을 쓴다.
@@ -68,7 +68,7 @@
 | DB-BRIEF | `docs/03-db/briefing.md` | DB | BE | QA |
 | DB-TYPES | `types/database.ts` | DB | BE | FE |
 | BE-BRIEF | `docs/04-backend/briefing.md` | BE | FE | QA |
-| FE-BRIEF | `docs/05-frontend/briefing-<TKT>.md` | FE | QA, UX | — |
+| FE-BRIEF | `docs/05-frontend/briefing-<TKT>.md` | FE | QA | UX (검수 시) |
 | QA-BRIEF | `docs/06-qa/briefing-<TKT 또는 브랜치>.md` | QA | — | UX, 사람 |
 
 ### 3.5 UX (횡단)
@@ -106,4 +106,55 @@ status: done              # done | blocked | partial
 inputs_read: [AR-HAND, AR-API, AR-CONV, AR-GATE, DB-BRIEF]
 next_readers: [FE, QA]
 ---
+```
+
+## 5. 실행 방법
+
+### 5.1 점검 스크립트 — `scripts/check-handoff.mjs`
+이 문서의 표를 그대로 파싱한다. 표에 행을 추가하면 스크립트도 자동으로 따라간다(표 형식 `| ID | \`경로\` | 만드는 단계 | 읽는 단계 (필수) | 읽는 단계 (선택) |`은 유지한다).
+
+```bash
+node scripts/check-handoff.mjs BE
+```
+
+```bash
+node scripts/check-handoff.mjs BE --post --ticket TKT-BE-01
+```
+
+| 마지막 줄 | 의미 | 종료 코드 |
+|---|---|---|
+| `STATUS: READY <STAGE>` | 필수 입력 모두 있음, 시작 가능 | 0 |
+| `STATUS: BLOCKED_BY_MISSING <ID…>` | 필수 입력 없음·미작성·`status: blocked` | 1 |
+| `STATUS: AWAITING_USER_DECISION <ID…>` | ARCH 전 `[PENDING]` D-xx, 또는 DB·BE·FE·QA 전 `Proposed` ADR | 1 |
+| `STATUS: DONE <STAGE>` / `STATUS: INCOMPLETE <STAGE> <ID…>` | (`--post`) 산출물 확인 결과 | 0 / 1 |
+
+- 자리표시자(`<TKT>`, `<slug>`, `xxx`, `YYYY-MM-DD`)가 있는 경로는 "해당 이름의 파일이 하나 이상 있는가"로 본다. `--post --ticket`을 주면 `<TKT>` 자리에 티켓 ID를 넣어 정확히 그 파일을 확인한다.
+- UX가 만드는 산출물은 없어도 막지 않고 경고만 한다(§3.5).
+
+### 5.2 단계 실행 — `scripts/run-stage.sh`
+입력 점검 → `claude -p`로 해당 스킬 실행 → 산출물 점검을 한 번에 한다. 앞 단계가 실패하면 다음 단계로 가지 않는다.
+
+```bash
+scripts/run-stage.sh PM
+```
+
+```bash
+scripts/run-stage.sh DB TKT-DB-01
+```
+
+| 종료 코드 | 의미 | 할 일 |
+|---|---|---|
+| 0 | 완료 | 브리핑 확인 후 다음 단계 실행 |
+| 1 | 입력 부족 또는 승인 대기로 시작하지 않음 | 출력된 ID의 앞 단계 산출물을 채우거나 결정을 승인 |
+| 2 | 에이전트가 `STATUS:` 줄을 남기고 멈춤 (결정 카드·ADR 승인 대기 등) | `decision-log.md`의 `[PENDING]`을 `[APPROVED by user, …]`로, ADR을 `Accepted`로 바꾼 뒤 같은 명령 재실행 |
+| 3 | 실행은 끝났지만 산출물이 레지스트리와 다름 | 출력된 ID 확인 후 같은 명령 재실행 |
+
+- 실행 로그는 `.pipeline-logs/`에 남는다(Git 제외).
+- `CLAUDE_ARGS`로 `claude -p` 옵션을 바꿀 수 있다(기본 `--permission-mode acceptEdits`). 빌드·테스트 명령까지 허용하려면 `--allowedTools`를 추가한다.
+- 대화형으로 실행할 때는 Claude Code에서 `/db-agent TKT-DB-01`처럼 스킬을 직접 호출한다. 스킬 맨 위 0단계가 같은 점검을 수행한다.
+
+### 5.3 기본 실행 순서
+```
+PM (P1~P9, 🔒마다 멈춤·재실행) → ARCH (A0~A8) → [마일스톤마다] DB 티켓들 → BE 티켓들 → FE 티켓들 → QA 티켓
+UX: PM 전에 컨텍스트 팩 배포, FE 이후 검수 (순서 밖에서 필요할 때 실행)
 ```
