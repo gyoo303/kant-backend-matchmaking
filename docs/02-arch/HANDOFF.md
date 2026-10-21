@@ -8,7 +8,7 @@
 | TKT | 내용 | 담당 | 읽을 것 | 산출 | 완료 조건 | 선행 |
 |---|---|---|---|---|---|---|
 | TKT-FE-00 | 구조 정리 커밋: 템플릿 잔재 삭제, `lint`→`eslint .`, `.gitignore`·`.env.example`, 중복 패키지 제거(`react-icons`, 사용처 0이면 `sass`·`cn`), `zod`·`server-only`·`@tosspayments/tosspayments-sdk` 추가 | FE | 05 §1·§5, 02 §2, ADR-009 | 정리 커밋 1개(기능 변경 없음) | GATE-01~06 | — |
-| TKT-DB-00 | Supabase 로컬(`supabase init`, `config.toml`), 원격 프로젝트 연결, 카카오·네이버·토스 키 발급 신청(1일차) | DB | ADR-003·004·005 | `supabase/config.toml`, `docs/03-db/briefing.md` §환경 | `supabase start` 성공 | FE-00 |
+| TKT-DB-00 | `supabase init`(`config.toml`), 원격 프로젝트 연결(사람이 `supabase login`·`link`), 카카오·네이버·토스 키 발급 신청(1일차). 로컬 Supabase 미사용(ADR-005) | DB | ADR-003·004·005 | `supabase/config.toml`, `docs/03-db/briefing.md` §환경 | `npx supabase db push --linked --dry-run` 정상 종료 | FE-00 |
 | TKT-DB-01 | enum·`profiles`·`products`·`is_keeper`·가입 트리거, `book-covers` 버킷, `lib/supabase/*`, `lib/data/products.ts`(API-01~03, `toProduct`), `data/products.ts` 8권 + `scripts/gen-seed.mjs` + `seed.sql`, `types/database.ts` | DB | 03 §2·3·4·6·8·9, 04 §1.1·API-01~03, ADR-001 | `supabase/migrations/0001_profiles_products.sql`, 위 파일들 | AC-02-1·3, NFR-16, GATE-07 | DB-00 |
 | TKT-FE-01 | `types/product.ts`, `app/layout.tsx`(Header·Footer), `components/Header·Footer·ProductCard.tsx`, env 누락 안내(AC-21-4) | FE | 04 §1.1·4.1, 05 CONV-03·04·06, PM-SCR §2, UX-PLAN-FE | 위 파일, `docs/05-frontend/briefing-TKT-FE-01.md` | AC-01-3, AC-04-2, KANT-R3·R4·C7·C8 | DB-01 |
 | TKT-FE-02 | `/` 메인, `/products` 목록(테마 주소 반영·`.map()`·빈 상태), `domains/products/theme.ts`(`parseTheme`)+테스트 | FE | 04 §4, 05 CONV-07·08·09, SCR-01·02 | `app/page.tsx`, `app/products/page.tsx` | AC-01-1·2·4, AC-02-1~5, KANT-R5·C9·C11 | FE-01 |
@@ -57,7 +57,7 @@
 | TKT-QA-M5 | 깨끗한 클론 실행, Vercel 배포 점검, 시연 리허설 | QA | 06, PM-SCR §5 | `briefing-TKT-QA-M5.md` | NFR-04·15, AC-21-* | FE-M5-01 |
 
 ### README 목차 (확정)
-1. 소개(Use Case 한 문장, 4개 테마·편지 구독) 2. 컴포넌트 텍스트 트리(`app/layout.tsx` → Header·Footer, 목록 → ProductCard) 3. 로컬 실행(`npm install`, `npx supabase start`, `npx supabase db reset`, `cp .env.example .env.local`, `npm run dev`) 4. 환경변수·Supabase 설정(카카오 "이메일 없이 허용", `custom:naver`, 책방지기 권한 부여 SQL 1줄) 5. 결제 테스트 방법(토스 테스트 키·테스트 카드) 6. 운영 절차(5년 경과 거래 기록 삭제 SQL) 7. 결과 캡처
+1. 소개(Use Case 한 문장, 4개 테마·편지 구독) 2. 컴포넌트 텍스트 트리(`app/layout.tsx` → Header·Footer, 목록 → ProductCard) 3. 로컬 실행(`npm install`, `cp .env.example .env.local`에 원격 Supabase URL·키 입력, `npm run dev`) 4. 환경변수·Supabase 설정(원격 프로젝트 연결 `npx supabase login`·`npx supabase link --project-ref <ref>`·`npx supabase db push --linked --include-seed`, Auth 리다이렉트 URL, 카카오 "이메일 없이 허용", `custom:naver`, 책방지기 권한 부여 SQL 1줄) 5. 결제 테스트 방법(토스 테스트 키·테스트 카드) 6. 운영 절차(5년 경과 거래 기록 삭제 SQL) 7. 결과 캡처
 
 ## 티켓 수
 | M | DB | BE | FE | QA | 계 |
@@ -70,4 +70,4 @@
 | 계 | 5 | 10 | 12 | 5 | 32 |
 
 ## 남은 리스크
-RISK-03 보상 취소 실패(로그+문의 안내), RISK-11 네이버 매핑 미확인(스파이크로 확인), RISK-12 네이버 운영 검수·카카오 비즈 앱(이번 범위 밖), RISK-14 5년 경과 기록 수동 삭제, RISK-15 M4 일정. Footer 법정 고지 미기재(D-021)는 실결제 전환 전 필요.
+RISK-16 개발·시연 DB 공용(ADR-005 개정: 되돌리기 없는 변경 규칙, seed 재적용 가능, 테스트 rollback), RISK-03 보상 취소 실패(로그+문의 안내), RISK-11 네이버 매핑 미확인(스파이크로 확인), RISK-12 네이버 운영 검수·카카오 비즈 앱(이번 범위 밖), RISK-14 5년 경과 기록 수동 삭제, RISK-15 M4 일정. Footer 법정 고지 미기재(D-021)는 실결제 전환 전 필요.

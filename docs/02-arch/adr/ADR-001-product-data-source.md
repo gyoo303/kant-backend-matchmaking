@@ -22,5 +22,5 @@
 
 ## 결과
 - 좋아지는 점: 런타임 분기 0, 폴백 데이터와 DB 불일치 위험 0
-- 감수할 점: 평가자가 로컬 실행하려면 Supabase(로컬 `supabase start` 또는 원격) 설정 필요 → README에 명령 명시
+- 감수할 점: 평가자가 로컬 실행하려면 원격 Supabase 프로젝트의 URL·키 필요(ADR-005) → README에 설정 절차 명시
 - 후속: TKT-DB-01(seed 생성), TKT-FE-01(env 누락 안내)

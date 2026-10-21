@@ -266,7 +266,10 @@ create table shipping_list_downloads (
 
 ## 8. seed·타입
 - `data/products.ts`(8권, 테마별 2권, `imageUrl = https://picsum.photos/seed/ub-<n>/600/800`, 고정 uuid) → `scripts/gen-seed.mjs` → `supabase/seed.sql`(`products`만). 생성 파일은 커밋하고, `data/products.ts`를 고치면 다시 생성한다(ADR-001).
-- `types/database.ts`: `npx supabase gen types typescript --local > types/database.ts`(DB 에이전트만 수정).
+- 원격 전용(ADR-005): seed는 `npx supabase db push --linked --include-seed`로 적용한다. 같은 원격 DB에 여러 번 적용되므로 `insert … on conflict (id) do update set …`로 쓴다(재적용해도 8행 유지).
+- pgTAP 테스트(`supabase/tests/*.test.sql`)는 원격 DB에서 돌므로 파일마다 `begin;` → `create extension if not exists pgtap with schema extensions;` → 테스트 → `select * from finish();` → `rollback;` 구조로 쓴다. 테스트용 사용자·행은 rollback으로 남지 않는다.
+- 적용된 마이그레이션 파일은 고치지 않는다. 원격 DB는 `db reset`으로 되돌리지 않으므로 변경은 새 마이그레이션 파일로 한다.
+- `types/database.ts`: `npx supabase gen types typescript --linked --schema public > types/database.ts`(DB 에이전트만 수정, 원격 적용 후 실행).
 - 매핑 함수는 한 곳: `lib/data/products.ts`의 `toProduct(row: Tables<'products'>): Product` (snake → camel).
 
 ## 9. 마이그레이션 파일

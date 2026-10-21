@@ -28,7 +28,7 @@ flowchart LR
 | 스타일 | Tailwind CSS 4 + shadcn(base-nova, `@base-ui/react`) | ^4 / 설치됨 | 기존 `components/ui` 재사용 | ADR-009 |
 | 아이콘 | `lucide-react` | 설치됨 | shadcn 기본. `react-icons`와 중복 → `react-icons` 제거(CONV-14) | — |
 | DB·인증·파일 | Supabase(Postgres·Auth·Storage), `@supabase/ssr`·`@supabase/supabase-js` | 0.12.x / 2.118.x (설치됨) | 팀 고정 | ADR-002, 003 |
-| 로컬 DB | Supabase CLI(`supabase start`, `db reset`) | 설치됨 | 마이그레이션·seed·RLS 로컬 검증 | ADR-005 |
+| DB 도구 | Supabase CLI(`link`, `db push --linked`, `test db --linked`, `gen types --linked`) | 설치됨 | 원격 프로젝트 1개에 마이그레이션·seed 적용, RLS 검증(로컬 Supabase 미사용) | ADR-005 |
 | 결제 | 토스페이먼츠 `@tosspayments/tosspayments-sdk` | 2.x (추가) | 서버 승인 API + 멱등키 | ADR-004 |
 | 입력 검증 | `zod` | 4.x (추가) | 타입·검증 일원화 | ADR-008 |
 | 서버 전용 표시 | `server-only` | 최신 (추가) | 비밀키 모듈의 클라이언트 import를 빌드 오류로 차단(RISK-10) | ADR-005 |

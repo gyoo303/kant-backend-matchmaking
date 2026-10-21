@@ -12,8 +12,9 @@
 | GATE-04 | 빌드 | `npm run build` (prebuild가 GATE-03 포함) | 종료 코드 0 (KANT-C15) | 전 티켓 |
 | GATE-05 | 비밀값·`.gitignore` | `git ls-files \| grep -E '(^\|/)\.env' \| grep -v '\.env\.example$'` 출력 0줄, `grep -rnE 'NEXT_PUBLIC_[A-Z_]*(SECRET\|SERVICE_ROLE)' --include=*.ts* app components lib domains` 0줄, `node_modules`·`.next` 미추적 | 모두 0 | 전 티켓 |
 | GATE-06 | 금지 패턴 | `grep -rnE '\bany\b\|as unknown as\|@ts-ignore\|@ts-expect-error\|catch *\([^)]*\) *\{ *\}' --include=*.ts* app components lib domains` 0줄 / `grep -rnE 'new Date\(\|Date\.now\|Math\.random\|crypto\|fetch\(\|supabase' domains --include=*.ts` 중 `*.test.ts` 제외 0줄 / `'use client'` 파일에 `server-only` 모듈 import 0 | 0줄 | 전 티켓 |
-| GATE-07 | RLS·RPC | `npx supabase db reset && npx supabase test db` (pgTAP, `supabase/tests/*.test.sql`) | 모든 테이블 RLS 활성(AR-DB §4 점검 쿼리 0행), 정책 표 역할별 테스트 통과 | DB 티켓, 스키마 변경 티켓 |
+| GATE-07 | RLS·RPC (원격, ADR-005) | 사람이 `npx supabase db push --linked --include-seed`로 적용한 뒤 `npx supabase test db --linked` (pgTAP, `supabase/tests/*.test.sql`, 파일마다 `begin … rollback`) | 모든 테이블 RLS 활성(AR-DB §4 점검 쿼리 0행), 정책 표 역할별 테스트 통과 | DB 티켓, 스키마 변경 티켓 |
 
+- GATE-07의 테스트 실행기(pg_prove)는 Supabase CLI가 Docker 컨테이너로 띄운다(로컬 DB는 띄우지 않음). Docker를 쓸 수 없으면 Supabase SQL 편집기에서 각 테스트 파일을 실행하고 `ok`/`not ok` 결과를 브리핑에 붙인다. `npx supabase db reset`은 원격 데이터를 지우므로 쓰지 않는다.
 - `\bany\b`는 주석·문자열의 영어 단어도 잡는다. 오탐이면 브리핑에 줄 번호와 이유를 적는다(코드에서 우회 금지).
 
 ## 2. 테스트 전략 (우선순위 순)

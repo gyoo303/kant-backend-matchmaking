@@ -26,5 +26,5 @@ PG ─redirect→ app/api/payments/*/route.ts ─→ lib/payments(PG HTTP) ─�
 
 ## 결과
 - 좋아지는 점: RISK-01·03·05를 DB 제약·조건부 갱신으로 차단, Edge Function 없음
-- 감수할 점: RPC는 SQL 테스트(로컬 Supabase)로 검증, `security definer` 함수는 첫 줄에서 `auth.uid()`·`is_keeper()` 검사 필수(CONV-12)
+- 감수할 점: RPC는 원격 프로젝트에서 pgTAP(`supabase test db --linked`, rollback)으로 검증(ADR-005), `security definer` 함수는 첫 줄에서 `auth.uid()`·`is_keeper()` 검사 필수(CONV-12)
 - 후속: TKT-DB-03~06(RPC), TKT-BE 전체

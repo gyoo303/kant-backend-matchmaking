@@ -83,6 +83,7 @@
 | RISK-13 | Cache Components 규칙 위반(세션 읽기 Suspense 밖) → 빌드 실패 | 높음 | 중 | CONV-07, GATE-04 |
 | RISK-14 | 탈퇴 시 거래 기록과 사적인 글의 처리 누락 | 낮음 | 중 | RPC `withdraw_member` 한 곳 + FK `on delete` 정책 (03 §탈퇴) |
 | RISK-15 | M4가 하루를 넘김 | 중 | 중 | HANDOFF에서 M4 티켓을 편지 → 서재 → 발송·언박싱 → 메모·해지 순으로 배치 |
+| RISK-16 | 로컬 Supabase 없이 원격 1개를 개발·시연 공용으로 씀 → 잘못된 마이그레이션·테스트 데이터가 시연 DB에 남음 | 중 | 중 | ADR-005 개정: 적용 마이그레이션 수정 금지(새 파일로), `db reset` 금지, seed `on conflict do update`, pgTAP `begin … rollback`, `db push --dry-run` 후 사람이 적용 (AR-DB §8, GATE-07) |
 
 ## 4. 자가 점검 (A0·A1)
 - D1: A0 검증과 A1 드라이버만 다룸. 결정은 ADR로 미룸.
