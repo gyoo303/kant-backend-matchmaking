@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SCR-16 언박싱 (코드 입력 전) 시안</title><link rel="stylesheet" href="../src/mockup.css"></head>
+<body><header class="site-header"><div class="wrap">
+  <a class="logo" href="#">우분투북스<small>대전 어은동</small></a>
+  <nav class="nav nav-main" aria-label="주 메뉴"><a href="#">테마 서가</a><a href="#">편지 띄우기</a></nav>
+  <nav class="nav" aria-label="내 메뉴"><a href="#">장바구니<span class="count" aria-label="담은 책 2권">2</span></a><a href="#" aria-current="page">마이페이지</a></nav>
+</div></header>
+<main><div class="wrap wrap-narrow"><div style="text-align:center"><h1>상자를 열어 볼까요</h1>
+<div class="blind" style="margin:28px auto 0;max-width:320px"><svg viewBox="0 0 150 200" width="170" role="img" aria-label="아직 열리지 않은 책">
+  <defs><filter id="soft"><feGaussianBlur stdDeviation="3"/></filter></defs>
+  <rect x="14" y="10" width="122" height="180" rx="4" fill="#2b3330" opacity=".88" filter="url(#soft)"/>
+  <rect x="22" y="18" width="8" height="164" fill="#3d4743" opacity=".8"/>
+  <path d="M60 92c0-12 30-12 30 0 0 10-15 10-15 22" stroke="#9aa59e" stroke-width="5" fill="none" stroke-linecap="round"/><circle cx="75" cy="128" r="3.5" fill="#9aa59e"/>
+</svg></div>
+<p class="hint-quote" style="margin:24px auto 0;max-width:24em">비 오는 날 부엌 창가에서 천천히 읽기 좋은 책이에요. (예시 힌트)</p>
+<form style="margin-top:32px"><label class="field" for="code"><span>상자 속 카드의 여섯 자리 코드</span></label>
+<input id="code" class="input code-input" inputmode="numeric" maxlength="6" value="4829">
+<div style="margin-top:16px"><button class="btn btn-primary btn-lg" disabled type="button" style="min-width:200px">열기</button></div>
+<p class="hint">숫자 여섯 자리를 모두 넣으면 열 수 있어요</p></form></div></div></main>
+<footer class="site-footer"><div class="wrap">
+  <div><strong>우분투북스</strong><div>대전 어은동 골목 안쪽의 작은 책방</div></div>
+  <nav aria-label="사이트 링크"><a class="link" href="#">테마 서가</a><a class="link" href="#">편지 띄우기</a></nav>
+</div></footer>
+<div class="mock-tag">SCR-16 시안 / 예시 데이터</div>
+</body></html>

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SCR-08 관리자 책 등록·수정 시안</title><link rel="stylesheet" href="../src/mockup.css"></head>
+<body><header class="admin-bar"><div class="wrap">
+  <a class="logo" href="#">우분투북스<small>책방지기 서재</small></a>
+  <nav aria-label="관리자 메뉴"><a href="#" aria-current="page">책 관리</a><a href="#">주문 처리</a><a href="#">서재 작업</a></nav>
+</div></header>
+<main><div class="wrap wrap-narrow"><p><a class="link" href="#">책 목록으로</a></p><h1 style="margin-top:12px">새 책 등록</h1>
+<form class="stack" style="margin-top:24px">
+  <label class="field"><span>제목</span><input class="input" value="숲의 시간을 걷다"></label>
+  <label class="field"><span>저자</span><input class="input" value="예시 저자"></label>
+  <label class="field field-error"><span>가격 (원)</span><input class="input" value="-1000" aria-invalid="true"><div class="error-text">가격은 0원 이상의 숫자로 적어 주세요</div></label>
+  <fieldset><legend style="margin-bottom:6px">테마</legend><div class="theme-tabs"><a aria-pressed="true">자연</a><a>식문화</a><a>생태</a><a>로컬</a></div></fieldset>
+  <label class="field"><span>표지 이미지</span><input class="input" value="cover.jpg"><div class="hint">세로 3:4 비율 사진이 가장 잘 보여요</div></label>
+  <label class="field"><span>짧은 설명 (목록 카드에 보여요)</span><input class="input"></label>
+  <label class="field"><span>책방지기 노트 (상세 맨 위에 크게 보여요)</span><textarea class="textarea" style="min-height:160px"></textarea></label>
+  <label class="field"><span>출판사 소개 (없으면 비워 두세요)</span><textarea class="textarea"></textarea></label>
+  <label class="field"><span>재고</span><input class="input" value="3"></label>
+  <button class="btn btn-primary btn-lg" type="button">저장</button></form></div></main>
+
+<div class="mock-tag">SCR-08 시안 / 예시 데이터</div>
+</body></html>

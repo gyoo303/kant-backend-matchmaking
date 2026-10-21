@@ -41,7 +41,7 @@ description: 독립서점 '우분투북스' 웹사이트 프로젝트의 도메�
 | 시점 | 작업 | 만드는 것 |
 |---|---|---|
 | PM 시작 전 (늦어도 PM P2·P3 전) | A → B | `UX-KNOW`, `UX-CTX-ORCH` |
-| PM P7(화면 구성) 이후, FE 시작 전 | C(① 검수) → B | `UX-REVIEW`, `UX-PERSONA`, `UX-DESIGN`, `UX-DEC`, `UX-CTX-FE`, `UX-CTX-QA` |
+| PM P7(화면 구성) 이후, FE 시작 전 | C(① 검수) → B | `UX-REVIEW`, `UX-PERSONA`, `UX-DESIGN`, `UX-DEC`, `UX-CTX-FE`, `UX-CTX-QA`, `UX-PLAN-FE`(화면별 디자인 시안 포함), `UX-PLAN-QA` |
 | FE 브리핑(`FE-BRIEF`)이 올라왔을 때 | C(④ 검수, 질문 응답, 디자인 판단 기록) | `UX-REVIEW`, `UX-DEC` |
 | QA 단계 | C(⑤ 검수) + D | `UX-USAB`, `UX-REVIEW` |
 
@@ -152,6 +152,8 @@ docs/uiux/
 │   ├── for-frontend.md        ← UX-CTX-FE ④ 사용자 페르소나 컨텍스트 + UX-n
 │   └── for-qa.md              ← UX-CTX-QA ⑤ 사용자 페르소나 컨텍스트 + 사용성 기준
 ├── review/                    ← 검수 대상 단계별 하위 폴더 (PM/, ARCH/, FE/, QA/)
+│   ├── frontend/              ← UX-PLAN-FE ④ 계획 참고자료 (README.md, design-system.md, screens.md, mockups/ 화면별 시안)
+│   └── QA/README.md, scenarios.md ← UX-PLAN-QA ⑤ 계획 참고자료 (같은 폴더의 날짜 파일은 UX-REVIEW)
 │   └── <단계>/YYYY-MM-DD-<대상>.md ← UX-REVIEW 검수 기록
 └── usability/
     └── YYYY-MM-DD-round<N>.md ← UX-USAB 사용성 테스트 결과

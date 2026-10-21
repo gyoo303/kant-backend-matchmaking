@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SCR-19 관리자 서재 작업 시안</title><link rel="stylesheet" href="../src/mockup.css"></head>
+<body><header class="admin-bar"><div class="wrap">
+  <a class="logo" href="#">우분투북스<small>책방지기 서재</small></a>
+  <nav aria-label="관리자 메뉴"><a href="#">책 관리</a><a href="#">주문 처리</a><a href="#" aria-current="page">서재 작업</a></nav>
+</div></header>
+<main><div class="wrap wrap-narrow"><h1>서재 작업</h1><p class="muted">도착한 순서대로 위에서부터 처리해요.</p>
+<section class="step"><div class="step-head"><span class="step-no">1</span><h2 style="font-size:1.25rem">편지 읽기</h2></div>
+<div class="row-list"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><strong>김예시 님의 편지</strong><span class="badge badge-plain">읽는 중</span></div>
+<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>이예시 님의 편지 <span class="badge badge-plain" style="background:var(--destructive-soft);color:var(--destructive-soft-foreground)">취소 요청</span></span><span style="display:flex;gap:8px"><button class="btn btn-destructive">환불</button><button class="btn btn-outline">취소 거절</button></span></div>
+<div style="display:flex;justify-content:space-between"><span>박예시 님의 편지</span><span class="badge badge-plain">편지 도착</span></div></div>
+<div class="paper" style="margin-top:16px"><p class="letter">책방지기님께,<br>요즘은 퇴근길이 조금 길게 느껴져요. 창밖 나무가 물드는 걸 보면서도 마음이 바빠서 제대로 보지 못했어요. 조용히 오래 머물 수 있는 책이면 좋겠습니다. (예시 편지)</p></div></section>
+<section class="step"><div class="step-head"><span class="step-no">2</span><h2 style="font-size:1.25rem">책 고르기와 답장</h2></div>
+<label class="field"><span>제목이나 저자로 찾기</span><input class="input" value="발효"></label>
+<div class="row-list" style="margin-top:8px"><label style="display:flex;gap:12px;align-items:center"><input type="radio" checked> 발효의 온도 <span class="muted small">재고 4</span></label>
+<label style="display:flex;gap:12px;align-items:center;color:var(--muted-foreground)"><input type="radio" disabled> 흙을 만지는 손 <span class="badge badge-soldout">품절</span></label></div>
+<label class="field" style="margin-top:20px"><span>답장 편지</span><textarea class="textarea" style="min-height:160px">보내 주신 편지 잘 읽었어요. (예시 답장)</textarea></label>
+<label class="field" style="margin-top:16px"><span>손글씨 엽서 사진 (선택, 10MB 이하 이미지)</span><input class="input" value="postcard.jpg"></label></section>
+<section class="step"><div class="step-head"><span class="step-no">3</span><h2 style="font-size:1.25rem">힌트 쓰고 발송</h2></div>
+<label class="field"><span>힌트 문장 (손님에게 책 대신 보여요)</span><input class="input" value=""><div class="hint">0 / 100자</div></label>
+<p class="notice notice-warm small" style="margin-top:16px">아직 빠진 것: 힌트 문장</p>
+<button class="btn btn-lg" disabled style="margin-top:16px;min-width:200px">발송</button></section>
+<section class="step"><div class="step-head"><h2 style="font-size:1.25rem">작별 안부</h2></div>
+<div class="row-list"><div><strong>최예시 님</strong><p class="muted small">그동안 고마웠어요. 겨울에 다시 편지할게요. (예시)</p></div></div></section></div></main>
+
+<div class="mock-tag">SCR-19 시안 / 예시 데이터</div>
+</body></html>
