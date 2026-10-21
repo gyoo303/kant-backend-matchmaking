@@ -35,6 +35,7 @@
 | IN-REQ | `docs/00-inputs/ubuntubooks-user-requirements-raw.md` | 사람 | PM | — |
 | IN-KANT | `docs/00-inputs/kant-rubric.md` | 사람 | PM | ARCH, QA |
 | UX-BASE | `docs/uiux/domain/base/` | 사람 | UX | — |
+| UX-TPL | `docs/uiux/domain/templates/` (UX-BASE 작성 가이드, 예시 문장은 근거로 쓰지 않음) | 사람 | — | — |
 
 ### 3.2 PM
 | ID | 경로 | 만드는 단계 | 읽는 단계 (필수) | 읽는 단계 (선택) |
