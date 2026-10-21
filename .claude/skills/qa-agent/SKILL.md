@@ -76,7 +76,7 @@ QA는 "통과/실패"만이 아니라 **사람이 이 변경을 이해하고 책
 > | 수용기준 | PM-AC | `docs/01-pm/06-acceptance-criteria.md` (`AC-xx-n`, `NFR-xx`) |
 > | 품질 게이트·AC↔테스트 연결 규칙 | AR-GATE | `docs/02-arch/06-quality-gates.md` |
 > | 담당자 브리핑 | DB-BRIEF / BE-BRIEF / FE-BRIEF | `docs/03-db/briefing.md`, `docs/04-backend/briefing.md`, `docs/05-frontend/briefing-<TKT>.md` |
-> | 페르소나·사용성 기준 | UX-CTX-QA | `docs/uiux/context/for-qa.md` |
+> | 페르소나·사용성 기준 | UX-CTX-QA | `docs/uiux/review/QA/README.md` (페르소나는 같은 폴더 `scenarios.md` §1) |
 > | 선택 | — | `docs/01-pm/03-domain.md`(INV), `docs/02-arch/03-db-schema.md`, `04-interfaces-api.md`, `05-structure-conventions.md` |
 >
 > 아래 일반 절차는 레지스트리에 없는 정보(검증할 diff, 브랜치 규칙 등)를 찾을 때 쓴다.

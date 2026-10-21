@@ -13,7 +13,7 @@
 | TKT-FE-01 | `types/product.ts`, `app/layout.tsx`(Header·Footer), `components/Header·Footer·ProductCard.tsx`, env 누락 안내(AC-21-4) | FE | 04 §1.1·4.1, 05 CONV-03·04·06, PM-SCR §2, UX-PLAN-FE | 위 파일, `docs/05-frontend/briefing-TKT-FE-01.md` | AC-01-3, AC-04-2, KANT-R3·R4·C7·C8 | DB-01 |
 | TKT-FE-02 | `/` 메인, `/products` 목록(테마 주소 반영·`.map()`·빈 상태), `domains/products/theme.ts`(`parseTheme`)+테스트 | FE | 04 §4, 05 CONV-07·08·09, SCR-01·02 | `app/page.tsx`, `app/products/page.tsx` | AC-01-1·2·4, AC-02-1~5, KANT-R5·C9·C11 | FE-01 |
 | TKT-FE-03 | `/products/[id]` 상세(노트 최상단), `not-found.tsx` | FE | 04 §4, SCR-03·04 | `app/products/[id]/page.tsx`, `not-found.tsx` | AC-03-1·2·4·5, KANT-R6·R9·C12·C14 | FE-02 |
-| TKT-QA-01 | M1 검증: KANT R2~R9, NFR-01~05·14~16, 360/768/1280 스크린샷 | QA | 06, PM-AC M1, PM-KANT, `docs/uiux/context/for-qa.md`, FE 브리핑 | `docs/06-qa/briefing-TKT-QA-01.md` | GATE-01~06, AC M1 표 | FE-03 |
+| TKT-QA-01 | M1 검증: KANT R2~R9, NFR-01~05·14~16, 360/768/1280 스크린샷 | QA | 06, PM-AC M1, PM-KANT, `docs/uiux/review/QA/README.md`(UX-CTX-QA), FE 브리핑 | `docs/06-qa/briefing-TKT-QA-01.md` | GATE-01~06, AC M1 표 | FE-03 |
 
 ## M2 회원·관리자 (2일차 오전)
 | TKT | 내용 | 담당 | 읽을 것 | 산출 | 완료 조건 | 선행 |

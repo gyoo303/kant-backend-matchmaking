@@ -28,9 +28,9 @@ description: 확정된 화면 명세와 디자인 기준을 코드로 구현하�
      | 컨벤션·금지 패턴 | AR-CONV | `docs/02-arch/05-structure-conventions.md` |
      | 품질 게이트 | AR-GATE | `docs/02-arch/06-quality-gates.md` |
      | 백엔드가 넘긴 것 | BE-BRIEF | `docs/04-backend/briefing.md` ("프론트엔드 에이전트에게 전달할 것") |
-     | 디자인 기준 | UX-DESIGN | `docs/uiux/design-principles.md` |
+     | 디자인 기준 | UX-DESIGN | `docs/uiux/review/frontend/design-system.md` |
      | 디자인 결정 기록 | UX-DEC | `docs/uiux/decisions.md` |
-     | 페르소나 컨텍스트 | UX-CTX-FE | `docs/uiux/context/for-frontend.md` |
+     | 페르소나 컨텍스트 | UX-CTX-FE | `docs/uiux/review/frontend/README.md` (§2·§3) |
    - 명령(lint·타입·빌드·테스트·스크린샷·audit): `package.json` scripts, CI 설정, README
    - 그 밖: 티켓에 적힌 ADR(`docs/02-arch/adr/`), PR 템플릿
    - 담당 영역: `AGENTS.md`의 담당 표, `CODEOWNERS`, `CONTRIBUTING.md`

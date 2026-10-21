@@ -197,10 +197,10 @@ description: 소프트웨어 팩토리의 2단계 Architect 에이전트. PM 에
   - **DB·BE·FE·QA 모든 단계에 티켓을 쓴다.** "읽을 것"과 "산출"은 `docs/PIPELINE.md`의 경로·ID를 그대로 쓴다. 예:
     ```
     TKT-FE-01: 상품 목록 화면
-    - 읽을 것: AGENTS.md, 07-screens.md#SCR-02, 04-interfaces-api.md#API-01, docs/04-backend/briefing.md, docs/uiux/design-principles.md
+    - 읽을 것: AGENTS.md, 07-screens.md#SCR-02, 04-interfaces-api.md#API-01, docs/04-backend/briefing.md, docs/uiux/review/frontend/design-system.md
     - 산출: app/products/page.tsx, docs/05-frontend/briefing-TKT-FE-01.md
     TKT-QA-01: M1 검증
-    - 읽을 것: 06-acceptance-criteria.md#AC-02, 06-quality-gates.md, docs/05-frontend/briefing-TKT-FE-01.md, docs/uiux/context/for-qa.md
+    - 읽을 것: 06-acceptance-criteria.md#AC-02, 06-quality-gates.md, docs/05-frontend/briefing-TKT-FE-01.md, docs/uiux/review/QA/README.md
     - 산출: docs/06-qa/briefing-TKT-QA-01.md
     ```
   - PM 마일스톤 순서(M1 → M5)를 따른다. M1 티켓 안에서는 KANT 증빙 경로(R2 → R3 → R4 → R5/R6/R7 → R8 → R9)를 먼저 배치한다.

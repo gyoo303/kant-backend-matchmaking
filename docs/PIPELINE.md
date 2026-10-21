@@ -77,12 +77,12 @@
 |---|---|---|---|---|
 | UX-KNOW | `docs/uiux/domain/knowledge.md` | UX | — | PM |
 | UX-OPENQ | `docs/uiux/domain/open-questions.md` | UX | — | PM |
-| UX-PERSONA | `docs/uiux/personas.md` | UX | — | PM, FE, QA |
-| UX-DESIGN | `docs/uiux/design-principles.md` | UX | FE | QA |
+| UX-PERSONA | `docs/uiux/review/QA/scenarios.md` (§1 페르소나 P1~P3) | UX | — | PM, FE, QA |
+| UX-DESIGN | `docs/uiux/review/frontend/design-system.md` | UX | FE | QA |
 | UX-DEC | `docs/uiux/decisions.md` | UX | FE | PM, QA |
 | UX-CTX-ORCH | `docs/uiux/context/for-orchestrator.md` | UX | PM | ARCH |
-| UX-CTX-FE | `docs/uiux/context/for-frontend.md` | UX | FE | — |
-| UX-CTX-QA | `docs/uiux/context/for-qa.md` | UX | QA | — |
+| UX-CTX-FE | `docs/uiux/review/frontend/README.md` (§2 페르소나 요약, §3 `UX-n` 정의) | UX | FE | — |
+| UX-CTX-QA | `docs/uiux/review/QA/README.md` (§2·§3 사용성 검증 범위, `UX-n` 확인 방법) | UX | QA | — |
 | UX-REVIEW | `docs/uiux/review/` (검수 대상 단계별 하위 폴더 `PM/`, `ARCH/`, `FE/`, `QA/`에 `YYYY-MM-DD-<대상>.md`) | UX | — | 검수 대상 단계 |
 | UX-USAB | `docs/uiux/usability/YYYY-MM-DD-round<N>.md` | UX | — | QA, PM |
 | UX-PLAN-FE | `docs/uiux/review/frontend/README.md` (같은 폴더의 `design-system.md`, `screens.md`, 화면별 시안 `mockups/*.png`를 함께 읽는다) | UX | FE | QA |
@@ -91,6 +91,7 @@
 > UX 산출물은 사람 승인 후에 배포된다(UX 스킬 R3). 아직 없으면 `필수`라도 `BLOCKED`로 멈추지 않고, 브리핑의 "확인하지 못한 것"에 `<ID> 미배포`로 적고 진행한다.
 > 승인 전 초안은 같은 폴더에 `<파일명>.draft.md`로 둔다. 다른 단계는 `.draft.md`를 읽지 않는다(UX 스킬 §7).
 > UX-PLAN-FE·UX-PLAN-QA는 FE·QA가 계획을 세울 때 읽는 참고자료 묶음이다. `review/` 아래에 있지만 검수 기록(UX-REVIEW)이 아니다. `review/QA/`의 `YYYY-MM-DD-<대상>.md`는 QA 산출물 검수 기록, `README.md`·`scenarios.md`는 UX-PLAN-QA다.
+> UX-CTX-FE·UX-DESIGN은 UX-PLAN-FE 묶음 안에, UX-CTX-QA·UX-PERSONA는 UX-PLAN-QA 묶음 안에 들어 있다. 별도 파일(`personas.md`, `design-principles.md`, `context/for-frontend.md`, `context/for-qa.md`)은 만들지 않는다. 같은 내용을 두 곳에 두지 않기 위해서다.
 
 ### 3.6 결정 기록 (어디에 무엇을)
 | 종류 | 위치 |
