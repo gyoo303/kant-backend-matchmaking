@@ -1,8 +1,5 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# 파일 업로드 경로
-/uploads
-
 # dependencies
 /node_modules
 /.pnp
@@ -35,6 +32,11 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# supabase cli (원격 연결 정보·브랜치 임시 파일)
+/supabase/.temp/
+/supabase/.branches/
 
 # vercel
 .vercel
