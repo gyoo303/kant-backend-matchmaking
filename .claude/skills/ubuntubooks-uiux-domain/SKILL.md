@@ -151,8 +151,8 @@ docs/uiux/
 │   ├── for-orchestrator.md    ← UX-CTX-ORCH ① 도메인 지식 컨텍스트
 │   ├── for-frontend.md        ← UX-CTX-FE ④ 사용자 페르소나 컨텍스트 + UX-n
 │   └── for-qa.md              ← UX-CTX-QA ⑤ 사용자 페르소나 컨텍스트 + 사용성 기준
-├── reviews/
-│   └── YYYY-MM-DD-<대상>.md   ← UX-REVIEW 검수 기록
+├── review/                    ← 검수 대상 단계별 하위 폴더 (PM/, ARCH/, FE/, QA/)
+│   └── <단계>/YYYY-MM-DD-<대상>.md ← UX-REVIEW 검수 기록
 └── usability/
     └── YYYY-MM-DD-round<N>.md ← UX-USAB 사용성 테스트 결과
 ```
@@ -358,7 +358,7 @@ docs/uiux/
 | `[불편]` | 과업은 되지만 헷갈리거나 일관성이 깨짐 | 이번 PR에서 고칠지 후속 이슈로 넘길지 브리핑에 적는다 |
 | `[취향]` | 취향이나 개선 아이디어 | 사람이 고치라고 할 때만 고친다 |
 
-### 5-3. 리뷰 코멘트 형식 (PR 코멘트와 `reviews/` 기록 공통)
+### 5-3. 리뷰 코멘트 형식 (PR 코멘트와 `review/` 기록 공통)
 
 ```markdown
 ### [막힘] 구매 버튼이 상품 상세 첫 화면에서 보이지 않음
@@ -371,7 +371,7 @@ docs/uiux/
 ```
 
 모든 수정요청에는 **문제 / 근거 / 요청 / 확인 방법**이 다 있어야 한다. 근거가 없는 요청은 `[취향]`으로 낮추거나 하지 않는다.
-`reviews/` 파일 맨 위에는 대상(`FE-BRIEF` 경로, PR 번호)과 승인 여부를 적는다.
+`review/<단계>/` 파일 맨 위에는 대상(`FE-BRIEF` 경로, PR 번호)과 승인 여부를 적는다.
 
 ### 5-4. ④의 질문에 답하기
 

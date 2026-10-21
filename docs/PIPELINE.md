@@ -83,7 +83,7 @@
 | UX-CTX-ORCH | `docs/uiux/context/for-orchestrator.md` | UX | PM | ARCH |
 | UX-CTX-FE | `docs/uiux/context/for-frontend.md` | UX | FE | — |
 | UX-CTX-QA | `docs/uiux/context/for-qa.md` | UX | QA | — |
-| UX-REVIEW | `docs/uiux/reviews/YYYY-MM-DD-<대상>.md` | UX | — | 검수 대상 단계 |
+| UX-REVIEW | `docs/uiux/review/` (검수 대상 단계별 하위 폴더 `PM/`, `ARCH/`, `FE/`, `QA/`에 `YYYY-MM-DD-<대상>.md`) | UX | — | 검수 대상 단계 |
 | UX-USAB | `docs/uiux/usability/YYYY-MM-DD-round<N>.md` | UX | — | QA, PM |
 
 > UX 산출물은 사람 승인 후에 배포된다(UX 스킬 R3). 아직 없으면 `필수`라도 `BLOCKED`로 멈추지 않고, 브리핑의 "확인하지 못한 것"에 `<ID> 미배포`로 적고 진행한다.
