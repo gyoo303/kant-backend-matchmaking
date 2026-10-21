@@ -40,12 +40,12 @@
 ### 3.2 PM
 | ID | 경로 | 만드는 단계 | 읽는 단계 (필수) | 읽는 단계 (선택) |
 |---|---|---|---|---|
-| PM-INV | `docs/01-pm/01-requirements-inventory.md` | PM | — | ARCH |
+| PM-INV | `docs/01-pm/01-requirements-inventory.md` | PM | — | ARCH, UX |
 | PM-ASM | `docs/01-pm/02-assumptions-questions.md` | PM | ARCH (`→ARCH` 이관) | — |
-| PM-DOMAIN | `docs/01-pm/03-domain.md` | PM | — | ARCH, DB, BE, QA |
+| PM-DOMAIN | `docs/01-pm/03-domain.md` | PM | — | ARCH, DB, BE, QA, UX |
 | PM-SCOPE | `docs/01-pm/04-scope.md` (상단 Architect 요약 블록) | PM | ARCH | — |
-| PM-US | `docs/01-pm/05-user-stories.md` | PM | — | ARCH, BE, FE |
-| PM-AC | `docs/01-pm/06-acceptance-criteria.md` | PM | FE, QA | ARCH, DB, BE |
+| PM-US | `docs/01-pm/05-user-stories.md` | PM | — | ARCH, BE, FE, UX |
+| PM-AC | `docs/01-pm/06-acceptance-criteria.md` | PM | FE, QA | ARCH, DB, BE, UX |
 | PM-SCR | `docs/01-pm/07-screens.md` | PM | FE | ARCH, UX |
 | PM-KANT | `docs/01-pm/08-kant-traceability.md` | PM (ARCH가 이관 행 갱신) | — | ARCH, QA |
 | PM-DEC | `docs/01-pm/decision-log.md` | PM, ARCH(`[자율][ARCH]`) | — | 전체 |
@@ -87,6 +87,7 @@
 | UX-USAB | `docs/uiux/usability/YYYY-MM-DD-round<N>.md` | UX | — | QA, PM |
 
 > UX 산출물은 사람 승인 후에 배포된다(UX 스킬 R3). 아직 없으면 `필수`라도 `BLOCKED`로 멈추지 않고, 브리핑의 "확인하지 못한 것"에 `<ID> 미배포`로 적고 진행한다.
+> 승인 전 초안은 같은 폴더에 `<파일명>.draft.md`로 둔다. 다른 단계는 `.draft.md`를 읽지 않는다(UX 스킬 §7).
 
 ### 3.6 결정 기록 (어디에 무엇을)
 | 종류 | 위치 |
