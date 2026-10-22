@@ -1,6 +1,6 @@
 ---
 stage: BE
-tickets: [TKT-BE-M2-01, TKT-BE-M2-02, TKT-BE-M2-03, TKT-BE-M3-01, TKT-BE-M3-02, TKT-BE-M3-03, TKT-BE-M4-01, TKT-BE-M4-02, TKT-BE-M4-03, TKT-BE-M4-04]
+tickets: [TKT-BE-M2-01, TKT-BE-M2-02, TKT-BE-M2-03, TKT-BE-M3-01, TKT-BE-M3-02, TKT-BE-M3-03, TKT-BE-M4-01, TKT-BE-M4-02, TKT-BE-M4-03, TKT-BE-M4-04, TKT-BE-M3-04]
 status: partial
 inputs_read: [AR-MAP, AR-HAND, AR-API, AR-CONV, AR-GATE, AR-ADR, DB-BRIEF, DB-TYPES, PM-AC, PM-US, PM-DOMAIN, PM-SCR]
 next_readers: [FE, QA]
@@ -13,6 +13,7 @@ next_readers: [FE, QA]
 | TKT | 완료 조건 | 충족 여부 |
 |---|---|---|
 | TKT-BE-M2-01 | AC-05-2·5·6 | 코드 완료. `safeNextPath` 테스트 통과. 실제 카카오 로그인(AC-05-2·5·6)은 아래 "카카오 로그인 확인 절차"대로 사람이 확인 |
+| TKT-BE-M3-04 | GATE-01~06 (D-044 영향 확인) | 충족(2026-10-22). **코드 변경 없음**. 아래 "TKT-BE-M3-04 영향 확인" 참고. 실제 동작은 0060 원격 적용 뒤 QA-M3에서 확인 |
 | TKT-BE-M2-02 | AC-05-1·2(네이버) | **미완료(사람 작업 필요)**. 네이버 키 미발급. 아래 "네이버 스파이크 절차"대로 확인 후 결과를 이 표에 적는다. ADR-003 A(`custom:naver`)는 BE 코드가 필요 없다(콜백 공용) |
 | TKT-BE-M2-03 | AC-06-1·2·4 | 코드·테스트 완료(AC-06-1·2·4 스키마 테스트 통과). 저장 후 목록 반영은 FE·QA 확인 |
 | TKT-BE-M3-01 | AC-07-1~5, AC-08-2·3 | 코드·테스트 완료(AC-07-2·3·4·5, AC-08-2·7 도메인 테스트 통과) |
@@ -104,6 +105,17 @@ next_readers: [FE, QA]
 - 서재 작업 저장(API-18)에서 품절 책은 서버에서 재고를 다시 보고 `OUT_OF_STOCK`으로 막는다(AC-14-2). RLS가 `arrived`·`reading`이 아닌 회차 저장을 막으면 `INVALID_STATE`.
 - `list_shipping_targets`의 생성 타입은 `order_number`·`books`를 `string`으로 적지만 실제로는 `null`이 온다(DB 브리핑). `lib/data/admin.ts`에서 `?? null`로 받는다. 타입 재생성 시 DB 쪽에서 nullable로 보이게 할 방법이 있으면 좋겠다(요청, 급하지 않음).
 
+### TKT-BE-M3-04 영향 확인 (D-044, AR-DB §5.3)
+| 지점 | 0060 이후 동작 | 코드 변경 |
+|---|---|---|
+| `lib/data/orders.ts` `createOrder` | `create_order`가 기존 결제 대기 주문을 돌려줘도 같은 `{ orderId }`. 시그니처·반환 타입 그대로라 `types/database.ts` 재생성 불필요 | 없음 |
+| API-07 `startOrderPayment` | 재사용된 주문에 `create_payment`가 새 `ready` 결제(새 `pg_order_id`)를 만든다. 결제창 상품명·금액은 그 주문 기준 | 없음 |
+| API-08 `retryPayment` | 그대로. 결제 대기 주문은 회원당 1건이라 결과 화면·주문 현황의 [다시 결제하기] 대상도 1건 | 없음 |
+| API-09 성공 경로 | 대체로 `cancelled`된 주문의 결제, 또는 재사용 주문에서 먼저 확정된 결제 뒤의 다른 결제는 `confirm_payment` → `INVALID_STATE` → 기존 보상 취소(SEQ-03 6) → `/checkout/result?status=fail&code=INVALID_STATE` | 없음 |
+| API-12 `cancelPending`, API-23 탈퇴 | 대상이 1건으로 줄 뿐 같은 RPC | 없음 |
+| 오류 매핑 | `create_order`의 새 오류 코드 없음. 동시 호출은 DB의 회원별 lock이 줄 세우므로 unique 위반(23505)은 정상 흐름에서 나오지 않는다. 나오면 `toAppError`가 `UNKNOWN`으로 바꾼다 | 없음 |
+- 남은 위험(설계가 받아들인 것): 두 탭에서 같은 주문을 결제해 둘 다 승인되면, 나중 결제는 PG 승인 뒤 보상 취소된다. 회원은 그 탭에서 "결제가 완료되지 않았어요"를 보지만 주문은 먼저 결제로 접수돼 있다. 보상 취소가 실패하면 기존과 같이 `contact=1` 안내.
+
 ### 남은 위험
 - `complete_refund`가 PG 환불 성공 뒤 실패하면 결제가 `refunding`에 남는다(`[API-13] REFUND_DB_FAILED` 로그). 다시 누르면 `ALREADY_PROCESSING`이라 운영자가 SQL로 `complete_refund`를 다시 불러야 한다.
 - API-09 보상 취소 실패(RISK-03 잔여): 결제는 `failed`(`failure_code`에 `:COMPENSATION_FAILED`), PG 관리자 화면에서 직접 취소 필요.
@@ -138,6 +150,11 @@ BE 쪽 코드는 콜백(`/auth/callback`)·세션 갱신(`proxy.ts`)·가드뿐�
 4. 실패하면 ADR-003 B(`app/auth/naver/*/route.ts` + `lib/auth/naver.ts`)로 전환한다. 이 경우 BE 작업을 다시 요청해 주세요.
 
 ## 검증 결과 (2026-10-22)
+### TKT-BE-M3-04
+- GATE-01 오류 0 / GATE-02 오류 0 / GATE-03 tests 76, pass 76, fail 0 / GATE-05 0줄 / GATE-06 0줄 (코드 변경 없음. GATE-04 빌드는 FE 단계 최종 빌드로 확인)
+- 결제 경로의 DB 쪽 동작(재사용 주문 두 결제 중 하나만 확정, 대체 주문 결제 거부)은 DB pgTAP `pending_orders.test.sql`이 확인했다(DB 브리핑 TKT-DB-05)
+
+### TKT-BE-M2-01~M4-04
 - GATE-01 `npx tsc --noEmit`: 통과(오류 0, 0050 적용·타입 재생성 후 재실행)
 - GATE-02 `npm run lint`: 통과(오류 0)
 - GATE-03 `npm test`: tests 70 / pass 70 / fail 0
