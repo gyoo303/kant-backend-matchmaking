@@ -1,6 +1,6 @@
 ---
 stage: DB
-tickets: [TKT-DB-00, TKT-DB-01, TKT-DB-02]
+tickets: [TKT-DB-00, TKT-DB-01, TKT-DB-02, TKT-DB-03]
 status: done
 inputs_read: [AR-MAP, AR-HAND, AR-DB, AR-CONV, AR-GATE, AR-ADR]
 next_readers: [BE, QA]
@@ -13,6 +13,7 @@ next_readers: [BE, QA]
 | TKT-DB-00 | `npx supabase db push --linked --dry-run` 정상 종료 | 충족 (2026-10-22, exit 0, "Remote database is up to date.", 적용 대상 마이그레이션 0개) |
 | TKT-DB-01 | AC-02-1·3, NFR-16, GATE-07 | 충족 (2026-10-22). 원격 적용 완료(`migration list`: 0001 local=remote), pgTAP 22개 통과, 공개 키 조회 확인(아래 "검증 결과") |
 | TKT-DB-02 | GATE-07, AC-08-5·6·8, AC-10-5 | 충족 (2026-10-22). 원격 적용 완료(`migration list`: 0020 local=remote), pgTAP 106개 통과(42·29·35), GATE-01~06 통과 |
+| TKT-DB-03 | GATE-07, AC-11-9, AC-16-6, AC-17-5, AC-18-8 | 충족 (2026-10-22). 원격 적용 완료(`migration list`: 0030 local=remote), pgTAP 168개 통과(62·42·29·35), GATE-01~06 통과 |
 
 ## 만든 것
 ### TKT-DB-00
@@ -61,6 +62,25 @@ next_readers: [BE, QA]
 | `ship_order(p_order_id) returns order_status` | authenticated(책방지기) | `paid → shipped`, `shipped_at` | `FORBIDDEN`, `CANCEL_REQUESTED`, `INVALID_STATE` | ✓ |
 - `p_kind`는 `'order'`만 받는다(회차 `'round'`는 0030). `p_ship` 키는 `recipientName`, `phone`, `address`(AR-API `ShippingSnapshot`과 같은 이름).
 
+### TKT-DB-03
+- `supabase/migrations/0030_subscription.sql`
+  - 테이블 7개: `subscriptions`(활성 1개 부분 unique), `subscription_rounds`(진행 중 1개 부분 unique INV-12, 취소 요청 check INV-20), `reader_letters`, `round_contents`, `unboxing_codes`(활성 코드 unique), `shelf_memos`, `farewell_notes` + `updated_at` 트리거 4개
+  - `payments.round_id` FK 추가(AR-DB §5.1), `payments_select_own`을 주문·회차 소유 기준으로 다시 만듦
+  - RLS 정책 19개(`payments_select_own` 재작성 포함, 아래 표), RPC만 쓰는 테이블은 쓰기 권한 회수, `reader_letters`는 `body` 컬럼 update만
+  - `postcards` 버킷(비공개, jpeg·png·webp, 10MB) + `storage.objects` 정책 4개(책방지기만)
+  - 회차 RPC 5개 새로 만듦, 공용 RPC 8개를 `create or replace`로 회차 분기 추가(`fail_payment`·`fail_refund`는 그대로 공용)
+- `supabase/tests/subscription.test.sql`: 회차 전이·멱등성·RLS 62개 (결과 표 형식)
+
+### RPC (TKT-DB-03)
+| 함수 | 실행 권한 | 하는 일 | 오류 | 멱등 |
+|---|---|---|---|---|
+| `create_round(p_letter, p_ship) returns subscription_rounds` | authenticated | 편지(10~2000자)·배송지 검사 → 회차 `pending_payment` + `reader_letters` | `VALIDATION`, `ROUND_IN_PROGRESS`(INV-12) | — |
+| `open_round(p_round_id)` | authenticated(책방지기) | `arrived → reading`, `opened_at`. 그 밖에는 변화 없음 | `FORBIDDEN` | ✓ |
+| `ship_round(p_round_id, p_code, p_teaser) returns char(6)` | authenticated(책방지기) | 책·답장·힌트(1~100자) 확인 → 재고−1 → 코드 insert → 힌트 저장 → `shipped` | `CANCEL_REQUESTED`, `MISSING_SHIPMENT_FIELDS`, `OUT_OF_STOCK`, `CODE_COLLISION`, `INVALID_STATE` | ✓ 이미 shipped면 처음 코드 |
+| `unbox_round(p_round_id, p_code) returns boolean` | authenticated | 소유자·`shipped`·코드 일치 → `unboxed`·`used_at`. 그 밖에는 false | — (틀린 코드·남의 회차 모두 false) | ✓ |
+| `end_subscription(p_note)` | authenticated | 구독 `ended`, 결제 대기 회차 `cancelled`, 안부(1~1000자)가 있으면 저장 | `INVALID_STATE`(활성 구독 없음), `VALIDATION` | — |
+| 공용 RPC 회차 분기 | (0020과 같음) | `create_payment(null, round)` 금액 30,000 / `confirm_payment` 회차: 활성 구독 연결(없으면 생성)·`arrived`·기본 배송지 upsert / `request·withdraw·reject_cancel('round')` 표시 설정·해제(**반환 null**) / `begin_refund('round')` 취소 요청 표시가 있는 arrived·reading만 / `complete_refund` 회차 `cancelled`·표시 해제 / `cancel_pending('round')` `pending_payment → cancelled` | 0020과 같음 | 0020과 같음 |
+
 ### RLS 정책 (TKT-DB-01 범위)
 | 테이블 | 누가 | 무엇을 | 조건 |
 |---|---|---|---|
@@ -85,6 +105,20 @@ next_readers: [BE, QA]
 | `payments` | 회원 | select | 주문 소유 기준 (`payments_select_own`, 0030에서 회차 기준을 더해 다시 만든다) |
 | `payments` | 책방지기 | select | `is_keeper()` |
 | `orders`·`order_items`·`payments` | anon·authenticated | insert·update·delete | 테이블 권한 회수 — RPC만 쓴다 |
+
+### RLS 정책 (TKT-DB-03 범위)
+| 테이블 | 누가 | 무엇을 | 조건 |
+|---|---|---|---|
+| `subscriptions`·`subscription_rounds` | 회원 / 책방지기 | select | own / 전체. 쓰기는 RPC만(권한 회수) |
+| `reader_letters` | 회원 | select / update(`body`만) | own / own + 회차 `pending_payment` |
+| `reader_letters` | 책방지기 | select | 회차 `status <> 'pending_payment'` (INV-18) |
+| `round_contents` | 회원 | select | own 회차 + `unboxed` (NFR-08) |
+| `round_contents` | 책방지기 | select / insert·update | 전체 / 회차 `arrived`·`reading`일 때만. delete 권한 회수 |
+| `unboxing_codes` | 책방지기 | select | 전체 (회원 정책 없음, 쓰기는 RPC) |
+| `shelf_memos` | 회원 | select·delete / insert·update | own / own + own 회차 `unboxed`. 책방지기 정책 없음(INV-19) |
+| `farewell_notes` | 회원 / 책방지기 | select | own / 전체. 쓰기는 `end_subscription` |
+| `payments` | 회원 | select | 주문 **또는 회차** 소유 기준 (`payments_select_own` 재작성) |
+| `storage.objects` (`postcards`) | 책방지기 | select·insert·update·delete | `bucket_id = 'postcards' and is_keeper()`. 회원 정책 없음 → 서명 URL(admin)로만 열람 |
 
 ### lib/data 함수
 | 함수 | API | 반환 | 비고 |
@@ -180,6 +214,13 @@ npx supabase test db --linked
 - `confirm_payment`가 `AMOUNT_MISMATCH`·`OUT_OF_STOCK`으로 실패하면 DB는 전부 롤백된다. 이어서 SEQ-03 6단계(PG 보상 취소 → `fail_payment`)를 서버가 한다.
 - `begin_refund`가 돌려주는 결제 행의 `pg_payment_key`로 `toss.cancel`을 부르고, 결과에 따라 `complete_refund` / `fail_refund`를 부른다.
 - `create_payment`는 부를 때마다 새 `ready` 결제를 만든다([다시 결제하기], API-08). 남은 이전 `ready` 결제는 확정되지 않는다(부분 unique는 정산된 결제만 막는다).
+- (TKT-DB-03) 회차 RPC 호출:
+  - 회원 화면의 회차 정보는 `subscription_rounds`(+`teaser`는 `shipped`·`unboxed`일 때만 화면에 표시)에서, 책·답장·엽서 경로는 `round_contents`에서 읽는다. `round_contents`는 언박싱 전에는 RLS가 0행을 돌려주므로 회원 응답에 섞일 수 없다(NFR-08). 언박싱 전에 `createAdminClient()`로 `round_contents`를 읽어 회원에게 주면 안 된다(금지 패턴 9).
+  - 엽서: `createClient()`로 `round_contents.postcard_path`를 읽은 뒤(언박싱 후에만 행이 온다) `createAdminClient().storage.from('postcards').createSignedUrl(path, 600)`.
+  - 서재 작업(API-18)은 `round_contents`에 책방지기 세션으로 insert/update한다(회차 `arrived`·`reading`일 때만 RLS 통과). 엽서 업로드는 `postcards` 버킷 `rounds/{round_id}/postcard.{ext}`.
+  - `ship_round`가 `CODE_COLLISION`이면 새 코드로 다시 부른다(SEQ-06, 최대 3회). `CODE_COLLISION`은 AR-API §2의 `ErrorCode` 목록에 없으므로 BE가 재시도용으로만 쓰고 화면에는 내보내지 않는다.
+  - `request_cancel`·`withdraw_cancel`·`reject_cancel`은 회차일 때 `null`을 돌려준다. 화면은 회차를 다시 읽어 `cancel_requested_at`·`cancel_rejected_at`으로 표시를 정한다.
+  - 회차 결제의 `confirm_payment` 반환은 `{ already, kind: 'round', roundId }`다.
 
 ## 설계와 다르게 한 것 / 질문
 - (TKT-DB-01, 사용자 승인 2026-10-22) `types/product.ts`를 DB-01에서 만들었다. AGENTS.md 담당은 FE지만 FE-01이 DB-01 다음이라 `toProduct`·`data/products.ts`가 컴파일되지 않는다. 내용은 AR-API §1.1 그대로이고, FE-01은 확인만 하면 된다.
@@ -204,8 +245,26 @@ npx supabase test db --linked
   - `cancel_pending`은 주문만 `cancelled`로 바꾸고, 남은 `ready` 결제는 그대로 둔다. 늦게 온 승인은 `confirm_payment`가 `INVALID_STATE`로 막고 서버가 보상 취소한다.
 - **질문 (TKT-DB-02)**: AR-API §2는 "RPC 오류를 `lib/data`가 `ErrorCode`로 바꾼다"고 하지만, 주문·결제용 `lib/data` 함수(`lib/data/orders.ts` 등)는 어느 티켓의 산출에도 없다. DB-02는 HANDOFF 산출(`0020_commerce.sql`, 테스트)만 만들었다. BE-M3 티켓에서 BE가 만들지, DB 티켓을 추가할지 정해 주세요. 정하기 전까지 BE는 위 "레이어 계층 확인 포인트"의 오류 규칙으로 RPC를 직접 부를 수 있다.
 - 상품 가격이 0원인 책만 담아 주문하면 `payments.amount > 0` 제약 때문에 `create_payment`가 `UNKNOWN`(23514)으로 실패한다. 설계 그대로 두었고, 0원 책은 시연 데이터에 없다.
+- (TKT-DB-03, 사용자 승인 2026-10-22) `ship_round`에 `p_teaser`를 추가했다. 힌트는 API-19 입력이고 발송 시 필수인데, 회차 행은 RPC로만 쓸 수 있어 저장할 길이 없었다. AR-DB §5 표와 AR-API SEQ-06을 같이 고쳤다.
+- (TKT-DB-03, 사용자 승인) 회차 분기의 `request_cancel`·`withdraw_cancel`·`reject_cancel`은 `null`을 돌려준다(시그니처 유지). AR-DB §5.1에 적었다.
+- (TKT-DB-03) 설계에 세부가 없어 정한 것:
+  - `create_round`는 편지(10~2000자)와 배송지를 함수에서 먼저 검사해 `VALIDATION`으로 돌려준다(제약 위반 23514 대신).
+  - `unbox_round`는 이미 `unboxed`인 자기 회차에 맞는 코드를 다시 넣으면 `true`(멱등). 다른 경우는 설계대로 모두 `false`.
+  - `reject_cancel('round')`은 이미 거절된(표시 없음 + 거절 시각 있음) 회차면 `null`, 표시가 없는데 거절 기록도 없으면 `INVALID_STATE`.
+  - `complete_refund`의 회차 분기는 `cancelled`로 바꾸면서 `cancel_requested_at`을 지운다. 표 §3의 `check (cancel_requested_at is null or status in ('arrived','reading'))` 때문이다. 회차는 발송 전이라 재고를 되돌릴 것이 없다.
+  - `end_subscription`은 결제 대기 회차를 회원 기준으로 모두 `cancelled`로 바꾼다(결제 대기 회차는 아직 구독에 연결되지 않았다).
+  - `shelf_memos` update 정책: `using`은 own만, `with check`에 own 회차 `unboxed`를 둔다. delete는 own만(설계 "own + unboxed"와 같은 결과: 메모는 unboxed 회차에만 생긴다).
 
 ## 검증 결과
+### TKT-DB-03 (2026-10-22, 원격 적용 후)
+- 원격 적용: 사람이 `npx supabase db push --linked` 실행. `migration list` 0001·0020·0030 local=remote, 다시 dry-run하면 "Remote database is up to date."
+- `types/database.ts`: `gen types --linked --schema public`으로 다시 생성(908줄, 새 테이블 7개·회차 RPC 5개 포함)
+- GATE-01 `npx tsc --noEmit`: 통과 / GATE-02 `npm run lint`: 통과 / GATE-03 `npm test`: 3 pass, 0 fail / GATE-04 `npm run build`: 통과
+- GATE-05 `.env` 추적 0줄 / GATE-06 금지 패턴 0줄
+- GATE-07 pgTAP: **168개 통과** (사람이 SQL 편집기로 파일마다 실행, `not ok` 0줄, 마지막 줄 `1..62`·`1..42`·`1..29`·`1..35`). 0030이 공용 RPC를 교체한 뒤에도 주문 분기 회귀 없음. 파일과 검사 수:
+  - `subscription.test.sql` 62개 (새 파일): 회차 전이 §6.2, 멱등성(AC-08-6, AC-15-4, AC-20-4), RLS(AC-11-9, AC-16-4·6, AC-17-5, AC-18-8, INV-18·19), postcards 버킷
+  - `rls.test.sql` 42개, `state_machine.test.sql` 29개, `payments.test.sql` 35개: 주문 분기가 그대로인지(회귀) 확인. `rls.test.sql`의 GATE-07 검사가 새 테이블 7개의 RLS 활성도 확인한다
+
 ### TKT-DB-02 (2026-10-22, 원격 적용 후)
 - 원격 적용: 사람이 `npx supabase db push --linked` 실행. `migration list` 0001·0020 local=remote, 다시 dry-run하면 "Remote database is up to date."
 - `types/database.ts`: `gen types --linked --schema public`으로 다시 생성(577줄, 새 테이블 5개·RPC 12개 포함)
