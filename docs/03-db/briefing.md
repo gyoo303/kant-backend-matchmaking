@@ -1,6 +1,6 @@
 ---
 stage: DB
-tickets: [TKT-DB-00, TKT-DB-01]
+tickets: [TKT-DB-00, TKT-DB-01, TKT-DB-02]
 status: done
 inputs_read: [AR-MAP, AR-HAND, AR-DB, AR-CONV, AR-GATE, AR-ADR]
 next_readers: [BE, QA]
@@ -12,6 +12,7 @@ next_readers: [BE, QA]
 |---|---|---|
 | TKT-DB-00 | `npx supabase db push --linked --dry-run` 정상 종료 | 충족 (2026-10-22, exit 0, "Remote database is up to date.", 적용 대상 마이그레이션 0개) |
 | TKT-DB-01 | AC-02-1·3, NFR-16, GATE-07 | 충족 (2026-10-22). 원격 적용 완료(`migration list`: 0001 local=remote), pgTAP 22개 통과, 공개 키 조회 확인(아래 "검증 결과") |
+| TKT-DB-02 | GATE-07, AC-08-5·6·8, AC-10-5 | 충족 (2026-10-22). 원격 적용 완료(`migration list`: 0020 local=remote), pgTAP 106개 통과(42·29·35), GATE-01~06 통과 |
 
 ## 만든 것
 ### TKT-DB-00
@@ -32,6 +33,34 @@ next_readers: [BE, QA]
 - `lib/data/products.ts`: `toProduct`, API-01~03
 - `supabase/tests/rls.test.sql`: pgTAP 22개 (아래 "검증 결과")
 
+### TKT-DB-02
+- `supabase/migrations/0020_commerce.sql`
+  - `cart_items`(PK member_id+product_id), `shipping_addresses`(회원당 1행), `orders`, `order_items`, `payments`(`round_id` FK 없음, AR-DB §5.1), 부분 unique 2개, `updated_at` 트리거 4개
+  - `order_number_seq` + 주문 번호 `UBYYMMDD-NNNN`(Asia/Seoul, AR-DB §5.2)
+  - RLS 정책 14개(아래 표), `orders`·`order_items`·`payments`는 테이블 쓰기 권한도 회수
+  - RPC 12개 — 주문 분기만, 회차 대상이면 `INVALID_STATE`(0030에서 `create or replace`로 회차 분기 추가)
+- `supabase/tests/`(AR-DB §8 결과 표 형식)
+  - `rls.test.sql`: 새 형식으로 바꾸고 commerce RLS 20개를 더해 42개
+  - `state_machine.test.sql`: 주문 전이(§6.1) 29개
+  - `payments.test.sql`: 확정·환불 멱등성 35개
+
+### RPC (TKT-DB-02, 모두 security definer + `search_path = ''`, 오류는 `P0001` + `ErrorCode`)
+| 함수 | 실행 권한 | 하는 일 | 오류 | 멱등 |
+|---|---|---|---|---|
+| `create_order(p_ship jsonb) returns orders` | authenticated | 배송지 검사 → 장바구니(재고>0 줄) → 주문·주문 줄(가격 사본), 합계 서버 계산 | `UNAUTHENTICATED`, `VALIDATION`, `OUT_OF_STOCK`(살 수 있는 줄 없음) | — |
+| `create_payment(p_order_id, p_round_id) returns payments` | authenticated | 소유·`pending_payment` 확인 → `ready` 결제, 금액 = 주문 합계, `pg_order_id` 생성 | `NOT_FOUND`, `INVALID_STATE` | — (부를 때마다 새 결제) |
+| `confirm_payment(p_pg_order_id, p_payment_key, p_amount) returns jsonb` | **service_role** | 금액 대조 → 재고 차감·장바구니 줄 삭제·기본 배송지 upsert·주문 `paid`·결제 `paid` | `AMOUNT_MISMATCH`, `OUT_OF_STOCK`(전체 롤백), `INVALID_STATE`, `NOT_FOUND` | ✓ `{already: true}` |
+| `fail_payment(p_pg_order_id, p_code)` | **service_role** | `ready → failed` | — | ✓ |
+| `request_cancel(p_kind, p_id) returns order_status` | authenticated | `paid → cancel_requested`, `cancel_rejected_at = null` | `NOT_FOUND`, `INVALID_STATE` | ✓ |
+| `withdraw_cancel(p_kind, p_id) returns order_status` | authenticated | `cancel_requested → paid` | 같음 | ✓ |
+| `cancel_pending(p_kind, p_id) returns order_status` | authenticated | `pending_payment → cancelled` (D-037) | 같음 | ✓ |
+| `reject_cancel(p_kind, p_id) returns order_status` | authenticated(책방지기) | `cancel_requested → paid` + `cancel_rejected_at` | `FORBIDDEN`, `NOT_FOUND`, `INVALID_STATE` | ✓ |
+| `begin_refund(p_kind, p_id) returns payments` | authenticated(책방지기) | 취소 요청 주문의 결제 `paid → refunding`, 결제 행 반환(`pg_payment_key` 포함) | `FORBIDDEN`, `ALREADY_PROCESSING`, `INVALID_STATE` | ✓ |
+| `complete_refund(p_payment_id)` | **service_role** | `refunding → refunded`, 주문 `refunded`, 재고 복구 | `INVALID_STATE`, `NOT_FOUND` | ✓ |
+| `fail_refund(p_payment_id)` | **service_role** | `refunding → paid` | — | ✓ |
+| `ship_order(p_order_id) returns order_status` | authenticated(책방지기) | `paid → shipped`, `shipped_at` | `FORBIDDEN`, `CANCEL_REQUESTED`, `INVALID_STATE` | ✓ |
+- `p_kind`는 `'order'`만 받는다(회차 `'round'`는 0030). `p_ship` 키는 `recipientName`, `phone`, `address`(AR-API `ShippingSnapshot`과 같은 이름).
+
 ### RLS 정책 (TKT-DB-01 범위)
 | 테이블 | 누가 | 무엇을 | 조건 |
 |---|---|---|---|
@@ -44,6 +73,19 @@ next_readers: [BE, QA]
 | `storage.objects` (`book-covers`) | 모두 | select | `bucket_id = 'book-covers'` |
 | `storage.objects` (`book-covers`) | 책방지기 | insert·update | `bucket_id = 'book-covers' and is_keeper()` |
 
+### RLS 정책 (TKT-DB-02 범위)
+| 테이블 | 누가 | 무엇을 | 조건 |
+|---|---|---|---|
+| `cart_items` | 회원 | select·insert·update·delete | `member_id = auth.uid()` / 책방지기 정책 없음 |
+| `shipping_addresses` | 회원 | select·insert·update | own (delete는 탈퇴 RPC, TKT-DB-04) |
+| `shipping_addresses` | 책방지기 | select | `is_keeper()` |
+| `orders` | 회원 | select | own |
+| `orders` | 책방지기 | select | `is_keeper() and member_id is not null` |
+| `order_items` | 회원 / 책방지기 | select | 주문 소유 기준 / 책방지기는 `member_id`가 있는 주문 |
+| `payments` | 회원 | select | 주문 소유 기준 (`payments_select_own`, 0030에서 회차 기준을 더해 다시 만든다) |
+| `payments` | 책방지기 | select | `is_keeper()` |
+| `orders`·`order_items`·`payments` | anon·authenticated | insert·update·delete | 테이블 권한 회수 — RPC만 쓴다 |
+
 ### lib/data 함수
 | 함수 | API | 반환 | 비고 |
 |---|---|---|---|
@@ -51,7 +93,7 @@ next_readers: [BE, QA]
 | `getProducts(theme?)` | API-01 | `Product[]` 최신순 | `'use cache'` + `cacheTag('products')`, 실패 시 throw |
 | `getProduct(id)` | API-02 | `Product \| null` | uuid 형식 아니면 조회 없이 null |
 | `getNewArrivals()` | API-03 | `Product[]` 재고>0 최신 4권 | D-035 |
-- 트랜잭션 함수(RPC): 없음 (TKT-DB-02부터)
+- 트랜잭션 함수(RPC): TKT-DB-02의 RPC 12개(위 표). `lib/data` 래퍼는 아래 "질문" 참고
 
 ## 환경
 
@@ -120,7 +162,7 @@ npx supabase db push --linked --dry-run --include-seed
 npx supabase db push --linked --include-seed
 ```
 3. 이후 DB 에이전트가 실행: `npx supabase gen types typescript --linked --schema public > types/database.ts` → `npx tsc --noEmit` → `npm run build`
-4. pgTAP (Docker 필요, 로컬 DB는 띄우지 않음). 이 PC에는 Docker가 없어 SQL 편집기에 `supabase/tests/*.test.sql`을 붙여 실행한다. 결과가 `1..N` 한 줄만 나오면 전부 통과, 실패가 있으면 `# Looks like you failed …` 줄이 함께 나온다:
+4. pgTAP (Docker 필요, 로컬 DB는 띄우지 않음). 이 PC에는 Docker가 없어 SQL 편집기에 `supabase/tests/*.test.sql`을 파일마다 붙여 실행한다. TKT-DB-02부터는 결과 표 형식(AR-DB §8)이라 모든 `ok`/`not ok` 줄이 이름과 함께 보인다. 판정: `not ok` 0줄, 마지막 줄 `1..N`:
 ```bash
 npx supabase test db --linked
 ```
@@ -131,6 +173,13 @@ npx supabase test db --linked
 - `createPublicClient()`는 anon 권한이다. 공개 데이터(`products`) 외에는 쓰지 않는다.
 - `createAdminClient()`는 RLS를 건너뛴다. 설계가 정한 곳(엽서 서명 URL, 탈퇴, 결제 확정 RPC)에서만 쓴다.
 - env가 없으면 세 클라이언트 모두 `CONFIG_MISSING: …` 메시지로 throw한다. 화면 안내(AC-21-4)는 TKT-FE-01에서 이 메시지로 판별한다.
+- (TKT-DB-02) 주문·결제 RPC의 호출 클라이언트:
+  - 회원·책방지기 RPC(`create_order`, `create_payment`, `request_cancel`, `withdraw_cancel`, `cancel_pending`, `reject_cancel`, `begin_refund`, `ship_order`)는 `createClient()`(쿠키 세션)로 부른다. `auth.uid()`·`is_keeper()`로 권한을 본다.
+  - 서버 전용 RPC(`confirm_payment`, `fail_payment`, `complete_refund`, `fail_refund`)는 `createAdminClient()`로만 부를 수 있다(실행 권한이 `service_role`뿐).
+- RPC 오류는 `error.code === 'P0001'`이고 `error.message`가 `ErrorCode` 문자열(`OUT_OF_STOCK` 등)이다. 그 밖의 코드(예: `23505` unique 위반, `42501` 권한)는 `UNKNOWN`으로 본다.
+- `confirm_payment`가 `AMOUNT_MISMATCH`·`OUT_OF_STOCK`으로 실패하면 DB는 전부 롤백된다. 이어서 SEQ-03 6단계(PG 보상 취소 → `fail_payment`)를 서버가 한다.
+- `begin_refund`가 돌려주는 결제 행의 `pg_payment_key`로 `toss.cancel`을 부르고, 결과에 따라 `complete_refund` / `fail_refund`를 부른다.
+- `create_payment`는 부를 때마다 새 `ready` 결제를 만든다([다시 결제하기], API-08). 남은 이전 `ready` 결제는 확정되지 않는다(부분 unique는 정산된 결제만 막는다).
 
 ## 설계와 다르게 한 것 / 질문
 - (TKT-DB-01, 사용자 승인 2026-10-22) `types/product.ts`를 DB-01에서 만들었다. AGENTS.md 담당은 FE지만 FE-01이 DB-01 다음이라 `toProduct`·`data/products.ts`가 컴파일되지 않는다. 내용은 AR-API §1.1 그대로이고, FE-01은 확인만 하면 된다.
@@ -144,8 +193,32 @@ npx supabase test db --linked
 - `config.toml`은 기본값에서 바꾸지 않았다. 설계(AR-DB, ADR-005)에 값이 정해져 있지 않고, 원격 전용이라 `config push`를 하지 않으면 원격에 영향이 없다.
 - 원격 Postgres는 17.11(`supabase/.temp/postgres-version`)로 `config.toml`의 `major_version = 17`과 같다.
 - 네이버 키(`NAVER_CLIENT_ID`·`NAVER_CLIENT_SECRET`)는 아직 발급 전이다. TKT-BE-M2-02 전에 필요하다.
+- (TKT-DB-02 정정) 위 DB-01 항목의 `postcards`는 `0003`이 아니라 `0030_subscription.sql`에 들어간다(AR-DB §9 번호 간격, 2026-10-22).
+- (TKT-DB-02) 설계에 세부가 없어 정한 것:
+  - `p_kind`는 `text`(`'order'`·`'round'`), `p_ship` jsonb 키는 `recipientName`·`phone`·`address`(AR-API `ShippingSnapshot`과 같은 이름).
+  - 상태 전이 RPC의 반환은 `order_status`(API-11·13 "새 상태"). 이미 목표 상태면 오류 없이 그 상태를 돌려준다(멱등 ✓).
+  - `create_order`는 배송지를 `shipping_addresses`와 같은 규칙(이름 1~50자, 연락처 `^[0-9-]{9,13}$`, 주소 1~200자)으로 검사한다. 결제 승인 뒤 기본 배송지 upsert가 제약 위반으로 실패하는 것을 막기 위해서다.
+  - 살 수 있는 줄(재고>0)이 하나도 없으면 `OUT_OF_STOCK`(빈 장바구니 포함).
+  - 서버 전용 RPC는 첫 줄에서 `auth.role() = 'service_role'`을 확인하고, 실행 권한도 `service_role`에만 준다.
+  - `begin_refund`는 주문이 `cancel_requested`일 때만 시작한다(AR-API §6.1의 `refunded`는 `cancel_requested`에서만 온다).
+  - `cancel_pending`은 주문만 `cancelled`로 바꾸고, 남은 `ready` 결제는 그대로 둔다. 늦게 온 승인은 `confirm_payment`가 `INVALID_STATE`로 막고 서버가 보상 취소한다.
+- **질문 (TKT-DB-02)**: AR-API §2는 "RPC 오류를 `lib/data`가 `ErrorCode`로 바꾼다"고 하지만, 주문·결제용 `lib/data` 함수(`lib/data/orders.ts` 등)는 어느 티켓의 산출에도 없다. DB-02는 HANDOFF 산출(`0020_commerce.sql`, 테스트)만 만들었다. BE-M3 티켓에서 BE가 만들지, DB 티켓을 추가할지 정해 주세요. 정하기 전까지 BE는 위 "레이어 계층 확인 포인트"의 오류 규칙으로 RPC를 직접 부를 수 있다.
+- 상품 가격이 0원인 책만 담아 주문하면 `payments.amount > 0` 제약 때문에 `create_payment`가 `UNKNOWN`(23514)으로 실패한다. 설계 그대로 두었고, 0원 책은 시연 데이터에 없다.
 
 ## 검증 결과
+### TKT-DB-02 (2026-10-22, 원격 적용 후)
+- 원격 적용: 사람이 `npx supabase db push --linked` 실행. `migration list` 0001·0020 local=remote, 다시 dry-run하면 "Remote database is up to date."
+- `types/database.ts`: `gen types --linked --schema public`으로 다시 생성(577줄, 새 테이블 5개·RPC 12개 포함)
+- GATE-01 `npx tsc --noEmit`: 통과
+- GATE-02 `npm run lint`: 통과
+- GATE-03 `npm test`: tests 3 / pass 3 / fail 0
+- GATE-04 `npm run build`: 통과
+- GATE-05: `.env` 추적 0줄 / GATE-06 금지 패턴 grep: 0줄
+- GATE-07 pgTAP: **106개 통과** (사람이 SQL 편집기로 파일마다 실행, `not ok` 0줄, 마지막 줄 `1..42`·`1..29`·`1..35`). 파일과 검사 수:
+  - `rls.test.sql` 42개: RLS 전체 활성, 가입 트리거, 비로그인 6, 회원 A 15(직접 쓰기 거부 포함), 회원 B 5(AC-09-4), 책방지기 9, book-covers 3
+  - `state_machine.test.sql` 29개: AR-API §6.1 전이 + 거부(INV-04, AC-09-3·5·6, AC-10-1·4, D-037), 주문 번호 형식
+  - `payments.test.sql` 35개: AC-08-5·6·8, AC-10-2·3·5, 서버 전용 RPC 권한, 결제 금액·`pg_order_id`
+
 ### TKT-DB-01 (2026-10-22, 원격 적용 후)
 - 원격 적용: 사람이 `npx supabase db push --linked --include-seed` 실행. `migration list` 0001 local=remote, 다시 dry-run하면 "Remote database is up to date."
 - `types/database.ts`: `gen types --linked --schema public`으로 생성(258줄, `products`·`profiles`·`is_keeper`·enum 6개)
