@@ -91,7 +91,7 @@ create table shipping_addresses (
 
 create table orders (
   id uuid primary key default gen_random_uuid(),
-  order_number text not null unique,                   -- 'UB' || yymmdd || '-' || 4자리, 화면 표시용
+  order_number text not null unique,                   -- 'UB' || yymmdd(Asia/Seoul) || '-' || 시퀀스 4자리, 화면 표시용 (§5.2)
   member_id uuid references profiles(id) on delete set null,   -- 탈퇴 시 연결 끊고 보관(§7)
   status order_status not null default 'pending_payment',
   total_amount integer not null check (total_amount >= 0),
@@ -167,7 +167,7 @@ create table farewell_notes (
 create table payments (
   id uuid primary key default gen_random_uuid(),
   order_id uuid references orders(id) on delete restrict,
-  round_id uuid references subscription_rounds(id) on delete restrict,
+  round_id uuid,                                       -- FK(→ subscription_rounds, on delete restrict)는 0030에서 alter로 추가 (§5.1)
   pg_order_id text not null unique,                    -- 토스 orderId (영숫자·-_ 6~64자)
   pg_payment_key text unique,                          -- RISK-01 중복 확정 차단
   amount integer not null check (amount > 0),          -- 서버 계산 금액(NFR-19)
@@ -248,6 +248,23 @@ create table shipping_list_downloads (
 | `list_shipping_targets() returns table(...)` | 책방지기 | INV-17 대상(결제 시점 배송지) | SEQ-11 |
 | `keeper_counts() returns jsonb` | 책방지기 | SCR-20 오늘 할 일 수 | — |
 
+### 5.1 주문/회차 공용 RPC의 마이그레이션 분할 (사용자 승인 2026-10-22)
+`payments`와 공용 RPC는 `0020`(TKT-DB-02)에서 만들지만 `subscription_rounds`는 `0030`(TKT-DB-03)에서 생긴다. 그래서 두 번에 나눈다.
+| 대상 | `0020_commerce.sql` (TKT-DB-02) | `0030_subscription.sql` (TKT-DB-03) |
+|---|---|---|
+| `payments.round_id` | 컬럼만(FK 없음), `check ((order_id is null) <> (round_id is null))`와 부분 unique는 그대로 | `alter table public.payments add constraint payments_round_id_fkey foreign key (round_id) references public.subscription_rounds(id) on delete restrict` |
+| `create_payment`, `confirm_payment`, `request_cancel`, `withdraw_cancel`, `reject_cancel`, `begin_refund`, `complete_refund`, `fail_refund`, `cancel_pending` | 주문 분기만 구현. 회차 대상(`p_round_id` not null, `p_kind = 'round'`, 회차 결제)이면 `INVALID_STATE` | 같은 시그니처로 `create or replace function` — 주문 분기는 그대로 두고 회차 분기를 추가 |
+| `payments` RLS select own | 주문 소유 기준만 | 정책을 `drop policy` 후 주문·회차 소유 기준으로 다시 만든다 |
+- 시그니처(함수 이름·인자·반환 타입)는 두 파일에서 같아야 한다. BE는 `0030` 적용 전에도 같은 RPC를 부른다.
+- pgTAP: `0020` 범위 테스트는 회차 호출이 `INVALID_STATE`인지 확인하지 않는다(0030 적용 후 바뀌므로). 회차 분기 테스트는 TKT-DB-03에서 쓴다.
+
+### 5.2 주문 번호 `orders.order_number`
+- `0020`에서 시퀀스 `public.order_number_seq`를 만든다. `create_order`가 만든다:
+  `'UB' || to_char(now() at time zone 'Asia/Seoul', 'YYMMDD') || '-' || lpad((nextval('public.order_number_seq') % 10000)::text, 4, '0')`
+- 예: `UB261022-0007`. 날짜는 한국 시간 기준, 뒤 4자리는 날마다 초기화하지 않는 순번이다.
+- 같은 날 1만 건을 넘으면 `unique` 위반이 날 수 있으나 시연 규모 밖으로 보고 재시도는 두지 않는다.
+- 시퀀스는 RLS 대상이 아니다. `create_order`(security definer)만 쓰므로 `anon`·`authenticated`에 시퀀스 권한을 주지 않는다.
+
 ## 6. Storage
 | 버킷 | 공개 | 경로 규칙 | 정책 | 제한 |
 |---|---|---|---|---|
@@ -268,6 +285,24 @@ create table shipping_list_downloads (
 - `data/products.ts`(8권, 테마별 2권, `imageUrl = https://picsum.photos/seed/ub-<n>/600/800`, 고정 uuid) → `scripts/gen-seed.mjs` → `supabase/seed.sql`(`products`만). 생성 파일은 커밋하고, `data/products.ts`를 고치면 다시 생성한다(ADR-001).
 - 원격 전용(ADR-005): seed는 `npx supabase db push --linked --include-seed`로 적용한다. 같은 원격 DB에 여러 번 적용되므로 `insert … on conflict (id) do update set …`로 쓴다(재적용해도 8행 유지).
 - pgTAP 테스트(`supabase/tests/*.test.sql`)는 원격 DB에서 돌므로 파일마다 `begin;` → `create extension if not exists pgtap with schema extensions;` → 테스트 → `select * from finish();` → `rollback;` 구조로 쓴다. 테스트용 사용자·행은 rollback으로 남지 않는다.
+- **결과 표 형식 (사용자 승인 2026-10-22)**: Docker 없이 SQL 편집기로 실행하면 마지막 결과만 보이므로, 모든 TAP 줄을 임시 테이블에 모아 마지막에 한 번에 출력한다. TKT-DB-02부터 이 형식으로 쓰고, `rls.test.sql`(TKT-DB-01)도 다음에 고칠 때 바꾼다.
+  ```sql
+  begin;
+  create extension if not exists pgtap with schema extensions;
+  create temp table tap (n serial, line text);
+  grant insert, select on tap to anon, authenticated, service_role;   -- 역할을 바꿔도 결과를 쌓을 수 있게
+  grant usage on sequence tap_n_seq to anon, authenticated, service_role;
+  select no_plan();                                   -- 출력 없음, 계획만 시작 (tap에 넣지 않는다)
+  insert into tap (line) select ok(…, 'AC-08-6 …');   -- 단언마다 insert into tap (line) select …
+  set local role authenticated;
+  insert into tap (line) select throws_ok(…);
+  reset role;
+  insert into tap (line) select * from finish();      -- 실패 수 요약
+  select line from tap where line is not null order by n;   -- 편집기에 모든 ok / not ok 줄이 이름과 함께 보인다
+  rollback;
+  ```
+  - `supabase test db --linked`로 돌려도 같은 결과가 나온다(마지막 select가 TAP 줄을 그대로 출력).
+  - 판정: 출력에 `not ok`가 0줄이고 마지막 줄이 `1..N`이면 통과.
 - 적용된 마이그레이션 파일은 고치지 않는다. 원격 DB는 `db reset`으로 되돌리지 않으므로 변경은 새 마이그레이션 파일로 한다.
 - `types/database.ts`: `npx supabase gen types typescript --linked --schema public > types/database.ts`(DB 에이전트만 수정, 원격 적용 후 실행).
 - 매핑 함수는 한 곳: `lib/data/products.ts`의 `toProduct(row: Tables<'products'>): Product` (snake → camel).
@@ -276,7 +311,11 @@ create table shipping_list_downloads (
 | 파일 | 내용 | TKT |
 |---|---|---|
 | `supabase/migrations/0001_profiles_products.sql` | enum 전체, `profiles`, `products`, `is_keeper`, 가입 트리거, `set_updated_at`, `book-covers` 버킷 + `storage.objects` 정책 | TKT-DB-01 |
-| `0002_commerce.sql` | `cart_items`, `shipping_addresses`, `orders`, `order_items`, `payments`, 주문 RPC·결제 RPC | TKT-DB-02 |
-| `0003_subscription.sql` | 구독·회차·편지류·코드·메모·안부, 회차 RPC, `postcards` 버킷 + `storage.objects` 정책 | TKT-DB-03 |
-| `0004_admin_ops.sql` | `shipping_list_downloads`, `list_shipping_targets`, `keeper_counts`, `withdraw_member` | TKT-DB-04 |
+| `0020_commerce.sql` | `cart_items`, `shipping_addresses`, `orders`, `order_items`, `payments`(round FK 없음), `order_number_seq`, 주문 RPC·결제 RPC(주문 분기, §5.1) | TKT-DB-02 |
+| `0030_subscription.sql` | 구독·회차·편지류·코드·메모·안부, 회차 RPC, `payments.round_id` FK·공용 RPC 회차 분기(§5.1), `postcards` 버킷 + `storage.objects` 정책 | TKT-DB-03 |
+| `0040_admin_ops.sql` | `shipping_list_downloads`, `list_shipping_targets`, `keeper_counts`, `withdraw_member` | TKT-DB-04 |
 - 버킷은 그 버킷을 쓰는 티켓의 마이그레이션에 둔다(사용자 승인 2026-10-22). 원격 전용(ADR-005)에서는 적용된 파일을 고칠 수 없고, 번호가 큰 파일을 먼저 적용하면 뒤에 오는 작은 번호 파일을 `db push`가 거부하기 때문이다.
+- **번호 간격 (사용자 승인 2026-10-22)**: 아직 적용하지 않은 계획 파일은 10 단위(`0020`·`0030`·`0040`)로 띄운다. `0001`은 이미 적용돼 그대로 둔다.
+  - 적용된 마이그레이션을 고쳐야 하면 그 파일 바로 뒤의 빈 번호로 새 파일을 만든다: `0020` 적용 후 고침 → `0021_<slug>.sql`, `0022_…`. `0001` 고침은 `0002`~`0019`를 쓴다.
+  - 고침 파일은 다음 계획 파일(예: `0030`)보다 반드시 작은 번호여야 한다. 계획 파일이 이미 적용됐으면 그 뒤의 빈 번호를 쓴다.
+  - 고침 파일을 만들면 이 표에 행을 추가하고 TKT를 적는다.
