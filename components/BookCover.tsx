@@ -8,7 +8,7 @@ import { FallbackCover } from './FallbackCover';
 interface BookCoverProps {
     src: string;
     title: string;
-    theme: Theme;
+    theme?: Theme; // 언박싱한 책(UnboxedRound)처럼 테마가 없는 데이터는 대체 표지를 기본 무늬로 그린다
     sizes: string;
     priority?: boolean;
     soldOut?: boolean;
@@ -23,7 +23,7 @@ export function BookCover({ src, title, theme, sizes, priority = false, soldOut 
     return (
         <div className={`relative aspect-3/4 overflow-hidden rounded-xs shadow-sm ${soldOut ? 'opacity-55' : ''}`}>
             {failed ? (
-                <FallbackCover theme={theme} title={title} alt={alt} />
+                <FallbackCover theme={theme ?? 'nature'} title={title} alt={alt} />
             ) : (
                 <Image
                     src={src}
