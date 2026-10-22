@@ -59,7 +59,7 @@ export type ActionResult<T> =
 | API-04 | `saveProduct` (`app/admin/products/actions.ts`) | 폼 | K | `ProductInput`(zod) + 표지 파일 | `{ id }` | `VALIDATION`, `FORBIDDEN` | — | AC-06-1~5 |
 | API-05 | `addToCart` / `updateCartQuantity` / `removeCartItem` (`app/cart/actions.ts`) | 폼 | M | `{ productId, quantity }` | `{ quantity, adjusted?: true }` | `OUT_OF_STOCK`, `UNAUTHENTICATED` | ✓ | AC-07-1~5 |
 | API-06 | `saveShippingAddress` (`app/mypage/address/actions.ts`) | 폼 | M | `ShippingInput` | — | `VALIDATION` | ✓ | AC-08-2 |
-| API-07 | `startOrderPayment` (`app/checkout/actions.ts`) | 폼 | M | `ShippingInput` | `PaymentRequest` | `VALIDATION`, `OUT_OF_STOCK` | — | AC-08-1·7 |
+| API-07 | `startOrderPayment` (`app/checkout/actions.ts`) | 폼 | M | `ShippingInput` | `PaymentRequest` | `VALIDATION`, `OUT_OF_STOCK` | — | AC-08-1·7·9·10 |
 | API-08 | `retryPayment` (`app/checkout/actions.ts`) | 버튼 | M | `PaymentTarget` | `PaymentRequest` | `INVALID_STATE` | — | AC-08-4, AC-11-8 |
 | API-09 | `GET /api/payments/toss/success` | PG 리다이렉트 | 세션 불필요(서버 검증) | `paymentKey, orderId, amount` | 302 → `/checkout/result?status=ok&target=…` | `AMOUNT_MISMATCH`, `OUT_OF_STOCK`, `PG_FAILED` | ✓ | AC-08-1·5·6·8, AC-11-3·10 |
 | API-10 | `GET /api/payments/toss/fail` | PG 리다이렉트 | — | `code, message, orderId` | 302 → result `status=fail` | — | ✓ | AC-08-4, AC-11-6 |
@@ -115,7 +115,7 @@ type WindowView =
 4. `proxy.ts`: 모든 요청에서 `updateSession`. `/mypage`, `/cart`, `/checkout`, `/letters`, `/admin` 비로그인 → `/login?next=` (낙관적). 최종 판단은 각 페이지·액션의 가드.
 
 ### SEQ-02 주문
-`/checkout` [결제하기] → API-07: `create_order` → `create_payment` → `PaymentRequest` → 브라우저 토스 결제창 → SEQ-03. 발송: API-13 `ship_order`(`paid`만, `cancel_requested`면 `CANCEL_REQUESTED`).
+`/checkout` [결제하기] → API-07: `create_order`(결제 대기 주문이 같은 내용이면 재사용, 다르면 `cancelled`로 대체 후 새로 — AR-DB §5.3, D-044) → `create_payment` → `PaymentRequest` → 브라우저 토스 결제창 → SEQ-03. 발송: API-13 `ship_order`(`paid`만, `cancel_requested`면 `CANCEL_REQUESTED`).
 
 ### SEQ-03 결제 확정 (주문·회차 공용, ADR-004)
 | 단계 | 주체 | 동작 | 실패 분기 |
@@ -156,6 +156,7 @@ API-22 → `end_subscription(note)`: 구독 `active→ended`, 결제 대기 회�
 |---|---|---|---|---|
 | pending_payment | confirm_payment | paid | 시스템 | 재고 차감, 장바구니 해당 줄 삭제, 기본 배송지 upsert, `paid_at` |
 | pending_payment | cancel_pending / 탈퇴 | cancelled | 회원 / 시스템 | — |
+| pending_payment | create_order(내용이 다른 새 주문서, D-044) | cancelled | 시스템 | 같은 호출에서 새 `pending_payment` 주문 생성. 같은 내용이면 전이 없이 재사용 (INV-21) |
 | paid | request_cancel | cancel_requested | 회원 | `cancel_rejected_at = null` |
 | cancel_requested | withdraw_cancel | paid | 회원 | — |
 | cancel_requested | reject_cancel | paid | 책방지기 | `cancel_rejected_at = now()` |

@@ -123,3 +123,4 @@
 - [자율][ARCH] D-A05: 토스 웹훅은 쓰지 않고 successUrl 서버 승인으로만 확정 — ADR-004
 - [자율][ARCH] D-A06: 회원 닉네임은 소셜 제공자 이름(없으면 "독자"), 이메일은 받지 않는다 — ADR-003
 - [자율][ARCH] D-A07: 비관리자의 관리자 주소 접근은 `notFound()`로 응답 — NFR-06, AR-API §3
+- [자율][ARCH] D-A08: D-044는 `create_order` 본문만 바꿔 구현한다(시그니처 그대로, BE·FE 코드 변경 없음). 동시 호출은 회원별 advisory lock, INV-21은 부분 unique 인덱스로 DB에서 보장 — AR-DB §5.3, 사용자 선택 B안 2026-10-22

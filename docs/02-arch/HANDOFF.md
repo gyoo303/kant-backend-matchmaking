@@ -35,7 +35,10 @@
 | TKT-BE-M3-03 | 취소 요청·철회·거절·환불·발송(API-11~13), 주문 조회 | BE | 04 SEQ-08, §6.1 | actions, `lib/data/orders.ts`(취소·철회·거절·결제 대기 취소·발송·주문 조회), `lib/data/payments.ts`(`begin_refund`·`complete_refund`·`fail_refund`) | AC-09-*, AC-10-* | TKT-BE-M3-02 |
 | TKT-FE-M3-01 | `/cart`, `/checkout`, `/checkout/result`, `/mypage/address` | FE | SCR-07·09~11 | 화면 | AC-07-*, AC-08-* | TKT-BE-M3-02 |
 | TKT-FE-M3-02 | `/mypage/orders`, `/admin/orders` | FE | SCR-12·13 | 화면 | AC-09-*, AC-10-* | TKT-BE-M3-03 |
-| TKT-QA-M3 | 테스트 결제 → 접수 → 발송, 중복·금액 변조·환불 실패 | QA | 06 §2 순위 3, PM-AC M3 | `briefing-TKT-QA-M3.md` | NFR-07·09·19 | TKT-FE-M3-02 |
+| TKT-DB-05 | 결제 대기 주문 회원당 1건(D-044, INV-21): 기존 대기 주문 정리 → `orders_one_pending_per_member` → `create_order` 재사용·대체(시그니처 그대로). 같은 내용 두 번 호출하는 기존 pgTAP 조정 + 새 테스트 | DB | 03 §3·3.1·5.3·9, 04 §6.1 SEQ-02, PM-AC AC-08-9·10 | `0060_create_order_reuse_pending.sql`, `supabase/tests/*`, `docs/03-db/briefing.md` | GATE-07, AC-08-9·10 | TKT-DB-04 |
+| TKT-BE-M3-04 | 영향 확인: `createOrder`·`startOrderPayment`·결제 경로가 재사용·대체된 주문에서도 맞게 도는지(코드 변경 없음이 기대값) | BE | AR-DB §5.3, 04 SEQ-02·03 | `docs/04-backend/briefing.md` | GATE-01~06 | TKT-DB-05 |
+| TKT-FE-M3-03 | 영향 확인: 주문서·결과·주문 현황이 재사용·대체 규칙과 맞는지(코드 변경 없음이 기대값) | FE | PM-AC AC-08-9·10, AR-DB §5.3 | `docs/05-frontend/briefing-TKT-FE-M3-03.md` | GATE-01~06 | TKT-BE-M3-04 |
+| TKT-QA-M3 | 테스트 결제 → 접수 → 발송, 중복·금액 변조·환불 실패, 결제 대기 주문 재사용·대체 | QA | 06 §2 순위 3, PM-AC M3 | `briefing-TKT-QA-M3.md` | NFR-07·09·19, AC-08-9·10 | TKT-FE-M3-02, TKT-FE-M3-03 |
 
 ## M4 편지 구독 (3일차) — 편지 → 서재 → 발송·언박싱 → 메모·해지
 | TKT | 내용 | 담당 | 읽을 것 | 산출 | 완료 조건 | 선행 |
@@ -65,10 +68,10 @@
 |---|---|---|---|---|---|
 | M1 | 2 | 0 | 4 | 1 | 7 |
 | M2 | 0 | 3 | 2 | 1 | 6 |
-| M3 | 1 | 3 | 2 | 1 | 7 |
+| M3 | 2 | 4 | 3 | 1 | 10 |
 | M4 | 2 | 4 | 3 | 1 | 10 |
 | M5 | 0 | 0 | 1 | 1 | 2 |
-| 계 | 5 | 10 | 12 | 5 | 32 |
+| 계 | 6 | 11 | 13 | 5 | 35 |
 
 ## 남은 리스크
 RISK-16 개발·시연 DB 공용(ADR-005 개정: 되돌리기 없는 변경 규칙, seed 재적용 가능, 테스트 rollback), RISK-03 보상 취소 실패(로그+문의 안내), RISK-11 네이버 매핑 미확인(스파이크로 확인), RISK-12 네이버 운영 검수·카카오 비즈 앱(이번 범위 밖), RISK-14 5년 경과 기록 수동 삭제, RISK-15 M4 일정. Footer 법정 고지 미기재(D-021)는 실결제 전환 전 필요.

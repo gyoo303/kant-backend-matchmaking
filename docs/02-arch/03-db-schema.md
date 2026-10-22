@@ -99,6 +99,8 @@ create table orders (
   cancel_rejected_at timestamptz,                      -- 거절 안내(AC-09-6), 새 취소 요청 시 null
   paid_at timestamptz, shipped_at timestamptz,
   created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+-- INV-21: 회원당 결제 대기 주문 1건 (0060에서 추가, §5.3)
+create unique index orders_one_pending_per_member on orders (member_id) where status = 'pending_payment';
 
 create table order_items (
   order_id uuid not null references orders(id) on delete cascade,
@@ -201,6 +203,7 @@ create table shipping_list_downloads (
 | INV-17 | — | `list_shipping_targets()` 조건 | 다중 테이블 조건 |
 | INV-19 | RLS(§4) | — | — |
 | INV-20 | 회차 `cancel_requested_at` check | 발송 RPC가 취소 요청 시 거부 | — |
+| INV-21 | `orders_one_pending_per_member` 부분 unique | `create_order`가 재사용·대체(§5.3) | — |
 
 ## 4. RLS (모든 테이블 `enable row level security`, 기본 거부)
 - 헬퍼: `public.is_keeper() returns boolean` — `security definer`, `stable`, `select exists(select 1 from profiles where id = auth.uid() and role = 'keeper')`. `search_path = ''` 고정.
@@ -229,7 +232,7 @@ create table shipping_list_downloads (
 ## 5. RPC (Postgres 함수, `security definer`, `search_path=''`, 첫 줄 권한 검사)
 | 함수 | 호출 주체 | 하는 일(원자) | 상세 |
 |---|---|---|---|
-| `create_order(p_ship jsonb) returns orders` | 회원 | 장바구니(재고>0 줄) → `orders`+`order_items`(가격 사본) `pending_payment`, 합계 서버 계산 | SEQ-02 |
+| `create_order(p_ship jsonb) returns orders` | 회원 | 장바구니(재고>0 줄) → `orders`+`order_items`(가격 사본) `pending_payment`, 합계 서버 계산. 결제 대기 주문이 있으면 재사용 또는 대체(§5.3, D-044) | SEQ-02 |
 | `create_round(p_letter text, p_ship jsonb) returns subscription_rounds` | 회원 | `reader_letters` + 회차 `pending_payment` (INV-12 unique 위반 → `ROUND_IN_PROGRESS`) | SEQ-04 |
 | `create_payment(p_order_id uuid, p_round_id uuid) returns payments` | 회원 | 소유·상태 검사, 금액=주문 합계/30,000, `pg_order_id` 생성, `ready` | SEQ-03 |
 | `confirm_payment(p_pg_order_id text, p_payment_key text, p_amount int) returns jsonb` | 서버(service role) | `ready→paid`, 금액 대조, 주문: 재고 차감·장바구니 제거·`paid` / 회차: 활성 구독 연결(없으면 생성)·`arrived`, 기본 배송지 upsert. 이미 `paid`면 `{already:true}` | SEQ-03 |
@@ -265,6 +268,18 @@ create table shipping_list_downloads (
 - 예: `UB261022-0007`. 날짜는 한국 시간 기준, 뒤 4자리는 날마다 초기화하지 않는 순번이다.
 - 같은 날 1만 건을 넘으면 `unique` 위반이 날 수 있으나 시연 규모 밖으로 보고 재시도는 두지 않는다.
 - 시퀀스는 RLS 대상이 아니다. `create_order`(security definer)만 쓰므로 `anon`·`authenticated`에 시퀀스 권한을 주지 않는다.
+
+### 5.3 결제 대기 주문 재사용·대체 (D-044, INV-21, `0060`)
+`create_order`의 시그니처·반환 타입은 그대로이고, 본문만 `create or replace`로 바꾼다. 순서:
+1. 권한·배송지 검사(기존과 같음).
+2. `perform pg_advisory_xact_lock(hashtextextended(v_member::text, 0))` — 같은 회원의 동시 호출을 줄 세운다(두 탭에서 동시에 [결제하기]).
+3. 지금 장바구니의 주문 대상 줄(재고>0)과 합계를 계산한다. 없으면 `OUT_OF_STOCK`(기존과 같음).
+4. 같은 회원의 `pending_payment` 주문을 `for update`로 읽는다(0060 이후 최대 1건).
+5. 그 주문이 **같은 내용**이면 그대로 반환한다(재사용). 같은 내용 = 배송지 3칸(btrim 후)이 같고, `order_items`의 `(product_id, quantity, unit_price)` 집합이 지금 장바구니 줄의 `(product_id, quantity, 현재 price)` 집합과 같고, `total_amount`가 같다.
+6. 다르면 그 주문을 `cancelled`로 바꾸고(대체), 기존과 같이 새 주문·항목을 만든다.
+- 재사용된 주문의 이전 `ready` 결제는 그대로 둔다. 어느 결제가 먼저 확정돼도 `payments_one_settled_per_order`와 `confirm_payment`의 `pending_payment` 검사로 한 번만 확정되고, 나중 결제는 `INVALID_STATE` → BE 보상 취소(SEQ-03 6)로 끝난다.
+- 대체로 `cancelled`된 주문의 결제창이 뒤늦게 성공해도 같은 경로(`INVALID_STATE` → 보상 취소)로 끝난다. 재고는 확정 때만 줄므로(INV-05) 되돌릴 재고가 없다.
+- `0060`은 인덱스를 만들기 전에 기존 데이터를 정리한다: 회원마다 가장 최근 `pending_payment` 주문 1건만 남기고 나머지를 `cancelled`로 바꾼다(D-044와 같은 결과).
 
 ## 6. Storage
 | 버킷 | 공개 | 경로 규칙 | 정책 | 제한 |
@@ -315,6 +330,8 @@ create table shipping_list_downloads (
 | `0020_commerce.sql` | `cart_items`, `shipping_addresses`, `orders`, `order_items`, `payments`(round FK 없음), `order_number_seq`, 주문 RPC·결제 RPC(주문 분기, §5.1) | TKT-DB-02 |
 | `0030_subscription.sql` | 구독·회차·편지류·코드·메모·안부, 회차 RPC, `payments.round_id` FK·공용 RPC 회차 분기(§5.1), `postcards` 버킷 + `storage.objects` 정책 | TKT-DB-03 |
 | `0040_admin_ops.sql` | `shipping_list_downloads`, `list_shipping_targets`, `keeper_counts`, `withdraw_member` | TKT-DB-04 |
+| `0050_create_payment_default_args.sql` | `create_payment` 인자에 `default null` | TKT-BE-M3-02 |
+| `0060_create_order_reuse_pending.sql` | 결제 대기 주문 정리 → `orders_one_pending_per_member` 부분 unique → `create_order` 재사용·대체(§5.3) | TKT-DB-05 |
 - 버킷은 그 버킷을 쓰는 티켓의 마이그레이션에 둔다(사용자 승인 2026-10-22). 원격 전용(ADR-005)에서는 적용된 파일을 고칠 수 없고, 번호가 큰 파일을 먼저 적용하면 뒤에 오는 작은 번호 파일을 `db push`가 거부하기 때문이다.
 - **번호 간격 (사용자 승인 2026-10-22)**: 아직 적용하지 않은 계획 파일은 10 단위(`0020`·`0030`·`0040`)로 띄운다. `0001`은 이미 적용돼 그대로 둔다.
   - 적용된 마이그레이션을 고쳐야 하면 그 파일 바로 뒤의 빈 번호로 새 파일을 만든다: `0020` 적용 후 고침 → `0021_<slug>.sql`, `0022_…`. `0001` 고침은 `0002`~`0019`를 쓴다.
