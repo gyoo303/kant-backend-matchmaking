@@ -33,7 +33,7 @@ async function Shelf() {
         <ul className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-3 md:gap-6 xl:grid-cols-4">
             {rounds.map((round) => (
                 <li key={round.roundId}>
-                    <BookCover key={round.product.imageUrl} src={round.product.imageUrl} title={round.product.name} sizes="(min-width: 1280px) 270px, (min-width: 768px) 33vw, 50vw" />
+                    <BookCover key={round.product.imageUrl} src={round.product.imageUrl} title={round.product.name} theme={round.product.theme} sizes="(min-width: 1280px) 270px, (min-width: 768px) 33vw, 50vw" />
                     <h2 className="font-heading mt-3 text-lg leading-snug font-bold">{round.product.name}</h2>
                     <ShelfMemo key={round.memo?.updatedAt ?? 'none'} roundId={round.roundId} bookName={round.product.name} memo={round.memo} actions={MEMO_ACTIONS} />
                 </li>

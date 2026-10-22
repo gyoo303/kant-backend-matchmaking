@@ -13,7 +13,7 @@ export function UnboxedView({ round, reveal = false }: { round: UnboxedRound; re
     return (
         <div className={`grid items-start gap-8 md:grid-cols-3 md:gap-12 ${motion}`}>
             <div className="w-full max-w-50 md:max-w-none">
-                <BookCover key={round.product.imageUrl} src={round.product.imageUrl} title={round.product.name} sizes="(min-width: 768px) 280px, 200px" />
+                <BookCover key={round.product.imageUrl} src={round.product.imageUrl} title={round.product.name} theme={round.product.theme} sizes="(min-width: 768px) 280px, 200px" />
                 <h1 className="font-heading mt-4 text-2xl leading-snug font-bold">{round.product.name}</h1>
                 <p className="text-muted-foreground mt-1">{round.product.author}</p>
             </div>

@@ -1,17 +1,14 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { unstable_rethrow } from 'next/navigation';
 import { Suspense, type ReactNode } from 'react';
 import { openRound, saveRoundContents, shipRound } from '@/app/admin/desk/actions';
 import { refund, rejectCancel } from '@/app/admin/orders/actions';
 import { DeskContentsForm } from '@/components/DeskContentsForm';
+import { DeskRoundList } from '@/components/DeskRoundList';
 import { formatDate } from '@/components/format-date';
-import { KeeperOrderActions } from '@/components/KeeperOrderActions';
 import { LetterPaper } from '@/components/LetterPaper';
 import { ShipRoundForm } from '@/components/ShipRoundForm';
-import { Badge } from '@/components/ui/badge';
 import { UnboxingCode } from '@/components/UnboxingCode';
-import { ROUND_STATUS_LABELS } from '@/domains/subscriptions/window-copy';
 import { getProducts } from '@/lib/data/products';
 import { getDeskRounds, getFarewellNotes, getKeeperRound } from '@/lib/data/rounds';
 import { isUuid } from '@/shared/utils/uuid';
@@ -32,14 +29,6 @@ function Step({ no, title, children }: { no: number; title: string; children: Re
             </h2>
             <div className="mt-5">{children}</div>
         </section>
-    );
-}
-
-function StatusBadge({ label, cancel = false }: { label: string; cancel?: boolean }) {
-    return (
-        <Badge variant="secondary" className={`h-auto px-2.5 py-1 text-sm font-normal ${cancel ? 'bg-destructive-soft text-destructive-soft-foreground' : ''}`}>
-            {label}
-        </Badge>
     );
 }
 
@@ -102,30 +91,7 @@ async function Desk({ searchParams }: { searchParams: PageProps<'/admin/desk'>['
     return (
         <>
             <Step no={1} title="편지 읽기">
-                {rounds.length === 0 ? (
-                    <p className="text-muted-foreground">지금 읽을 편지가 없어요</p>
-                ) : (
-                    // 결제 확정된 회차만(결제 대기는 없다, AC-13-4·INV-18), 도착 순
-                    <ul className="border-t">
-                        {rounds.map((item) => (
-                            <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 border-b py-3">
-                                <Link
-                                    href={`/admin/desk?round=${item.id}`}
-                                    aria-current={item.id === round?.id ? 'true' : undefined}
-                                    className="inline-flex min-h-11 items-center gap-2 rounded-lg aria-[current=true]:font-bold"
-                                >
-                                    {item.paidAt ? `${formatDate(item.paidAt)} 도착한 편지` : '도착한 편지'}
-                                    {item.cancelRequested && <StatusBadge label="취소 요청" cancel />}
-                                </Link>
-                                {item.cancelRequested ? (
-                                    <KeeperOrderActions targetId={item.id} kind="round" cancelRequested actions={ROUND_CANCEL_ACTIONS} />
-                                ) : (
-                                    <StatusBadge label={ROUND_STATUS_LABELS[item.status]} />
-                                )}
-                            </li>
-                        ))}
-                    </ul>
-                )}
+                <DeskRoundList rounds={rounds} selectedId={round?.id ?? null} cancelActions={ROUND_CANCEL_ACTIONS} />
                 {round && (
                     <LetterPaper label={`${round.shipping.recipientName} 님의 편지`} className="mt-6">
                         {round.letter}
