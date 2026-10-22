@@ -275,8 +275,8 @@ create table shipping_list_downloads (
 ## 9. 마이그레이션 파일
 | 파일 | 내용 | TKT |
 |---|---|---|
-| `supabase/migrations/0001_profiles_products.sql` | enum 전체, `profiles`, `products`, `is_keeper`, 가입 트리거, `set_updated_at` | TKT-DB-01 |
+| `supabase/migrations/0001_profiles_products.sql` | enum 전체, `profiles`, `products`, `is_keeper`, 가입 트리거, `set_updated_at`, `book-covers` 버킷 + `storage.objects` 정책 | TKT-DB-01 |
 | `0002_commerce.sql` | `cart_items`, `shipping_addresses`, `orders`, `order_items`, `payments`, 주문 RPC·결제 RPC | TKT-DB-02 |
-| `0003_subscription.sql` | 구독·회차·편지류·코드·메모·안부, 회차 RPC | TKT-DB-03 |
+| `0003_subscription.sql` | 구독·회차·편지류·코드·메모·안부, 회차 RPC, `postcards` 버킷 + `storage.objects` 정책 | TKT-DB-03 |
 | `0004_admin_ops.sql` | `shipping_list_downloads`, `list_shipping_targets`, `keeper_counts`, `withdraw_member` | TKT-DB-04 |
-| `0005_storage.sql` | 버킷 2개 + `storage.objects` 정책 | TKT-DB-01(book-covers), TKT-DB-03(postcards) |
+- 버킷은 그 버킷을 쓰는 티켓의 마이그레이션에 둔다(사용자 승인 2026-10-22). 원격 전용(ADR-005)에서는 적용된 파일을 고칠 수 없고, 번호가 큰 파일을 먼저 적용하면 뒤에 오는 작은 번호 파일을 `db push`가 거부하기 때문이다.

@@ -39,7 +39,7 @@
 ## M4 편지 구독 (3일차) — 편지 → 서재 → 발송·언박싱 → 메모·해지
 | TKT | 내용 | 담당 | 읽을 것 | 산출 | 완료 조건 | 선행 |
 |---|---|---|---|---|---|---|
-| TKT-DB-03 | 구독·회차·편지류·코드·메모·안부 테이블, 회차 RPC, `postcards` 버킷 + pgTAP(RLS·전이) | DB | 03 §3~6, 04 §6.2 | `0003_subscription.sql`, `0005_storage.sql` | GATE-07, AC-11-9, AC-16-6, AC-17-5, AC-18-8 | DB-02 |
+| TKT-DB-03 | 구독·회차·편지류·코드·메모·안부 테이블, 회차 RPC, `postcards` 버킷 + pgTAP(RLS·전이) | DB | 03 §3~6, 04 §6.2 | `0003_subscription.sql`(`postcards` 버킷 포함) | GATE-07, AC-11-9, AC-16-6, AC-17-5, AC-18-8 | DB-02 |
 | TKT-BE-M4-01 | `postLetter`(API-15), 회차 결제 연결(SEQ-04), `getWindow`(API-16), `domains/subscriptions/window-copy.ts` | BE | 04 SEQ-04, §4.2 | actions·data | AC-11-1~10, AC-12-* | DB-03 |
 | TKT-FE-M4-01 | `/letters/new`(봉투·우체통 전환, 동작 줄이기), `/mypage/window`(WindowScene·BlindBook) | FE | SCR-14·15, UX-PLAN-FE, CONV-11 | 화면 | AC-11-*, AC-12-*, NFR-10·11 | BE-M4-01 |
 | TKT-BE-M4-02 | 서재: `openRound`·`saveRoundContents`(엽서 업로드)·`shipRound`(코드, `lib/crypto.ts`, `domains/subscriptions/unboxing-code.ts`+테스트) | BE | 04 SEQ-05·06 | actions | AC-13-*, AC-14-*, AC-15-* | DB-03 |
