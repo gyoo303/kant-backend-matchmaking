@@ -1,8 +1,8 @@
 ---
 stage: DB
-tickets: [TKT-DB-00, TKT-DB-01, TKT-DB-02, TKT-DB-03, TKT-DB-04]
-status: done
-inputs_read: [AR-MAP, AR-HAND, AR-DB, AR-CONV, AR-GATE, AR-ADR]
+tickets: [TKT-DB-00, TKT-DB-01, TKT-DB-02, TKT-DB-03, TKT-DB-04, TKT-DB-05]
+status: partial
+inputs_read: [AR-MAP, AR-HAND, AR-DB, AR-CONV, AR-GATE, AR-ADR, PM-AC, PM-DOMAIN]
 next_readers: [BE, QA]
 ---
 # DB 에이전트 브리핑
@@ -15,6 +15,7 @@ next_readers: [BE, QA]
 | TKT-DB-02 | GATE-07, AC-08-5·6·8, AC-10-5 | 충족 (2026-10-22). 원격 적용 완료(`migration list`: 0020 local=remote), pgTAP 106개 통과(42·29·35), GATE-01~06 통과 |
 | TKT-DB-03 | GATE-07, AC-11-9, AC-16-6, AC-17-5, AC-18-8 | 충족 (2026-10-22). 원격 적용 완료(`migration list`: 0030 local=remote), pgTAP 168개 통과(62·42·29·35), GATE-01~06 통과 |
 | TKT-DB-04 | AC-19-1·4, AC-05-4·8 | 충족 (2026-10-22). 원격 적용 완료(`migration list`: 0040 local=remote), pgTAP 78개 통과(36·42), GATE-01~06 통과 |
+| TKT-DB-05 | GATE-07, AC-08-9·10 | 코드 충족, **원격 적용 대기**(2026-10-22). 0060을 트랜잭션 안에서 적용한 채 pgTAP 6개 파일 223개 통과 후 rollback. 사람이 `db push` 하면 `done` |
 
 ## 만든 것
 ### TKT-DB-00
@@ -134,6 +135,15 @@ next_readers: [BE, QA]
 | `getNewArrivals()` | API-03 | `Product[]` 재고>0 최신 4권 | D-035 |
 - 트랜잭션 함수(RPC): TKT-DB-02의 RPC 12개(위 표). `lib/data` 래퍼는 아래 "질문" 참고
 
+### TKT-DB-05
+- `supabase/migrations/0060_create_order_reuse_pending.sql` (AR-DB §5.3, D-044, INV-21)
+  1. 기존 데이터 정리: 회원마다 가장 최근 `pending_payment` 주문 1건만 남기고 나머지는 `cancelled`
+  2. `orders_one_pending_per_member` 부분 unique 인덱스(`member_id` where `status = 'pending_payment'`)
+  3. `create_order` 본문 교체(`create or replace`, 시그니처·반환·grant 그대로): 회원별 `pg_advisory_xact_lock` → 장바구니 합계 → 결제 대기 주문 `for update` → 배송지·(책, 수량, 현재 가격) 집합·합계가 같으면 그 주문 반환(재사용), 다르면 `cancelled`로 바꾼 뒤 새 주문
+- `supabase/tests/pending_orders.test.sql`(새 파일, 19개): 재사용, 공백 정리, 새 결제 `pg_order_id`, 수량·배송지·가격이 다르면 대체, 결제 대기 1건, 다른 회원 영향 없음, 품절이면 기존 주문 그대로, 재사용 주문의 두 결제 중 하나만 확정·재고 1회 차감, 대체된 주문의 결제는 확정 거부, 인덱스가 2건째 거부
+- `supabase/tests/state_machine.test.sql` 조정: 같은 장바구니로 주문 2건을 연달아 만들던 준비 단계를 "order1 결제 대기 취소 → order2 생성" 순서로 바꿨다(D-044에서는 두 번째 호출이 order1을 재사용하므로). 검사 내용·개수(29)는 같다
+- `types/database.ts`: 바뀌지 않는다(함수 시그니처 그대로) — 다시 만들지 않았다
+
 ## 환경
 
 ### 1. 구성 (ADR-005 개정, 2026-10-21)
@@ -232,6 +242,7 @@ npx supabase test db --linked
   - 탈퇴(API-23): `createClient()`로 `withdraw_member()` → 반환 `postcardPaths`를 `createAdminClient().storage.from('postcards').remove(paths)` → `createAdminClient().auth.admin.deleteUser(uid)`(`profiles` cascade) → 로그아웃. RPC가 성공한 뒤 Storage·계정 삭제가 실패하면 다시 불러도 된다(두 번째 `withdraw_member()`는 지울 것이 없어 빈 목록을 돌려준다).
 
 ## 설계와 다르게 한 것 / 질문
+- (TKT-DB-05) 없음. 설계(AR-DB §5.3)대로다. 참고: 같은 내용 비교는 `except` 양방향 집합 비교라 같은 책이 장바구니에 두 줄로 들어갈 수 없는 현재 구조(`cart_items` PK = member_id+product_id)를 전제로 한다.
 - (TKT-DB-01, 사용자 승인 2026-10-22) `types/product.ts`를 DB-01에서 만들었다. AGENTS.md 담당은 FE지만 FE-01이 DB-01 다음이라 `toProduct`·`data/products.ts`가 컴파일되지 않는다. 내용은 AR-API §1.1 그대로이고, FE-01은 확인만 하면 된다.
 - (TKT-DB-01, 사용자 승인) `lib/supabase/server.ts`에 `createPublicClient()`를 추가했다. Next 16의 `'use cache'` 안에서는 `cookies()`를 쓸 수 없어(next/dist/docs `use-cache.md`) CONV-07을 지키려면 세션 없는 클라이언트가 필요하다.
 - (TKT-DB-01, 사용자 승인) `book-covers` 버킷을 `0005_storage.sql`이 아니라 `0001`에 넣었다. AR-DB §9 표와 HANDOFF TKT-DB-03 산출을 같이 고쳤다(`postcards`는 `0003`).
@@ -269,6 +280,13 @@ npx supabase test db --linked
   - `shelf_memos` update 정책: `using`은 own만, `with check`에 own 회차 `unboxed`를 둔다. delete는 own만(설계 "own + unboxed"와 같은 결과: 메모는 unboxed 회차에만 생긴다).
 
 ## 검증 결과
+### TKT-DB-05 (2026-10-22, 원격 적용 전)
+- 원격 영구 적용은 하지 않았다(규칙: 사람이 적용). 대신 각 테스트 파일의 `begin;` 바로 뒤에 0060 내용을 넣은 임시 사본을 `npx supabase db query --linked -f <파일>`로 실행했다. 파일 전체가 `begin … rollback`이라 원격에 남는 것이 없다(임시 사본은 지웠다).
+- GATE-07 pgTAP: **223개 통과, `not ok` 0줄** — `pending_orders` 1..19, `state_machine` 1..29, `payments` 1..35, `rls` 1..42, `admin_ops` 1..36, `subscription` 1..62
+- 실행 뒤 원격 확인: 인덱스 `orders_one_pending_per_member` 0개, `create_order` 본문에 advisory lock 없음(기존 그대로), 테스트 계정 0개
+- `npx supabase db push --linked --dry-run`: 적용 대상 `0060_create_order_reuse_pending.sql` 1개
+- 사람이 할 일: `npx supabase db push --linked` → `migration list`에서 0060 local=remote 확인 → 같은 테스트 6개를 SQL 편집기(또는 `db query --linked -f`)로 다시 실행. 0060의 정리 단계는 원격의 결제 대기 주문 중 회원별 최신 1건 외를 `cancelled`로 바꾼다(되돌릴 수 없음, D-044와 같은 결과)
+
 ### TKT-DB-04 (2026-10-22, 원격 적용 후)
 - 원격 적용: 사람이 `npx supabase db push --linked` 실행. `migration list` 0001·0020·0030·0040 local=remote, 다시 dry-run하면 "Remote database is up to date."
 - `types/database.ts`: `gen types --linked --schema public`으로 다시 생성(952줄, `shipping_list_downloads`·RPC 3개 포함)
