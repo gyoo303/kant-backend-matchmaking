@@ -240,7 +240,7 @@ create table shipping_list_downloads (
 | `complete_refund(p_payment_id) / fail_refund(p_payment_id)` | 서버 | `refunding→refunded` + 주문 `refunded`·재고 복구 / 회차 `cancelled` · 실패 시 `refunding→paid` | SEQ-08 |
 | `ship_order(p_order_id)` | 책방지기 | `paid→shipped` (취소 요청이면 거부) | SEQ-02 |
 | `open_round(p_round_id)` | 책방지기 | `arrived→reading`, `opened_at` (이미 reading이면 변화 0) | SEQ-05 |
-| `ship_round(p_round_id, p_code char(6)) returns char(6)` | 책방지기 | 검사(책·답장·힌트 있음, 취소 요청 없음, 재고≥1) → 재고−1, 코드 insert(충돌 시 `CODE_COLLISION`), `reading/arrived→shipped`. 이미 shipped면 기존 코드 반환 | SEQ-06 |
+| `ship_round(p_round_id, p_code char(6), p_teaser text) returns char(6)` | 책방지기 | 검사(책·답장 있음, 힌트 1~100자, 취소 요청 없음, 재고≥1) → 재고−1, 코드 insert(충돌 시 `CODE_COLLISION`), `teaser` 저장, `reading/arrived→shipped`. 이미 shipped면 기존 코드 반환 (`p_teaser` 추가: 사용자 승인 2026-10-22, 회차 행은 RPC로만 쓰므로 힌트를 여기서 저장) | SEQ-06 |
 | `unbox_round(p_round_id, p_code text) returns boolean` | 회원 | 소유자·`shipped`·코드 일치 → `unboxed`, `used_at`. 불일치는 false(구분 없음, AC-16-4) | SEQ-07 |
 | `cancel_pending(p_kind, p_id)` | 회원 | 결제 대기 주문 취소(D-037) / 회차 [편지 거두기] `cancelled` | SEQ-02, 04 |
 | `end_subscription(p_note text)` | 회원 | 구독 `ended`, 결제 대기 회차 `cancelled`, 안부 있으면 insert | SEQ-09 |
@@ -256,6 +256,7 @@ create table shipping_list_downloads (
 | `create_payment`, `confirm_payment`, `request_cancel`, `withdraw_cancel`, `reject_cancel`, `begin_refund`, `complete_refund`, `fail_refund`, `cancel_pending` | 주문 분기만 구현. 회차 대상(`p_round_id` not null, `p_kind = 'round'`, 회차 결제)이면 `INVALID_STATE` | 같은 시그니처로 `create or replace function` — 주문 분기는 그대로 두고 회차 분기를 추가 |
 | `payments` RLS select own | 주문 소유 기준만 | 정책을 `drop policy` 후 주문·회차 소유 기준으로 다시 만든다 |
 - 시그니처(함수 이름·인자·반환 타입)는 두 파일에서 같아야 한다. BE는 `0030` 적용 전에도 같은 RPC를 부른다.
+- `request_cancel`·`withdraw_cancel`·`reject_cancel`은 `order_status`를 돌려준다. 회차는 상태가 바뀌지 않고 `cancel_requested_at` 표시만 바뀌므로 **회차 분기는 `null`을 돌려준다**(사용자 승인 2026-10-22). `cancel_pending`의 회차 분기는 `'cancelled'`를 돌려준다(두 enum에 같은 값이 있다).
 - pgTAP: `0020` 범위 테스트는 회차 호출이 `INVALID_STATE`인지 확인하지 않는다(0030 적용 후 바뀌므로). 회차 분기 테스트는 TKT-DB-03에서 쓴다.
 
 ### 5.2 주문 번호 `orders.order_number`

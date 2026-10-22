@@ -136,7 +136,7 @@ API-15: `create_round`(편지 + 회차 `pending_payment`, 배송지 사본) → 
 
 ### SEQ-06 발송·코드 발급
 1. API-19: `teaser` 검증 → 코드 생성 `generateUnboxingCode(randomInt)` (`domains/subscriptions/unboxing-code.ts`, 인자로 받은 `randomInt`; 실제 주입은 `lib/crypto.ts`의 `node:crypto.randomInt`)
-2. RPC `ship_round(roundId, code)`: `select … for update` → 이미 `shipped`면 기존 코드 반환 / 취소 요청이면 `CANCEL_REQUESTED` / 책·답장·힌트 누락 `MISSING_SHIPMENT_FIELDS` / `update products set stock = stock-1 where id=… and stock>=1` 영향 0 → `OUT_OF_STOCK` / `insert unboxing_codes` unique 위반 → `CODE_COLLISION`(액션이 새 코드로 최대 3회 재시도) / 회차 `shipped`
+2. RPC `ship_round(roundId, code, teaser)`: `select … for update` → 이미 `shipped`면 기존 코드 반환 / 취소 요청이면 `CANCEL_REQUESTED` / 책·답장·힌트 누락 `MISSING_SHIPMENT_FIELDS` / `update products set stock = stock-1 where id=… and stock>=1` 영향 0 → `OUT_OF_STOCK` / `insert unboxing_codes` unique 위반 → `CODE_COLLISION`(액션이 새 코드로 최대 3회 재시도) / 회차 `shipped`
 3. 화면에 코드 크게 표시(AC-15-1), 다시 열면 같은 코드(AC-15-2)
 
 ### SEQ-07 언박싱
