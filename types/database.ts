@@ -456,6 +456,35 @@ export type Database = {
           },
         ]
       }
+      shipping_list_downloads: {
+        Row: {
+          created_at: string
+          id: string
+          keeper_id: string | null
+          row_count: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          keeper_id?: string | null
+          row_count: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          keeper_id?: string | null
+          row_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shipping_list_downloads_keeper_id_fkey"
+            columns: ["keeper_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscription_rounds: {
         Row: {
           amount: number
@@ -711,6 +740,20 @@ export type Database = {
       }
       fail_refund: { Args: { p_payment_id: string }; Returns: undefined }
       is_keeper: { Args: never; Returns: boolean }
+      keeper_counts: { Args: never; Returns: Json }
+      list_shipping_targets: {
+        Args: never
+        Returns: {
+          address: string
+          books: string
+          kind: string
+          order_number: string
+          paid_at: string
+          phone: string
+          recipient_name: string
+          target_id: string
+        }[]
+      }
       open_round: { Args: { p_round_id: string }; Returns: undefined }
       reject_cancel: {
         Args: { p_id: string; p_kind: string }
@@ -736,6 +779,7 @@ export type Database = {
         Args: { p_id: string; p_kind: string }
         Returns: Database["public"]["Enums"]["order_status"]
       }
+      withdraw_member: { Args: never; Returns: Json }
     }
     Enums: {
       member_role: "member" | "keeper"
