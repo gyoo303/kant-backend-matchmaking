@@ -3,7 +3,7 @@ import Link from 'next/link';
 // 책방 이름 + 사이트 링크만. 사업자 정보·환불 규정·개인정보 처리방침은 넣지 않는다 (AC-01-3, D-021)
 export function Footer() {
     return (
-        <footer className="text-muted-foreground mt-16 border-t text-sm">
+        <footer data-site-chrome className="text-muted-foreground mt-16 border-t text-sm">
             <div className="mx-auto flex w-full max-w-6xl flex-wrap justify-between gap-4 px-4 pt-8 pb-10 md:px-8">
                 <div>
                     <p className="font-heading text-foreground text-base font-bold">우분투북스</p>

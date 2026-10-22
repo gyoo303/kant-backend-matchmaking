@@ -50,7 +50,7 @@ export function AccountNavPending() {
 // account 자리는 세션을 읽으므로 layout이 <Suspense>로 감싸서 넘긴다 (CONV-07)
 export function Header({ account }: { account: ReactNode }) {
     return (
-        <header className="bg-background border-b">
+        <header data-site-chrome className="bg-background border-b">
             <div className="mx-auto flex min-h-16 w-full max-w-6xl flex-wrap items-center justify-between gap-x-4 px-4 md:px-8">
                 <Link href="/" className="font-heading flex items-baseline gap-1.5 rounded-lg text-xl font-bold whitespace-nowrap">
                     우분투북스

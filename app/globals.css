@@ -161,4 +161,9 @@
     [data-surface='night'] {
         --ring: var(--lamp);
     }
+    /* 관리자 화면은 회원 Header·Footer 대신 관리자 바만 보인다 (SCR-08·20 시안, 사용자 결정 2026-10-22).
+       app/layout.tsx는 그대로 두고(KANT-R4) admin/layout의 data-admin-shell이 있을 때만 숨긴다 */
+    body:has([data-admin-shell]) [data-site-chrome] {
+        display: none;
+    }
 }
