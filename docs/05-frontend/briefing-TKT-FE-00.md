@@ -4,6 +4,7 @@ tickets: [TKT-FE-00]
 status: done
 inputs_read: [AR-MAP, AR-HAND, AR-CONV, AR-GATE, AR-ADR]
 next_readers: [QA, UX]
+exception: { blocked: [BE-BRIEF], approved_by: user, date: 2026-10-21, read_instead: [] }
 ---
 # [구조 정리] TKT-FE-00
 결론: 완료 조건 GATE-01~06 모두 통과 · 기능 변경 없음 (화면·API 변화 0)

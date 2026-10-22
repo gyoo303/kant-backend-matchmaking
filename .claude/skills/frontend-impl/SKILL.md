@@ -7,7 +7,8 @@ description: 확정된 화면 명세와 디자인 기준을 코드로 구현하�
 
 > **0단계 — 시작 전 확인 (생략 금지, 이 단계 코드: `FE`)**
 > 1. `docs/PIPELINE.md`(산출물 레지스트리)를 읽는다. 이 문서에 적힌 경로와 레지스트리가 다르면 레지스트리를 따른다.
-> 2. `node scripts/check-handoff.mjs FE`를 실행한다. 마지막 줄이 `STATUS: READY FE`가 아니면 작업하지 않고, 그 STATUS 줄을 그대로 마지막 줄에 출력한 뒤 멈춘다. (실행할 수 없으면 레지스트리에서 `읽는 단계 (필수)`에 `FE`가 있는 파일을 직접 확인한다.)
+> 2. `node scripts/check-handoff.mjs FE --ticket <TKT>`를 실행한다. 마지막 줄이 `STATUS: READY FE`가 아니면 작업하지 않고, 그 STATUS 줄을 그대로 마지막 줄에 출력한 뒤 멈춘다. 이 점검은 HANDOFF "선행" 열의 티켓 브리핑도 필수로 확인한다. (실행할 수 없으면 레지스트리에서 `읽는 단계 (필수)`에 `FE`가 있는 파일과, 선행 티켓 단계의 브리핑을 직접 확인한다.)
+>    - 사용자가 막힌 상태에서 진행을 승인하면 `docs/PIPELINE.md` §2-5대로 브리핑 머리말 `exception`과 "절차 예외" 칸을 남긴다.
 > 3. 산출물은 레지스트리에서 `만드는 단계`가 `FE`인 경로에만 쓴다. 끝나면 `node scripts/check-handoff.mjs FE --post --ticket <TKT>`로 확인하고 결과를 보고에 적는다.
 
 
@@ -119,7 +120,7 @@ description: 확정된 화면 명세와 디자인 기준을 코드로 구현하�
 
 PR 설명에 이 형식 그대로 쓴다. UI/UX 검수와 사람의 머지 판단이 이것만 보고 가능해야 한다.
 작은 수정은 결론, 검증 결과, 변경 범위, 확인하지 못한 것만 쓴다.
-같은 내용을 `docs/05-frontend/briefing-<TKT>.md`(FE-BRIEF)에도 저장해 PR에 포함한다. QA·UI/UX 에이전트는 이 파일을 읽는다. 파일 맨 위에는 `docs/PIPELINE.md` §4의 머리말(`stage: FE`, `tickets`, `status`, `inputs_read`, `next_readers: [QA, UX]`)을 둔다.
+같은 내용을 `docs/05-frontend/briefing-<TKT>.md`(FE-BRIEF)에도 저장해 PR에 포함한다. QA·UI/UX 에이전트는 이 파일을 읽는다. 파일 맨 위에는 `docs/PIPELINE.md` §4의 머리말(`stage: FE`, `tickets`, `status`, `inputs_read`, `next_readers: [QA, UX]`, 예외 진행 시 `exception`)을 둔다.
 
 ```
 ## [기능] 이름
@@ -127,6 +128,9 @@ PR 설명에 이 형식 그대로 쓴다. UI/UX 검수와 사람의 머지 판�
 
 ### 사람이 결정할 것
 - (없으면 "없음")
+
+### 절차 예외 (점검이 막혔는데 승인받아 진행한 경우만, PIPELINE §2-5)
+- 막힌 입력, 승인자·날짜, 이 티켓에 그 입력이 필요 없었던 이유 또는 대신 읽은 문서
 
 ### 이해 가이드
 - 데이터 흐름 3~5줄: 어디서 받아서 → 상태는 어디에 → 에러는 어디서 처리

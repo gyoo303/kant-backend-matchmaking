@@ -30,7 +30,7 @@ STAGE="${STAGE^^}"
 cd "$(git rev-parse --show-toplevel)"
 
 echo "== [$STAGE] 실행 전 점검"
-node scripts/check-handoff.mjs "$STAGE" || exit 1
+node scripts/check-handoff.mjs "$STAGE" ${TICKET:+--ticket "$TICKET"} || exit 1
 
 PROMPT="/$SKILL
 ${SKILL} 스킬의 지시대로 작업하라. 스킬 맨 위의 '0단계 — 시작 전 확인'부터 수행한다.

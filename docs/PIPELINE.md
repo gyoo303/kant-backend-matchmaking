@@ -22,10 +22,11 @@
 
 ## 2. 사용 규칙
 
-1. **작업 시작 전**: `node scripts/check-handoff.mjs <내 코드>`를 실행한다. 이 스크립트는 아래 표에서 `읽는 단계 (필수)`에 내 코드가 있는 행을 찾아 파일이 있는지, 브리핑 머리말이 `blocked`가 아닌지, 승인 대기 결정(`[PENDING]` D-xx, `Proposed` ADR)이 없는지 확인한다. 마지막 줄이 `STATUS: READY`가 아니면 작업하지 않고 그 줄을 보고한다. `선택`은 필요할 때 해당 ID 섹션만 읽는다.
+1. **작업 시작 전**: `node scripts/check-handoff.mjs <내 코드>`를 실행한다. DB·BE·FE·QA는 `--ticket <TKT>`를 붙인다. 이 스크립트는 아래 표에서 `읽는 단계 (필수)`에 내 코드가 있는 행을 찾아 파일이 있는지, 브리핑 머리말이 `blocked`가 아닌지, 승인 대기 결정(`[PENDING]` D-xx, `Proposed` ADR)이 없는지 확인한다. 또 HANDOFF에서 그 티켓의 "선행" 티켓을 찾아 선행 티켓 단계의 브리핑(§3.4의 `선행` 행)을 필수로 확인한다. 마지막 줄이 `STATUS: READY`가 아니면 작업하지 않고 그 줄을 보고한다. `선택`은 필요할 때 해당 ID 섹션만 읽는다.
 2. **작업 후**: `만드는 단계`가 나인 경로에만 쓴다. 표에 없는 경로에 다음 단계가 읽어야 할 문서를 만들지 않는다. 새 문서가 필요하면 이 표에 행을 추가한다.
 3. **브리핑**: DB·BE·FE·QA는 단계 폴더에 브리핑을 남긴다(§4 형식). PR 설명에 쓰는 내용도 같은 파일로 저장한다. PR 설명만으로는 다음 에이전트가 읽을 수 없다.
 4. **수용기준 번호**: 모든 단계는 PM의 `AC-xx-n`, `NFR-xx`를 그대로 쓴다. 새 번호 체계를 만들지 않는다. UI/UX 명세 항목은 `UX-n`을 쓴다.
+5. **예외 진행**: 점검이 `READY`가 아닌데 사용자가 진행을 승인하면, 막힌 입력이 이 티켓에 정말 필요한지와 대신 읽은 문서를 확인한 뒤 진행한다. 브리핑 머리말에 `exception`(§4)을, 본문에 "절차 예외" 칸(승인자·날짜·막힌 ID·이유)을 남긴다. 승인은 채팅이 아니라 이 기록으로 다음 단계에 전달된다.
 
 ## 3. 산출물 표
 
@@ -66,11 +67,13 @@
 ### 3.4 구현·검증 단계 브리핑
 | ID | 경로 | 만드는 단계 | 읽는 단계 (필수) | 읽는 단계 (선택) |
 |---|---|---|---|---|
-| DB-BRIEF | `docs/03-db/briefing.md` | DB | BE | QA |
+| DB-BRIEF | `docs/03-db/briefing.md` | DB | 선행 | QA |
 | DB-TYPES | `types/database.ts` | DB | BE | FE |
-| BE-BRIEF | `docs/04-backend/briefing.md` | BE | FE | QA |
-| FE-BRIEF | `docs/05-frontend/briefing-<TKT>.md` | FE | QA | UX (검수 시) |
-| QA-BRIEF | `docs/06-qa/briefing-<TKT 또는 브랜치>.md` | QA | — | UX, 사람 |
+| BE-BRIEF | `docs/04-backend/briefing.md` | BE | 선행 | QA |
+| FE-BRIEF | `docs/05-frontend/briefing-<TKT>.md` | FE | 선행 | UX (검수 시) |
+| QA-BRIEF | `docs/06-qa/briefing-<TKT 또는 브랜치>.md` | QA | 선행 | UX, 사람 |
+
+> `선행` = 점검하는 티켓의 HANDOFF "선행" 열에 이 단계 티켓이 있을 때만 필수다. 예: TKT-FE-01(선행 TKT-DB-01)은 DB-BRIEF, TKT-FE-M2-01(선행 TKT-BE-M2-01)은 BE-BRIEF가 필수다. 브리핑 하나를 여러 티켓이 함께 쓰는 단계(DB·BE)는 머리말 `tickets`에 선행 티켓이 있어야 통과한다.
 
 ### 3.5 UX (횡단)
 | ID | 경로 | 만드는 단계 | 읽는 단계 (필수) | 읽는 단계 (선택) |
@@ -111,8 +114,11 @@ tickets: [TKT-BE-01]
 status: done              # done | blocked | partial
 inputs_read: [AR-HAND, AR-API, AR-CONV, AR-GATE, DB-BRIEF]
 next_readers: [FE, QA]
+# 예외로 진행했을 때만 (§2-5). 없으면 줄을 쓰지 않는다
+exception: { blocked: [BE-BRIEF], approved_by: user, date: 2026-10-21, read_instead: [DB-BRIEF] }
 ---
 ```
+- `exception`: 점검이 막혔는데 사용자 승인으로 진행한 경우의 기록. `blocked`는 막힌 ID, `read_instead`는 대신 읽은 입력(없으면 `[]`).
 
 ## 5. 실행 방법
 
@@ -120,12 +126,15 @@ next_readers: [FE, QA]
 이 문서의 표를 그대로 파싱한다. 표에 행을 추가하면 스크립트도 자동으로 따라간다(표 형식 `| ID | \`경로\` | 만드는 단계 | 읽는 단계 (필수) | 읽는 단계 (선택) |`은 유지한다).
 
 ```bash
-node scripts/check-handoff.mjs BE
+node scripts/check-handoff.mjs BE --ticket TKT-BE-M2-01
 ```
 
 ```bash
-node scripts/check-handoff.mjs BE --post --ticket TKT-BE-01
+node scripts/check-handoff.mjs BE --post --ticket TKT-BE-M2-01
 ```
+
+- DB·BE·FE·QA의 실행 전 점검은 `--ticket`이 없으면 `STATUS: BLOCKED_BY_MISSING TICKET`으로 멈춘다. PM·ARCH·UX는 `--ticket` 없이 실행한다.
+- 선행 티켓은 `docs/02-arch/HANDOFF.md` 표의 마지막 열("선행")에서 읽는다. 이 열은 전체 티켓 ID(`TKT-DB-01`)를 쉼표로 나열하고, 없으면 `—`로 쓴다. HANDOFF 표의 열 순서를 바꾸면 스크립트(`readPredecessors`)도 같이 고친다.
 
 | 마지막 줄 | 의미 | 종료 코드 |
 |---|---|---|
