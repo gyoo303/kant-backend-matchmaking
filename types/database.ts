@@ -683,7 +683,7 @@ export type Database = {
         }
       }
       create_payment: {
-        Args: { p_order_id: string; p_round_id: string }
+        Args: { p_order_id?: string; p_round_id?: string }
         Returns: {
           amount: number
           approved_at: string | null
