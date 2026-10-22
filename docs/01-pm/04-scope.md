@@ -16,7 +16,7 @@
 
 - **핵심 엔티티**: Product, Theme, Cart/CartItem, Order, Payment, ShippingAddress, Subscription, SubscriptionRound, ReaderLetter, ReplyLetter, PostcardPhoto, Teaser, UnboxingCode, ShelfMemo, FarewellNote, FarewellLetter (PM-DOMAIN §3·§4)
 - **상태 흐름**: Order §5.1(취소 요청 철회·거절 포함), Subscription §5.2, SubscriptionRound(창가 등불) §5.3 + 취소 요청 표시, 진행 중 회차 정의 §5.4, 탈퇴 데이터 처리 §7
-- **불변 규칙**: INV-01~20 (특히 INV-04 결제 전 발송 금지, INV-05 재고, INV-06 중복 확정 금지, INV-07·08 블라인드·코드, INV-09 등불 단방향, INV-15 관리자 전용, INV-19 편지류 열람, INV-20 취소 요청 중 발송 금지)
+- **불변 규칙**: INV-01~21 (특히 INV-04 결제 전 발송 금지, INV-05 재고, INV-06 중복 확정 금지, INV-07·08 블라인드·코드, INV-09 등불 단방향, INV-15 관리자 전용, INV-19 편지류 열람, INV-20 취소 요청 중 발송 금지, INV-21 결제 대기 주문 1건)
 - **→ARCH 질문**: A-01 PG·테스트 모드 / A-02 네이버 로그인 / A-03 `data/products.ts` 역할 / A-04 등불 반영 방식 / A-05 코드 생성 / A-06 엑셀 형식 / A-07 관리자 권한 / A-08 답장·엽서 비공개 저장 / A-09 기존 저장소 구조와 KANT 증빙 경로 정합 / A-10 소셜 로그인 외부 심사 / A-11 주소록 파일 취급 (PM-ASM §4)
 
 | 문서 | 읽을 부분 |
