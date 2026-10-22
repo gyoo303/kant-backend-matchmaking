@@ -1,7 +1,7 @@
 ---
 stage: DB
 tickets: [TKT-DB-00, TKT-DB-01, TKT-DB-02, TKT-DB-03, TKT-DB-04, TKT-DB-05]
-status: partial
+status: done
 inputs_read: [AR-MAP, AR-HAND, AR-DB, AR-CONV, AR-GATE, AR-ADR, PM-AC, PM-DOMAIN]
 next_readers: [BE, QA]
 ---
@@ -15,7 +15,7 @@ next_readers: [BE, QA]
 | TKT-DB-02 | GATE-07, AC-08-5·6·8, AC-10-5 | 충족 (2026-10-22). 원격 적용 완료(`migration list`: 0020 local=remote), pgTAP 106개 통과(42·29·35), GATE-01~06 통과 |
 | TKT-DB-03 | GATE-07, AC-11-9, AC-16-6, AC-17-5, AC-18-8 | 충족 (2026-10-22). 원격 적용 완료(`migration list`: 0030 local=remote), pgTAP 168개 통과(62·42·29·35), GATE-01~06 통과 |
 | TKT-DB-04 | AC-19-1·4, AC-05-4·8 | 충족 (2026-10-22). 원격 적용 완료(`migration list`: 0040 local=remote), pgTAP 78개 통과(36·42), GATE-01~06 통과 |
-| TKT-DB-05 | GATE-07, AC-08-9·10 | 코드 충족, **원격 적용 대기**(2026-10-22). 0060을 트랜잭션 안에서 적용한 채 pgTAP 6개 파일 223개 통과 후 rollback. 사람이 `db push` 하면 `done` |
+| TKT-DB-05 | GATE-07, AC-08-9·10 | 충족 (2026-10-22). 원격 적용 완료(`migration list`: 0060 local=remote), pgTAP 223개 통과(19·29·35·42·36·62), 적용 전 정리 대상 결제 대기 주문 0건 |
 
 ## 만든 것
 ### TKT-DB-00
@@ -280,12 +280,16 @@ npx supabase test db --linked
   - `shelf_memos` update 정책: `using`은 own만, `with check`에 own 회차 `unboxed`를 둔다. delete는 own만(설계 "own + unboxed"와 같은 결과: 메모는 unboxed 회차에만 생긴다).
 
 ## 검증 결과
-### TKT-DB-05 (2026-10-22, 원격 적용 전)
+### TKT-DB-05 (2026-10-22, 원격 적용 후)
+- 원격 적용: 사용자 지시(2026-10-22)로 `npx supabase db push --linked` 실행. 적용 전 원격의 결제 대기 주문은 0건이라 0060의 정리 단계(1)로 바뀐 데이터는 없다. `migration list` 0001·0020·0030·0040·0050·0060 local=remote, 다시 dry-run하면 "Remote database is up to date."
+- 적용 후 확인: 인덱스 `orders_one_pending_per_member` 1개, `create_order` 본문에 회원별 advisory lock 있음
+- GATE-07 pgTAP(적용된 스키마, 원본 테스트 파일을 `npx supabase db query --linked -f`로 실행): **223개 통과, `not ok` 0줄** — `pending_orders` 1..19, `state_machine` 1..29, `payments` 1..35, `rls` 1..42, `admin_ops` 1..36, `subscription` 1..62. 실행 뒤 테스트 계정 0개(모두 rollback)
+
+#### 적용 전 검증 (기록)
 - 원격 영구 적용은 하지 않았다(규칙: 사람이 적용). 대신 각 테스트 파일의 `begin;` 바로 뒤에 0060 내용을 넣은 임시 사본을 `npx supabase db query --linked -f <파일>`로 실행했다. 파일 전체가 `begin … rollback`이라 원격에 남는 것이 없다(임시 사본은 지웠다).
 - GATE-07 pgTAP: **223개 통과, `not ok` 0줄** — `pending_orders` 1..19, `state_machine` 1..29, `payments` 1..35, `rls` 1..42, `admin_ops` 1..36, `subscription` 1..62
 - 실행 뒤 원격 확인: 인덱스 `orders_one_pending_per_member` 0개, `create_order` 본문에 advisory lock 없음(기존 그대로), 테스트 계정 0개
 - `npx supabase db push --linked --dry-run`: 적용 대상 `0060_create_order_reuse_pending.sql` 1개
-- 사람이 할 일: `npx supabase db push --linked` → `migration list`에서 0060 local=remote 확인 → 같은 테스트 6개를 SQL 편집기(또는 `db query --linked -f`)로 다시 실행. 0060의 정리 단계는 원격의 결제 대기 주문 중 회원별 최신 1건 외를 `cancelled`로 바꾼다(되돌릴 수 없음, D-044와 같은 결과)
 
 ### TKT-DB-04 (2026-10-22, 원격 적용 후)
 - 원격 적용: 사람이 `npx supabase db push --linked` 실행. `migration list` 0001·0020·0030·0040 local=remote, 다시 dry-run하면 "Remote database is up to date."
