@@ -29,7 +29,7 @@ export interface Product {
 |---|---|
 | `domains/orders/types/order.types.ts` | `OrderStatus`, `OrderSummary { id, orderNumber, status, totalAmount, createdAt, cancelRejected: boolean, items: { productId, productName, unitPrice, quantity }[] }`, `ShippingSnapshot { recipientName, phone, address }` |
 | `domains/cart/types/cart.types.ts` | `CartLine { product: Product; quantity: number; purchasable: boolean }` |
-| `domains/subscriptions/types/round.types.ts` | `RoundStatus`, `WindowView` (§4.3), `UnboxedRound { roundId, product: Pick<Product,'id'|'name'|'imageUrl'|'author'>, replyLetter, postcardUrl: string | null, unboxedAt, memo: { body, updatedAt } | null }`, `KeeperRound`(서재 작업용, 편지 전문·내용·코드 포함) |
+| `domains/subscriptions/types/round.types.ts` | `RoundStatus`, `WindowView` (§4.3), `UnboxedRound { roundId, product: Pick<Product,'id'|'name'|'imageUrl'|'author'|'theme'>, replyLetter, postcardUrl: string | null, unboxedAt, memo: { body, updatedAt } | null }`, `KeeperRound`(서재 작업용, 편지 전문·내용·코드 포함), `DeskRound { id, status, paidAt, cancelRequested, recipientName }`(서재 작업 목록, 받는 사람 이름 = 결제 시점 배송지 사본) |
 | `domains/payments/types/payment.types.ts` | `PaymentTarget = { kind: 'order'; orderId: string } | { kind: 'round'; roundId: string }`, `PaymentRequest { pgOrderId, amount, orderName, customerKey }` |
 - DB 행 타입은 `types/database.ts`의 `Tables<'…'>`만 쓴다. 화면 타입으로의 변환은 `lib/data/*`에서만 한다.
 

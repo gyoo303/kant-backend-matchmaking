@@ -52,6 +52,8 @@
 | TKT-DB-04 | `shipping_list_downloads`, `list_shipping_targets`, `keeper_counts`, `withdraw_member` | DB | 03 §5·7·8·9, ADR-007 | `0040_admin_ops.sql` | AC-19-1·4, AC-05-4·8 | TKT-DB-03 |
 | TKT-BE-M4-04 | 주소록 Route Handler(API-14), `domains/shipping/shipping-list.ts`(CSV)+테스트 | BE | ADR-007, 04 SEQ-11 | route, `lib/data/admin.ts`(`list_shipping_targets`·`keeper_counts`·다운로드 기록) | AC-19-* | TKT-DB-04 |
 | TKT-FE-M4-03 | `/mypage/rounds/[id]`, `/mypage/shelf`, `/mypage/farewell`, SCR-13 주소록 버튼·안내 문구, SCR-20 숫자 | FE | SCR-16~18·13·20 | 화면 | AC-16-*, AC-17-*, AC-18-*, AC-19-2 | TKT-BE-M4-03, TKT-BE-M4-04 |
+| TKT-BE-M4-05 | 서재 작업 목록에 받는 사람 이름(`getDeskRounds` → `DeskRound[]`, select에 `ship_recipient_name`), 언박싱 책에 테마(`UNBOXED_COLUMNS`의 `products(...)`에 `theme`, `UnboxedRound.product` 타입). DB·RLS 변경 없음 | BE | 04 §1.2(`DeskRound`, `UnboxedRound`) | `lib/data/rounds.ts`, `domains/subscriptions/types/round.types.ts`, `docs/04-backend/briefing.md` | GATE-01~06 | TKT-BE-M4-03 |
+| TKT-FE-M4-04 | 서재 작업 목록 "<이름> 님의 편지"(SCR-19 시안), 언박싱·나의 서가 표지에 `theme` 전달(UX-D-10 대체 표지) | FE | 04 §1.2, UX-PLAN-FE screens §SCR-16·17·19 | `app/admin/desk/page.tsx`, `components/UnboxedView.tsx`, `app/mypage/shelf/page.tsx`, `docs/05-frontend/briefing-TKT-FE-M4-04.md` | GATE-01~06, AC-04-2 | TKT-BE-M4-05 |
 | TKT-QA-M4 | 시연 흐름 7~10, 블라인드 응답 검사, 회원 간 열람 | QA | 06 §2 순위 2~4, PM-AC M4, `docs/uiux/review/QA/scenarios.md` | `briefing-TKT-QA-M4.md` | NFR-08·09·17·18 | TKT-FE-M4-03 |
 
 ## M5 마감 (4일차 오전)
@@ -69,9 +71,9 @@
 | M1 | 2 | 0 | 4 | 1 | 7 |
 | M2 | 0 | 3 | 2 | 1 | 6 |
 | M3 | 2 | 4 | 3 | 1 | 10 |
-| M4 | 2 | 4 | 3 | 1 | 10 |
+| M4 | 2 | 5 | 4 | 1 | 12 |
 | M5 | 0 | 0 | 1 | 1 | 2 |
-| 계 | 6 | 11 | 13 | 5 | 35 |
+| 계 | 6 | 12 | 14 | 5 | 37 |
 
 ## 남은 리스크
 RISK-16 개발·시연 DB 공용(ADR-005 개정: 되돌리기 없는 변경 규칙, seed 재적용 가능, 테스트 rollback), RISK-03 보상 취소 실패(로그+문의 안내), RISK-11 네이버 매핑 미확인(스파이크로 확인), RISK-12 네이버 운영 검수·카카오 비즈 앱(이번 범위 밖), RISK-14 5년 경과 기록 수동 삭제, RISK-15 M4 일정. Footer 법정 고지 미기재(D-021)는 실결제 전환 전 필요.
