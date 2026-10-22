@@ -2,16 +2,18 @@ import type { Metadata } from 'next';
 import { unstable_rethrow } from 'next/navigation';
 import { Suspense } from 'react';
 import { refund, rejectCancel, shipOrder } from '@/app/admin/orders/actions';
+import { OUTLINE_BUTTON } from '@/components/button-styles';
 import { KeeperOrderActions } from '@/components/KeeperOrderActions';
 import { Badge } from '@/components/ui/badge';
+import { buttonVariants } from '@/components/ui/button';
 import { ORDER_STATUS_LABELS } from '@/domains/orders/order';
 import type { KeeperOrder } from '@/domains/orders/types/order.types';
+import { SHIPPING_LIST_EMPTY_MESSAGE, SHIPPING_LIST_NOTICE } from '@/domains/shipping/shipping-list';
 import { getKeeperOrders } from '@/lib/data/orders';
 
 export const metadata: Metadata = { title: '주문 처리' };
 
 const KEEPER_ACTIONS = { shipOrder, refund, rejectCancel };
-const NOTHING_TO_SHIP = '지금 보낼 책이 없어요'; // AC-19-2
 
 async function loadOrders(): Promise<KeeperOrder[] | null> {
     try {
@@ -43,7 +45,7 @@ function KeeperOrderCard({ order }: { order: KeeperOrder }) {
                 {order.shipping.recipientName} / {order.shipping.phone} / {order.shipping.address}
             </p>
             <p className="text-muted-foreground text-sm">주문 번호 {order.orderNumber}</p>
-            <KeeperOrderActions orderId={order.id} cancelRequested={cancelRequested} actions={KEEPER_ACTIONS} />
+            <KeeperOrderActions targetId={order.id} cancelRequested={cancelRequested} actions={KEEPER_ACTIONS} />
         </li>
     );
 }
@@ -54,7 +56,7 @@ async function KeeperOrderList() {
         return <p role="status" className="bg-card mt-6 rounded-lg border p-6">주문을 불러오지 못했어요</p>;
     }
     if (orders.length === 0) {
-        return <p className="bg-card mt-6 rounded-lg border p-6">{NOTHING_TO_SHIP}</p>;
+        return <p className="bg-card mt-6 rounded-lg border p-6">{SHIPPING_LIST_EMPTY_MESSAGE}</p>;
     }
     return (
         <ul className="mt-6 flex flex-col gap-4">
@@ -65,12 +67,32 @@ async function KeeperOrderList() {
     );
 }
 
-// SCR-13 주문 처리 (AC-10-1~6). [주소록 내려받기]는 TKT-FE-M4-03에서 이 제목 줄에 붙인다
-export default function AdminOrdersPage() {
+// 주소록 라우트가 보낼 건이 없을 때 ?empty=1로 돌려보낸다 → 파일 대신 안내 (AC-19-2·4)
+async function ShippingListNotice({ searchParams }: { searchParams: PageProps<'/admin/orders'>['searchParams'] }) {
+    const { empty } = await searchParams;
+    if (empty !== '1') return null;
+    return (
+        <p role="status" className="bg-accent text-accent-foreground mt-4 rounded-lg px-4 py-3">
+            {SHIPPING_LIST_EMPTY_MESSAGE}
+        </p>
+    );
+}
+
+// SCR-13 주문 처리 (AC-10-1~6, AC-19-1~4)
+export default function AdminOrdersPage({ searchParams }: PageProps<'/admin/orders'>) {
     return (
         <>
-            <h1 className="font-heading text-3xl font-bold md:text-4xl">주문 처리</h1>
-            <p className="text-muted-foreground mt-3">오래된 주문부터 보여요.</p>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+                <h1 className="font-heading text-3xl font-bold md:text-4xl">주문 처리</h1>
+                {/* 파일 내려받기(Route Handler API-14)라 <Link>가 아니라 <a>로 둔다(CONV-04 예외: 페이지 이동이 아님) */}
+                <a href="/api/admin/shipping-list" className={buttonVariants({ variant: 'ghost', className: OUTLINE_BUTTON })}>
+                    주소록 내려받기
+                </a>
+            </div>
+            <p className="text-muted-foreground mt-3">오래된 주문부터 보여요. {SHIPPING_LIST_NOTICE}.</p>
+            <Suspense fallback={null}>
+                <ShippingListNotice searchParams={searchParams} />
+            </Suspense>
             <Suspense fallback={<p className="text-muted-foreground mt-6">주문을 꺼내 오는 중이에요.</p>}>
                 <KeeperOrderList />
             </Suspense>

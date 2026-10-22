@@ -9,18 +9,29 @@ type ActionOutcome = { ok: true } | { ok: false; error: { message: string } };
 type CancelInput = { kind: 'order' | 'round'; id: string };
 
 export interface KeeperOrderActionSet {
-    shipOrder: (input: CancelInput) => Promise<ActionOutcome>;
     refund: (input: CancelInput) => Promise<ActionOutcome>;
     rejectCancel: (input: CancelInput) => Promise<ActionOutcome>;
+    shipOrder?: (input: CancelInput) => Promise<ActionOutcome>; // 주문만. 회차 발송은 서재 작업 ③에서 (API-19)
 }
 
 export const CANCEL_REQUEST_HINT = '취소 요청이 있는 주문이에요. 환불하거나 거절해 주세요'; // REJ-22, AC-10-4
 
-// 주문 한 건의 [발송 완료] / [환불]·[취소 거절]. 처리하는 동안 상자의 버튼을 모두 막아 두 번 눌리지 않게 한다 (AC-10-5)
-export function KeeperOrderActions({ orderId, cancelRequested, actions }: { orderId: string; cancelRequested: boolean; actions: KeeperOrderActionSet }) {
+// 주문·회차 한 건의 [환불]·[취소 거절](+ 주문은 [발송 완료]). 처리하는 동안 버튼을 모두 막아 두 번 눌리지 않게 한다 (AC-10-5, AC-20-4)
+export function KeeperOrderActions({
+    targetId,
+    kind = 'order',
+    cancelRequested,
+    actions,
+}: {
+    targetId: string;
+    kind?: 'order' | 'round';
+    cancelRequested: boolean;
+    actions: KeeperOrderActionSet;
+}) {
     const [pending, startTransition] = useTransition();
     const [message, setMessage] = useState<string | null>(null);
-    const target = { kind: 'order' as const, id: orderId };
+    const target = { kind, id: targetId };
+    const shipOrder = actions.shipOrder;
 
     function run(action: (input: CancelInput) => Promise<ActionOutcome>) {
         setMessage(null);
@@ -32,7 +43,7 @@ export function KeeperOrderActions({ orderId, cancelRequested, actions }: { orde
     }
 
     return (
-        <div className="mt-4">
+        <div className={shipOrder ? 'mt-4' : ''}>
             <div className="flex flex-wrap gap-2">
                 {cancelRequested && (
                     <>
@@ -45,19 +56,21 @@ export function KeeperOrderActions({ orderId, cancelRequested, actions }: { orde
                     </>
                 )}
                 {/* 취소 요청 주문은 발송을 막는다 (AC-10-4) */}
-                <Button
-                    type="button"
-                    variant={cancelRequested ? 'secondary' : 'default'}
-                    onClick={() => run(actions.shipOrder)}
-                    disabled={pending || cancelRequested}
-                    aria-describedby={cancelRequested ? `ship-hint-${orderId}` : undefined}
-                    className="h-11 px-5 text-base"
-                >
-                    발송 완료
-                </Button>
+                {shipOrder && (
+                    <Button
+                        type="button"
+                        variant={cancelRequested ? 'secondary' : 'default'}
+                        onClick={() => run(shipOrder)}
+                        disabled={pending || cancelRequested}
+                        aria-describedby={cancelRequested ? `ship-hint-${targetId}` : undefined}
+                        className="h-11 px-5 text-base"
+                    >
+                        발송 완료
+                    </Button>
+                )}
             </div>
-            {cancelRequested && (
-                <p id={`ship-hint-${orderId}`} className="text-muted-foreground mt-2 text-sm">
+            {shipOrder && cancelRequested && (
+                <p id={`ship-hint-${targetId}`} className="text-muted-foreground mt-2 text-sm">
                     {CANCEL_REQUEST_HINT}
                 </p>
             )}
