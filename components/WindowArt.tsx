@@ -1,6 +1,6 @@
 // 창가 일러스트 (UX-D-03·04). 메인 첫 화면(hero)과 창가 상태 4개(WindowScene, TKT-FE-M4-01)가 같은 그림을 쓴다.
 // 일러스트 파일이라 SVG 안의 색은 토큰 밖 값을 쓴다(design-system §2 예외 2). 모양·색은 시안(mockups/src/build.mjs)과 같다.
-// 촛불 흔들림(UX-17)은 창가 화면 티켓(TKT-FE-M4-01)에서 키프레임 토큰과 함께 넣는다. 지금은 정지 그림이다.
+// 사용자 행동 없이 반복되는 움직임은 촛불 하나뿐이며, 동작 줄이기 설정이면 멈춘다 (UX-17, CONV-11).
 export type WindowArtState = 'hero' | 'arrived' | 'reading' | 'shipped' | 'empty';
 
 interface WindowArtProps {
@@ -46,7 +46,7 @@ export function WindowArt({ state, label }: WindowArtProps) {
             )}
             {hasCandle && <rect x="105" y="182" width="14" height="30" rx="2" fill="#efe6d2" />}
             {lit && (
-                <g>
+                <g className="motion-safe:animate-candle svg-origin-bottom">
                     <ellipse cx="112" cy="168" rx="9" ry="16" fill="#e9a83a" opacity=".35" />
                     <ellipse cx="112" cy="171" rx="5" ry="10" fill="#f6c768" />
                 </g>

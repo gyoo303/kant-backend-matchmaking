@@ -60,6 +60,76 @@
     --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* 모션 토큰 (design-system §7, NFR-10). 쓰는 곳은 모두 motion-safe: 로 감싼다(동작 줄이기면 0초, CONV-11) */
+@theme {
+    --animate-candle: candle-flicker 2.4s ease-in-out infinite; /* 사용자 행동 없이 반복되는 유일한 움직임 (UX-17) */
+    --animate-envelope-close: envelope-close 700ms ease-in both; /* 봉투 닫힘 ≤ 1s */
+    --animate-mailbox-drop: mailbox-drop 2s ease-in both; /* 우체통 들어감 1.5~3s, 결제 확정 뒤에만 (D-041) */
+    --animate-unbox-hide: unbox-hide 800ms ease-out both; /* 언박싱 공개 ≤ 2s (가림 0.8s + 공개 1.2s) */
+    --animate-unbox-reveal: unbox-reveal 1200ms ease-out both;
+
+    @keyframes candle-flicker {
+        0%,
+        100% {
+            transform: scale(1, 1);
+        }
+        35% {
+            transform: scale(0.94, 1.05);
+        }
+        70% {
+            transform: scale(1.04, 0.96);
+        }
+    }
+    @keyframes envelope-close {
+        from {
+            transform: scaleY(-1);
+        }
+        to {
+            transform: scaleY(1);
+        }
+    }
+    @keyframes mailbox-drop {
+        0% {
+            transform: translate(0, 0) rotate(-8deg);
+            opacity: 1;
+        }
+        60% {
+            transform: translate(70%, -10%) rotate(0deg);
+            opacity: 1;
+        }
+        100% {
+            transform: translate(85%, 10%) scale(0.4);
+            opacity: 0;
+        }
+    }
+    @keyframes unbox-hide {
+        to {
+            opacity: 0;
+            filter: blur(12px);
+        }
+    }
+    @keyframes unbox-reveal {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+        to {
+            opacity: 1;
+            transform: none;
+        }
+    }
+}
+
+/* SVG 안의 도형을 자기 상자 기준으로 움직인다(촛불은 아래, 봉투 덮개는 위가 축) */
+@utility svg-origin-bottom {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+}
+@utility svg-origin-top {
+    transform-box: fill-box;
+    transform-origin: 50% 0%;
+}
+
 :root {
     /* 디자인 토큰: docs/uiux/review/frontend/design-system.md §2 (UX-D-01) */
     --background: oklch(0.959 0.008 114.2);

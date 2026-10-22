@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { retryPayment } from '@/app/checkout/actions';
+import { PostedLetter } from '@/components/PostedLetter';
 import { RetryPaymentButton, type RetryTarget } from '@/components/RetryPaymentButton';
 import { OUTLINE_BUTTON } from '@/components/button-styles';
 import { buttonVariants } from '@/components/ui/button';
@@ -65,17 +66,12 @@ async function OrderSucceeded({ orderId }: { orderId: string }) {
     );
 }
 
-// 편지 회차 결제 성공. 우체통에 들어가는 전환(D-041)은 TKT-FE-M4-01에서 이 자리에 넣는다
+// 편지 회차 결제 성공: 이때만 봉투가 우체통에 들어가는 전환 (D-041, AC-11-2)
 function RoundSucceeded() {
     return (
         <>
             <h1 className="font-heading text-3xl font-bold md:text-4xl">편지를 띄웠어요</h1>
-            <p className="text-muted-foreground mt-3 text-lg">{WINDOW_COPY.arrived}</p>
-            <div className="mt-8">
-                <Link href="/mypage/window" className={PRIMARY}>
-                    창가로 가기
-                </Link>
-            </div>
+            <PostedLetter copy={WINDOW_COPY.arrived} />
         </>
     );
 }
