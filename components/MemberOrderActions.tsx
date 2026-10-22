@@ -57,9 +57,9 @@ export function MemberOrderActions({
                 {mode === 'pending_payment' && (
                     <>
                         <RetryPaymentButton target={{ kind: 'order', orderId }} retryPayment={actions.retryPayment} variant="outline" />
-                        {/* 결제 대기 주문 거두기 (D-037, API-12) */}
+                        {/* 결제 대기 주문 취소 (D-037, API-12) */}
                         <Button type="button" variant="link" onClick={() => run(actions.cancelPending)} disabled={pending} className="h-11 px-2 text-base">
-                            주문 거두기
+                            주문 취소
                         </Button>
                     </>
                 )}

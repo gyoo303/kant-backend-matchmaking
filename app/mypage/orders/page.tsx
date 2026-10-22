@@ -48,7 +48,7 @@ function OrderCard({ order }: { order: OrderSummary }) {
             {status === 'paid' && order.cancelRejected && (
                 <p className="bg-secondary mt-4 rounded-lg px-4 py-3">{CANCEL_REJECTED_MESSAGE}</p>
             )}
-            {status === 'pending_payment' && <p className="text-muted-foreground mt-3">결제가 끝나지 않았어요. 다시 결제하거나 주문을 거둘 수 있어요.</p>}
+            {status === 'pending_payment' && <p className="text-muted-foreground mt-3">결제가 끝나지 않았어요. 다시 결제하거나 주문을 취소할 수 있어요.</p>}
 
             {/* 발송된 주문은 [취소 요청]이 없다 (AC-09-3). 거절된 주문은 안내만 둔다 */}
             {(status === 'pending_payment' || status === 'cancel_requested' || (status === 'paid' && !order.cancelRejected)) && (
@@ -61,7 +61,8 @@ function OrderCard({ order }: { order: OrderSummary }) {
 // 세션을 읽으므로 <Suspense> 안 (CONV-07). RLS로 본인 주문만 온다 (AC-09-4)
 async function OrderList() {
     await requireMember('/mypage/orders');
-    const orders = await getMyOrders();
+    // 결제 전 취소(`cancelled`)는 결제가 일어나지 않은 주문이라 목록에서 뺀다. 새 주문서가 이전 결제 대기 주문을 대체할 때마다 생기기 때문이다 (D-044)
+    const orders = (await getMyOrders()).filter((order) => order.status !== 'cancelled');
 
     if (orders.length === 0) {
         return (
