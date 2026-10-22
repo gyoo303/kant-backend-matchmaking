@@ -2,6 +2,7 @@
 
 - ADR-001~009 모두 Accepted(2026-10-21). 모든 티켓 공통으로 `AGENTS.md`(디렉토리 지도)와 `06-quality-gates.md`를 먼저 읽는다.
 - 선후관계: 같은 마일스톤 안에서 DB → BE → FE → QA. "선행" 열은 전체 티켓 ID(`TKT-DB-01`)를 쉼표로 나열하고, 없으면 `—`로 쓴다. `scripts/check-handoff.mjs --ticket`이 이 열을 읽어 선행 티켓의 브리핑을 필수 입력으로 점검한다(PIPELINE §2-1).
+- `lib/data` 담당 (사용자 결정 2026-10-22): `lib/data/products.ts`(상품 조회 API-01~03)는 DB, 그 밖의 `lib/data/*`(RPC 래퍼·행→화면 타입 변환)는 BE가 각 티켓 "산출"에 적힌 파일로 만든다. RPC 시그니처·오류 규칙·호출 클라이언트는 `docs/03-db/briefing.md`를 따른다.
 - 티켓 1개 = 1~2시간. "하지 말 것"의 공통: 스키마·API 이름 임의 변경(필요하면 Architect에 질문), 범위 밖 기능 추가.
 
 ## M1 쇼핑 기반 (1일차) — KANT 증빙 순서 R2 → R3 → R4 → R5·R6·R7 → R8 → R9
@@ -21,7 +22,7 @@
 | TKT-BE-M2-01 | `proxy.ts`·`lib/supabase/proxy.ts`, `/auth/callback`, `lib/auth/guards.ts`, `lib/http/result.ts`, 카카오 로그인 | BE | 04 §2·API-24~26·SEQ-01, ADR-003 | 위 파일, `docs/04-backend/briefing.md` | AC-05-2·5·6 | TKT-DB-01 |
 | TKT-BE-M2-02 | 네이버 `custom:naver` 스파이크(반나절). 실패 시 ADR-003 B로 `app/auth/naver/*/route.ts` + `lib/auth/naver.ts` | BE | ADR-003 | 결과를 브리핑에 기록 | AC-05-1·2(네이버) | TKT-BE-M2-01 |
 | TKT-FE-M2-01 | `/login`, `/mypage` 골격(메뉴), `/admin` 레이아웃·홈(SCR-20 숫자는 M4 후 연결) | FE | SCR-05·06·20, 04 API-25·26 | 화면 + 브리핑 | AC-05-1·3, AC-06-5 | TKT-BE-M2-01 |
-| TKT-BE-M2-03 | `saveProduct`(API-04, 표지 업로드 `book-covers`, `updateTag('products')`), `domains/products/product.schema.ts` | BE | 04 API-04, ADR-008 | actions + 스키마 + 테스트 | AC-06-1·2·4 | TKT-BE-M2-01 |
+| TKT-BE-M2-03 | `saveProduct`(API-04, 표지 업로드 `book-covers`, `updateTag('products')`), `domains/products/product.schema.ts` | BE | 04 API-04, ADR-008 | actions + 스키마 + 테스트, `lib/data/product-admin.ts`(책 저장·표지 업로드) | AC-06-1·2·4 | TKT-BE-M2-01 |
 | TKT-FE-M2-02 | `/admin/products`(목록·새 책·편집, 삭제 버튼 없음) | FE | SCR-08 | 화면 | AC-06-1~5 | TKT-BE-M2-03 |
 | TKT-QA-M2 | 로그인 2종·권한 차단 | QA | 06, PM-AC M2 | `docs/06-qa/briefing-TKT-QA-M2.md` | NFR-06 | TKT-FE-M2-02 |
 
@@ -29,9 +30,9 @@
 | TKT | 내용 | 담당 | 읽을 것 | 산출 | 완료 조건 | 선행 |
 |---|---|---|---|---|---|---|
 | TKT-DB-02 | `cart_items`·`shipping_addresses`·`orders`·`order_items`·`payments` + RPC(`create_order`, `create_payment`, `confirm_payment`, `fail_payment`, 취소·환불·`ship_order`, `cancel_pending`) 주문 분기만, `order_number_seq` + pgTAP | DB | 03 §3·4·5(§5.1·5.2)·8·9, 04 §6.1·6.3 | `0020_commerce.sql`, `supabase/tests/*` | GATE-07, AC-08-5·6·8, AC-10-5 | TKT-DB-01 |
-| TKT-BE-M3-01 | 장바구니·배송지 액션(API-05·06), `domains/cart`(수량 보정)+테스트 | BE | 04 API-05·06 | actions | AC-07-1~5, AC-08-2·3 | TKT-DB-02 |
-| TKT-BE-M3-02 | `lib/payments/toss.ts`(confirm·cancel·멱등키), API-07·08·09·10 | BE | ADR-004, 04 SEQ-02·03 | route·actions | AC-08-1·4~8, NFR-07·19 | TKT-BE-M3-01 |
-| TKT-BE-M3-03 | 취소 요청·철회·거절·환불·발송(API-11~13), 주문 조회 | BE | 04 SEQ-08, §6.1 | actions | AC-09-*, AC-10-* | TKT-BE-M3-02 |
+| TKT-BE-M3-01 | 장바구니·배송지 액션(API-05·06), `domains/cart`(수량 보정)+테스트 | BE | 04 API-05·06 | actions, `lib/data/cart.ts`(장바구니·기본 배송지) | AC-07-1~5, AC-08-2·3 | TKT-DB-02 |
+| TKT-BE-M3-02 | `lib/payments/toss.ts`(confirm·cancel·멱등키), API-07·08·09·10 | BE | ADR-004, 04 SEQ-02·03 | route·actions, `lib/data/orders.ts`(`create_order`), `lib/data/payments.ts`(`create_payment`·`confirm_payment`·`fail_payment`) | AC-08-1·4~8, NFR-07·19 | TKT-BE-M3-01 |
+| TKT-BE-M3-03 | 취소 요청·철회·거절·환불·발송(API-11~13), 주문 조회 | BE | 04 SEQ-08, §6.1 | actions, `lib/data/orders.ts`(취소·철회·거절·결제 대기 취소·발송·주문 조회), `lib/data/payments.ts`(`begin_refund`·`complete_refund`·`fail_refund`) | AC-09-*, AC-10-* | TKT-BE-M3-02 |
 | TKT-FE-M3-01 | `/cart`, `/checkout`, `/checkout/result`, `/mypage/address` | FE | SCR-07·09~11 | 화면 | AC-07-*, AC-08-* | TKT-BE-M3-02 |
 | TKT-FE-M3-02 | `/mypage/orders`, `/admin/orders` | FE | SCR-12·13 | 화면 | AC-09-*, AC-10-* | TKT-BE-M3-03 |
 | TKT-QA-M3 | 테스트 결제 → 접수 → 발송, 중복·금액 변조·환불 실패 | QA | 06 §2 순위 3, PM-AC M3 | `briefing-TKT-QA-M3.md` | NFR-07·09·19 | TKT-FE-M3-02 |
@@ -40,13 +41,13 @@
 | TKT | 내용 | 담당 | 읽을 것 | 산출 | 완료 조건 | 선행 |
 |---|---|---|---|---|---|---|
 | TKT-DB-03 | 구독·회차·편지류·코드·메모·안부 테이블, 회차 RPC, `payments.round_id` FK·공용 RPC 회차 분기(`create or replace`), `postcards` 버킷 + pgTAP(RLS·전이) | DB | 03 §3~6(§5.1)·8·9, 04 §6.2 | `0030_subscription.sql`(`postcards` 버킷 포함) | GATE-07, AC-11-9, AC-16-6, AC-17-5, AC-18-8 | TKT-DB-02 |
-| TKT-BE-M4-01 | `postLetter`(API-15), 회차 결제 연결(SEQ-04), `getWindow`(API-16), `domains/subscriptions/window-copy.ts` | BE | 04 SEQ-04, §4.2 | actions·data | AC-11-1~10, AC-12-* | TKT-DB-03 |
+| TKT-BE-M4-01 | `postLetter`(API-15), 회차 결제 연결(SEQ-04), `getWindow`(API-16), `domains/subscriptions/window-copy.ts` | BE | 04 SEQ-04, §4.2 | actions·data, `lib/data/rounds.ts`(`create_round`, `getWindow` API-16) | AC-11-1~10, AC-12-* | TKT-DB-03 |
 | TKT-FE-M4-01 | `/letters/new`(봉투·우체통 전환, 동작 줄이기), `/mypage/window`(WindowScene·BlindBook) | FE | SCR-14·15, UX-PLAN-FE, CONV-11 | 화면 | AC-11-*, AC-12-*, NFR-10·11 | TKT-BE-M4-01 |
-| TKT-BE-M4-02 | 서재: `openRound`·`saveRoundContents`(엽서 업로드)·`shipRound`(코드, `lib/crypto.ts`, `domains/subscriptions/unboxing-code.ts`+테스트) | BE | 04 SEQ-05·06 | actions | AC-13-*, AC-14-*, AC-15-* | TKT-DB-03 |
+| TKT-BE-M4-02 | 서재: `openRound`·`saveRoundContents`(엽서 업로드)·`shipRound`(코드, `lib/crypto.ts`, `domains/subscriptions/unboxing-code.ts`+테스트) | BE | 04 SEQ-05·06 | actions, `lib/data/rounds.ts`(`open_round`·`round_contents` 저장·`ship_round`) | AC-13-*, AC-14-*, AC-15-* | TKT-DB-03 |
 | TKT-FE-M4-02 | `/admin/desk` 한 열 화면(작별 안부 목록 포함) | FE | SCR-19, NFR-13 | 화면 | AC-13-1, AC-18-4 | TKT-BE-M4-02 |
-| TKT-BE-M4-03 | `unbox`(API-20, 서명 URL), 메모(API-21), 구독 마무리(API-22), 회차 취소(API-11~13 round), 탈퇴(API-23) | BE | 04 SEQ-07·08·09·10 | actions | AC-16-*, AC-17-*, AC-18-*, AC-20-*, AC-05-4·7~9 | TKT-DB-03 |
+| TKT-BE-M4-03 | `unbox`(API-20, 서명 URL), 메모(API-21), 구독 마무리(API-22), 회차 취소(API-11~13 round), 탈퇴(API-23) | BE | 04 SEQ-07·08·09·10 | actions, `lib/data/rounds.ts`(`unbox_round`·서가 메모·`end_subscription`·회차 취소), `lib/data/members.ts`(`withdraw_member`) | AC-16-*, AC-17-*, AC-18-*, AC-20-*, AC-05-4·7~9 | TKT-DB-03 |
 | TKT-DB-04 | `shipping_list_downloads`, `list_shipping_targets`, `keeper_counts`, `withdraw_member` | DB | 03 §5·7·8·9, ADR-007 | `0040_admin_ops.sql` | AC-19-1·4, AC-05-4·8 | TKT-DB-03 |
-| TKT-BE-M4-04 | 주소록 Route Handler(API-14), `domains/shipping/shipping-list.ts`(CSV)+테스트 | BE | ADR-007, 04 SEQ-11 | route | AC-19-* | TKT-DB-04 |
+| TKT-BE-M4-04 | 주소록 Route Handler(API-14), `domains/shipping/shipping-list.ts`(CSV)+테스트 | BE | ADR-007, 04 SEQ-11 | route, `lib/data/admin.ts`(`list_shipping_targets`·`keeper_counts`·다운로드 기록) | AC-19-* | TKT-DB-04 |
 | TKT-FE-M4-03 | `/mypage/rounds/[id]`, `/mypage/shelf`, `/mypage/farewell`, SCR-13 주소록 버튼·안내 문구, SCR-20 숫자 | FE | SCR-16~18·13·20 | 화면 | AC-16-*, AC-17-*, AC-18-*, AC-19-2 | TKT-BE-M4-03, TKT-BE-M4-04 |
 | TKT-QA-M4 | 시연 흐름 7~10, 블라인드 응답 검사, 회원 간 열람 | QA | 06 §2 순위 2~4, PM-AC M4, `docs/uiux/review/QA/scenarios.md` | `briefing-TKT-QA-M4.md` | NFR-08·09·17·18 | TKT-FE-M4-03 |
 

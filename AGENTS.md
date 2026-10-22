@@ -29,7 +29,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 | `domains/<d>/` | 순수 타입·zod 스키마·규칙·문구 상수 + `*.test.ts` (스킬의 `lib/domain`에 해당) |
 | `types/` | `product.ts`(KANT), `database.ts`(supabase gen types) |
 | `data/products.ts` | KANT Mock = seed 원천 + 테스트 픽스처 |
-| `lib/supabase/` · `lib/data/` | Supabase 클라이언트 · DB 접근(여기서만 Supabase 호출) |
+| `lib/supabase/` · `lib/data/` | Supabase 클라이언트 · DB 접근(여기서만 Supabase 호출). `lib/data/products.ts`(상품 조회)는 DB, 그 밖의 `lib/data/*`(장바구니·주문·결제·회차·운영·탈퇴, RPC 래퍼)는 BE |
 | `lib/auth/` · `lib/payments/` · `lib/http/` · `lib/crypto.ts` | 가드 · 토스 연동 · 에러 모델 · 난수 |
 | `shared/utils/` | 공용 유틸(`formatPrice`, `cn`) |
 | `supabase/` | 마이그레이션·seed·설정 |
@@ -37,8 +37,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 | 단계 | 쓰는 곳 | 읽는 설계 문서 |
 |---|---|---|
-| DB | `supabase/`, `lib/supabase/`, `lib/data/`, `types/database.ts`, `data/products.ts`, `scripts/gen-seed.mjs` | `03-db-schema.md`, `HANDOFF.md` |
-| BE | `app/**/actions.ts`, `app/**/route.ts`, `lib/auth`, `lib/payments`, `lib/http`, `lib/crypto.ts`, `domains/` | `04-interfaces-api.md` §2·3·5·6 |
+| DB | `supabase/`, `lib/supabase/`, `lib/data/products.ts`, `types/database.ts`, `data/products.ts`, `scripts/gen-seed.mjs` | `03-db-schema.md`, `HANDOFF.md` |
+| BE | `app/**/actions.ts`, `app/**/route.ts`, `lib/data/*`(`products.ts` 제외), `lib/auth`, `lib/payments`, `lib/http`, `lib/crypto.ts`, `domains/` | `04-interfaces-api.md` §2·3·5·6, `docs/03-db/briefing.md`(RPC 표·호출 규칙) |
 | FE | `app/**/page.tsx·layout.tsx·not-found.tsx`, `components/`, `types/product.ts`, `README.md` | `04-interfaces-api.md` §1·4, `05-structure-conventions.md` |
 | QA | `**/*.test.ts`, `docs/06-qa/` | `06-quality-gates.md`, PM-AC |
 

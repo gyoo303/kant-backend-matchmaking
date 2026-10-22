@@ -71,7 +71,8 @@ lib/http/              # 에러 타입, 공통 응답, 에러 처리 래퍼 (04�
 - **응답**: 필드는 camelCase로 쓰고 DB 컬럼명을 그대로 노출하지 않는다. 에러 응답은 `04`의 에러 모델 하나로 통일한다.
 
 # 규칙
-- `supabase/`, `lib/supabase/`, `lib/data/`, `types/database.ts`는 수정하지 않는다. 필요한 함수가 없으면 브리핑에 DB 에이전트 요청으로 남긴다.
+- `supabase/`, `lib/supabase/`, `lib/data/products.ts`, `types/database.ts`는 수정하지 않는다. 테이블·RPC가 없거나 바꿔야 하면 브리핑에 DB 에이전트 요청으로 남긴다.
+- 그 밖의 `lib/data/*`(장바구니·주문·결제·회차·운영·탈퇴)는 BE가 만든다(`AGENTS.md` 지도, HANDOFF 티켓 "산출"). DB가 만든 RPC를 감싸고 `P0001` 오류를 `ErrorCode`로 바꾸는 데이터 접근만 두며, 권한 판단·결제 흐름은 진입점·로직 쪽에 둔다.
 - spec에 없는 API를 만들지 않는다.
 - `05-structure-conventions.md`의 금지 패턴을 지킨다.
 - 패키지 추가는 사람에게 확인받는다.

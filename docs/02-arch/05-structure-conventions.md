@@ -23,7 +23,7 @@ types/product.ts                  # KANT 고정 (Product, Theme)
 types/database.ts                 # supabase gen types (DB 에이전트만 수정)
 data/products.ts                  # KANT Mock 8권 = seed 원천 + 테스트 픽스처 (ADR-001)
 lib/supabase/                     # client.ts(브라우저) server.ts(서버) admin.ts(service role, server-only) proxy.ts(updateSession)
-lib/data/                         # DB 접근 (Supabase 호출은 여기만), 행→화면 타입 변환
+lib/data/                         # DB 접근 (Supabase 호출은 여기만), 행→화면 타입 변환. products.ts는 DB, 나머지(RPC 래퍼)는 BE
 lib/auth/guards.ts                # getCurrentMember, requireMember, requireKeeper
 lib/payments/toss.ts              # 토스 confirm/cancel (server-only)
 lib/http/result.ts                # ActionResult, ErrorCode
