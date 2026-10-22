@@ -1,13 +1,14 @@
 import 'server-only';
 import { imageExtension } from '@/domains/products/product.schema';
 import type { ShippingInput } from '@/domains/shipping/shipping.schema';
-import type { KeeperRound, RoundStatus, UnboxedRound, WindowView } from '@/domains/subscriptions/types/round.types';
+import type { DeskRound, KeeperRound, RoundStatus, UnboxedRound, WindowView } from '@/domains/subscriptions/types/round.types';
 import { toWindowView } from '@/domains/subscriptions/window-copy';
 import { toAppError, isRpcSignal } from '@/lib/data/rpc-error';
 import { sessionUserId } from '@/lib/data/session';
 import { AppError } from '@/lib/http/result';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
+import type { Enums } from '@/types/database';
 
 // 편지 구독 회차 (TKT-BE-M4-01~03). 회원 데이터는 회원 세션(createClient)과 RLS로만 읽는다.
 // round_contents(책·답장·엽서)는 언박싱 전에는 RLS가 0행을 돌려준다(NFR-08). admin 클라이언트로 읽어 회원에게 주지 않는다.
@@ -81,15 +82,21 @@ export async function openRound(roundId: string): Promise<void> {
 }
 
 // SCR-19 목록: 결제 확정된 진행 중 회차만(arrived·reading, AC-13-4), 도착순
-export async function getDeskRounds(): Promise<{ id: string; status: RoundStatus; paidAt: string | null; cancelRequested: boolean }[]> {
+export async function getDeskRounds(): Promise<DeskRound[]> {
     const supabase = await createClient();
     const { data, error } = await supabase
         .from('subscription_rounds')
-        .select('id, status, paid_at, cancel_requested_at')
+        .select('id, status, paid_at, cancel_requested_at, ship_recipient_name')
         .in('status', ['arrived', 'reading'])
         .order('paid_at', { ascending: true });
     if (error) throw new AppError('UNKNOWN', `[SCR-19] rounds: ${error.message}`);
-    return data.map((row) => ({ id: row.id, status: row.status, paidAt: row.paid_at, cancelRequested: row.cancel_requested_at !== null }));
+    return data.map((row) => ({
+        id: row.id,
+        status: row.status,
+        paidAt: row.paid_at,
+        cancelRequested: row.cancel_requested_at !== null,
+        recipientName: row.ship_recipient_name,
+    }));
 }
 
 // SCR-19 회차 하나(편지 전문·매칭·코드). 책방지기 세션에서만 행이 온다(RLS). 엽서는 책방지기 Storage 정책으로 서명
@@ -223,13 +230,13 @@ type UnboxedRow = {
     round_contents: {
         reply_letter: string | null;
         postcard_path: string | null;
-        products: { id: string; name: string; image_url: string; author: string } | null;
+        products: { id: string; name: string; image_url: string; author: string; theme: Enums<'theme'> } | null;
     } | null;
     shelf_memos: { body: string; updated_at: string } | null;
 };
 
 const UNBOXED_COLUMNS =
-    'id, unboxed_at, round_contents(reply_letter, postcard_path, products(id, name, image_url, author)), shelf_memos(body, updated_at)';
+    'id, unboxed_at, round_contents(reply_letter, postcard_path, products(id, name, image_url, author, theme)), shelf_memos(body, updated_at)';
 
 // 엽서 서명 URL: 언박싱 후 RLS로 읽은 경로만 admin으로 서명한다(AR-DB §6, 금지 패턴 9의 예외)
 async function signPostcard(path: string | null): Promise<string | null> {
@@ -247,7 +254,13 @@ async function toUnboxedRound(row: UnboxedRow): Promise<UnboxedRound | null> {
     if (!contents?.products || !row.unboxed_at) return null;
     return {
         roundId: row.id,
-        product: { id: contents.products.id, name: contents.products.name, imageUrl: contents.products.image_url, author: contents.products.author },
+        product: {
+            id: contents.products.id,
+            name: contents.products.name,
+            imageUrl: contents.products.image_url,
+            author: contents.products.author,
+            theme: contents.products.theme,
+        },
         replyLetter: contents.reply_letter ?? '',
         postcardUrl: await signPostcard(contents.postcard_path),
         unboxedAt: row.unboxed_at,

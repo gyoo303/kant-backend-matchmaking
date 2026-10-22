@@ -1,6 +1,6 @@
 ---
 stage: BE
-tickets: [TKT-BE-M2-01, TKT-BE-M2-02, TKT-BE-M2-03, TKT-BE-M3-01, TKT-BE-M3-02, TKT-BE-M3-03, TKT-BE-M4-01, TKT-BE-M4-02, TKT-BE-M4-03, TKT-BE-M4-04, TKT-BE-M3-04]
+tickets: [TKT-BE-M2-01, TKT-BE-M2-02, TKT-BE-M2-03, TKT-BE-M3-01, TKT-BE-M3-02, TKT-BE-M3-03, TKT-BE-M4-01, TKT-BE-M4-02, TKT-BE-M4-03, TKT-BE-M4-04, TKT-BE-M3-04, TKT-BE-M4-05]
 status: partial
 inputs_read: [AR-MAP, AR-HAND, AR-API, AR-CONV, AR-GATE, AR-ADR, DB-BRIEF, DB-TYPES, PM-AC, PM-US, PM-DOMAIN, PM-SCR]
 next_readers: [FE, QA]
@@ -13,6 +13,7 @@ next_readers: [FE, QA]
 | TKT | 완료 조건 | 충족 여부 |
 |---|---|---|
 | TKT-BE-M2-01 | AC-05-2·5·6 | 코드 완료. `safeNextPath` 테스트 통과. 실제 카카오 로그인(AC-05-2·5·6)은 아래 "카카오 로그인 확인 절차"대로 사람이 확인 |
+| TKT-BE-M4-05 | GATE-01~06 (서재 목록 이름, 언박싱 책 테마) | 충족(2026-10-22). `getDeskRounds` → `DeskRound[]`(+`recipientName`), `UnboxedRound.product.theme`. 원격 스키마에서 같은 컬럼 조회 확인 |
 | TKT-BE-M3-04 | GATE-01~06 (D-044 영향 확인) | 충족(2026-10-22). **코드 변경 없음**. 아래 "TKT-BE-M3-04 영향 확인" 참고. 0060 원격 적용 완료(2026-10-22, DB pgTAP 223개 통과). 회원 세션으로 보는 실제 흐름은 QA-M3에서 확인 |
 | TKT-BE-M2-02 | AC-05-1·2(네이버) | **미완료(사람 작업 필요)**. 네이버 키 미발급. 아래 "네이버 스파이크 절차"대로 확인 후 결과를 이 표에 적는다. ADR-003 A(`custom:naver`)는 BE 코드가 필요 없다(콜백 공용) |
 | TKT-BE-M2-03 | AC-06-1·2·4 | 코드·테스트 완료(AC-06-1·2·4 스키마 테스트 통과). 저장 후 목록 반영은 FE·QA 확인 |
@@ -105,6 +106,15 @@ next_readers: [FE, QA]
 - 서재 작업 저장(API-18)에서 품절 책은 서버에서 재고를 다시 보고 `OUT_OF_STOCK`으로 막는다(AC-14-2). RLS가 `arrived`·`reading`이 아닌 회차 저장을 막으면 `INVALID_STATE`.
 - `list_shipping_targets`의 생성 타입은 `order_number`·`books`를 `string`으로 적지만 실제로는 `null`이 온다(DB 브리핑). `lib/data/admin.ts`에서 `?? null`로 받는다. 타입 재생성 시 DB 쪽에서 nullable로 보이게 할 방법이 있으면 좋겠다(요청, 급하지 않음).
 
+### TKT-BE-M4-05 서재 목록 이름·언박싱 책 테마 (AR-API §1.2, D-A09)
+| 함수·타입 | 바뀐 것 | 프론트가 쓸 값 |
+|---|---|---|
+| `lib/data/rounds.ts` `getDeskRounds()` | select에 `ship_recipient_name` 추가, 반환 타입 `DeskRound[]` | `recipientName`(결제 시점 배송지 사본의 받는 사람) |
+| `domains/subscriptions/types/round.types.ts` `DeskRound` | 새 타입(`id, status, paidAt, cancelRequested, recipientName`) | — |
+| `UNBOXED_COLUMNS`·`toUnboxedRound` | `products(...)`에 `theme` | `UnboxedRound.product.theme`(`getUnboxedRound`·`getShelf`·`unbox` 응답 모두) |
+- DB·RLS 변경 없음. 책방지기는 모든 회차를 읽고(`getDeskRounds`는 책방지기 화면 전용), 테마는 공개 상품 정보라 언박싱 뒤 응답에 들어가도 블라인드 원칙(NFR-08)과 무관하다.
+- 액션 시그니처는 그대로다. `unbox`(API-20) 응답의 `product`에 `theme`이 더해질 뿐이다.
+
 ### TKT-BE-M3-04 영향 확인 (D-044, AR-DB §5.3)
 | 지점 | 0060 이후 동작 | 코드 변경 |
 |---|---|---|
@@ -150,6 +160,10 @@ BE 쪽 코드는 콜백(`/auth/callback`)·세션 갱신(`proxy.ts`)·가드뿐�
 4. 실패하면 ADR-003 B(`app/auth/naver/*/route.ts` + `lib/auth/naver.ts`)로 전환한다. 이 경우 BE 작업을 다시 요청해 주세요.
 
 ## 검증 결과 (2026-10-22)
+### TKT-BE-M4-05
+- GATE-01 오류 0 / GATE-02 오류 0 / GATE-03 tests 76, pass 76, fail 0 (GATE-04 빌드는 FE 단계 최종 빌드로 확인)
+- 원격 DB: `subscription_rounds.ship_recipient_name`·`products.theme` 존재(`information_schema` 2건), 같은 컬럼 조인 조회 오류 0
+
 ### TKT-BE-M3-04
 - GATE-01 오류 0 / GATE-02 오류 0 / GATE-03 tests 76, pass 76, fail 0 / GATE-05 0줄 / GATE-06 0줄 (코드 변경 없음. GATE-04 빌드는 FE 단계 최종 빌드로 확인)
 - 결제 경로의 DB 쪽 동작(재사용 주문 두 결제 중 하나만 확정, 대체 주문 결제 거부)은 DB pgTAP `pending_orders.test.sql`이 확인했다(DB 브리핑 TKT-DB-05)
