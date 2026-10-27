@@ -35,8 +35,8 @@
 ### 3.1 입력 원본 (사람이 작성, 에이전트는 읽기만)
 | ID | 경로 | 만드는 단계 | 읽는 단계 (필수) | 읽는 단계 (선택) |
 |---|---|---|---|---|
-| IN-REQ | `docs/00-inputs/ubuntubooks-user-requirements-raw.md` | 사람 | PM | — |
-| IN-KANT | `docs/00-inputs/kant-rubric.md` | 사람 | PM | ARCH, QA |
+| IN-REQ | `docs/00-inputs/usecase-requirements-raw.md` | 사람 | PM | — |
+| IN-KANT | `docs/00-inputs/kant-rubric.md` (프로젝트(2) 발제: 범위·일정·평가표) | 사람 | PM | ARCH, QA |
 | UX-BASE | `docs/uiux/domain/base/` | 사람 | UX | — |
 | UX-TPL | `docs/uiux/domain/templates/` (UX-BASE 작성 가이드, 예시 문장은 근거로 쓰지 않음) | 사람 | — | — |
 
@@ -50,13 +50,13 @@
 | PM-US | `docs/01-pm/05-user-stories.md` | PM | — | ARCH, BE, FE, UX |
 | PM-AC | `docs/01-pm/06-acceptance-criteria.md` | PM | FE, QA | ARCH, DB, BE, UX |
 | PM-SCR | `docs/01-pm/07-screens.md` | PM | FE | ARCH, UX |
-| PM-KANT | `docs/01-pm/08-kant-traceability.md` | PM (ARCH가 이관 행 갱신) | — | ARCH, QA |
+| PM-KANT | `docs/01-pm/08-rubric-traceability.md` | PM (ARCH가 이관 행 갱신) | — | ARCH, QA |
 | PM-DEC | `docs/01-pm/decision-log.md` | PM, ARCH(`[자율][ARCH]`) | — | 전체 |
 
 ### 3.3 ARCH
 | ID | 경로 | 만드는 단계 | 읽는 단계 (필수) | 읽는 단계 (선택) |
 |---|---|---|---|---|
-| AR-MAP | `AGENTS.md` (저장소 루트, Next.js 자동 블록 아래 섹션) | ARCH | DB, BE, FE, QA | — |
+| AR-MAP | `AGENTS.md` (저장소 루트, `## 디렉토리 지도` 섹션) | ARCH | DB, BE, FE, QA | — |
 | AR-DRV | `docs/02-arch/01-drivers.md` | ARCH | — | QA |
 | AR-SYS | `docs/02-arch/02-system-architecture.md` | ARCH | — | DB, BE |
 | AR-DB | `docs/02-arch/03-db-schema.md` | ARCH | DB | BE, QA |
@@ -70,7 +70,6 @@
 | ID | 경로 | 만드는 단계 | 읽는 단계 (필수) | 읽는 단계 (선택) |
 |---|---|---|---|---|
 | DB-BRIEF | `docs/03-db/briefing.md` | DB | 선행 | QA |
-| DB-TYPES | `types/database.ts` | DB | BE | FE |
 | BE-BRIEF | `docs/04-backend/briefing.md` | BE | 선행 | QA |
 | FE-BRIEF | `docs/05-frontend/briefing-<TKT>.md` | FE | 선행 | UX (검수 시) |
 | QA-BRIEF | `docs/06-qa/briefing-<TKT 또는 브랜치>.md` | QA | 선행 | UX, 사람 |
@@ -85,7 +84,7 @@
 | UX-PERSONA | `docs/uiux/review/QA/scenarios.md` (§1 페르소나 P1~P3) | UX | — | PM, FE, QA |
 | UX-DESIGN | `docs/uiux/review/frontend/design-system.md` | UX | FE | QA |
 | UX-DEC | `docs/uiux/decisions.md` | UX | FE | PM, QA |
-| UX-CTX-ORCH | `docs/uiux/context/for-orchestrator.md` | UX | PM | ARCH |
+| UX-CTX-ORCH | `docs/uiux/context/for-orchestrator.md` | UX | — | ARCH |
 | UX-CTX-FE | `docs/uiux/review/frontend/README.md` (§2 페르소나 요약, §3 `UX-n` 정의) | UX | FE | — |
 | UX-CTX-QA | `docs/uiux/review/QA/README.md` (§2·§3 사용성 검증 범위, `UX-n` 확인 방법) | UX | QA | — |
 | UX-REVIEW | `docs/uiux/review/` (검수 대상 단계별 하위 폴더 `PM/`, `ARCH/`, `FE/`, `QA/`에 `YYYY-MM-DD-<대상>.md`) | UX | — | 검수 대상 단계 |

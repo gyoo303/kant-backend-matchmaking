@@ -1,13 +1,3 @@
-<!-- BEGIN:nextjs-agent-rules -->
-
-## This is NOT the Next.js you know
-
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
-
-This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
-
-<!-- END:nextjs-agent-rules -->
-
 ## 에이전트 파이프라인 규칙 (모든 작업에 적용)
 
 이 저장소는 `PM → ARCH → DB → BE → FE → QA` (+ 횡단 UX) 에이전트 파이프라인으로 작업한다. 스킬을 쓰지 않는 작업에도 적용된다.
@@ -20,26 +10,26 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## 디렉토리 지도
 
-파일 전체를 탐색하기 전에 이 지도부터 본다. 상세 규칙은 `docs/02-arch/05-structure-conventions.md`.
+파일 전체를 탐색하기 전에 이 지도부터 본다. 구조는 발제(`docs/00-inputs/kant-rubric.md` §4.2) 기준이며, 기능 폴더 이름과 상세 규칙은 ARCH가 `docs/02-arch/05-structure-conventions.md`에서 확정하고 이 지도를 갱신한다.
 
 | 경로 | 책임 |
 |---|---|
-| `app/` | 라우트·화면, `actions.ts`(Server Action), `route.ts`(Route Handler). 비즈니스 규칙 금지 |
-| `components/` | `Header`·`Footer`·`ProductCard`(KANT 고정) + 화면 공용 컴포넌트, `ui/`는 shadcn 기본 |
-| `domains/<d>/` | 순수 타입·zod 스키마·규칙·문구 상수 + `*.test.ts` (스킬의 `lib/domain`에 해당) |
-| `types/` | `product.ts`(KANT), `database.ts`(supabase gen types) |
-| `data/products.ts` | KANT Mock = seed 원천 + 테스트 픽스처 |
-| `lib/supabase/` · `lib/data/` | Supabase 클라이언트 · DB 접근(여기서만 Supabase 호출). `lib/data/products.ts`(상품 조회)는 DB, 그 밖의 `lib/data/*`(장바구니·주문·결제·회차·운영·탈퇴, RPC 래퍼)는 BE |
-| `lib/auth/` · `lib/payments/` · `lib/http/` · `lib/crypto.ts` | 가드 · 토스 연동 · 에러 모델 · 난수 |
-| `shared/utils/` | 공용 유틸(`formatPrice`, `cn`) |
-| `supabase/` | 마이그레이션·seed·설정 |
-| `proxy.ts` | 세션 갱신(Next 16의 middleware) |
+| `pyproject.toml` · `uv.lock` | 의존성 (uv) |
+| `src/main.py` | 앱 엔트리, lifespan(테이블 생성·시드 주입), 라우터·미들웨어 조립 |
+| `src/database.py` | AsyncEngine, AsyncSessionLocal, Base, `get_db()` |
+| `src/auth/` | 회원·OAuth2 로그인·JWT 블랙리스트 (4계층) |
+| `src/<기능>/domain/` | 순수 파이썬 도메인 클래스. fastapi·sqlalchemy import 금지 |
+| `src/<기능>/infrastructure/` | `models.py`(테이블), `repositories.py`(ORM ↔ 도메인 객체 변환) |
+| `src/<기능>/application/` | `service.py`(흐름 조율, commit) |
+| `src/<기능>/presentation/` | `schemas.py`(Pydantic), `router.py`(APIRouter, 예외 변환) |
+| `src/templates/` · `src/static/` | Jinja2 화면, 정적 파일 |
+| `tests/` | 테스트 |
 
 | 단계 | 쓰는 곳 | 읽는 설계 문서 |
 |---|---|---|
-| DB | `supabase/`, `lib/supabase/`, `lib/data/products.ts`, `types/database.ts`, `data/products.ts`, `scripts/gen-seed.mjs` | `03-db-schema.md`, `HANDOFF.md` |
-| BE | `app/**/actions.ts`, `app/**/route.ts`, `lib/data/*`(`products.ts` 제외), `lib/auth`, `lib/payments`, `lib/http`, `lib/crypto.ts`, `domains/` | `04-interfaces-api.md` §2·3·5·6, `docs/03-db/briefing.md`(RPC 표·호출 규칙) |
-| FE | `app/**/page.tsx·layout.tsx·not-found.tsx`, `components/`, `types/product.ts`, `README.md` | `04-interfaces-api.md` §1·4, `05-structure-conventions.md` |
-| QA | `**/*.test.ts`, `docs/06-qa/` | `06-quality-gates.md`, PM-AC |
+| DB | `src/database.py`, `src/<기능>/infrastructure/`, 시드 데이터 | `03-db-schema.md`, `HANDOFF.md` |
+| BE | `src/<기능>/{domain,application,presentation}/`, `src/auth/`, `src/main.py`, `pyproject.toml` | `04-interfaces-api.md`, `docs/03-db/briefing.md` |
+| FE | `src/templates/`, `src/static/`, `README.md` | `04-interfaces-api.md`(화면 데이터 계약), `07-screens.md`, `05-structure-conventions.md` |
+| QA | `tests/`, `docs/06-qa/` | `06-quality-gates.md`, PM-AC |
 
 설계 문서: `docs/02-arch/` (ADR은 `adr/`). 티켓: `docs/02-arch/HANDOFF.md`.
