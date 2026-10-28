@@ -1,17 +1,23 @@
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 import auth.infrastructure.models  # noqa: F401  (create_all 전에 테이블 등록)
 import rooms.infrastructure.models  # noqa: F401
+from auth.presentation.pages import page_router as auth_page_router
 from auth.presentation.router import router as auth_router
 from config import get_settings
 from database import AsyncSessionLocal, Base, engine
 from exceptions import AuthenticationError, DomainRuleError, GoneError, NotFoundError
+from logging_middleware import log_requests
+from rooms.presentation.pages import page_router as rooms_page_router
 from rooms.presentation.router import router as rooms_router
 from seed import seed_initial_data
 
@@ -20,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 SERVER_ERROR_MESSAGE = "서버 오류가 발생했습니다"
 MAX_VALIDATION_MESSAGES = 3
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 @asynccontextmanager
@@ -39,6 +46,16 @@ app = FastAPI(
     description="2vs2 공개 방을 만들거나 참가하고, 방장이 게임을 시작하면 방이 해산된다.",
     version="0.1.0",
     lifespan=lifespan,
+)
+
+# 미들웨어: 요청 로깅이 안쪽, CORS가 가장 바깥 (CONV-10·11, 교안 4장)
+app.middleware("http")(log_requests)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_settings().cors_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 
@@ -85,3 +102,7 @@ async def handle_unexpected_error(request: Request, exc: Exception) -> JSONRespo
 
 app.include_router(auth_router)
 app.include_router(rooms_router)
+app.include_router(auth_page_router)
+app.include_router(rooms_page_router)
+# 정적 파일은 FE가 src/static/에 만든다. 폴더가 생기기 전에도 앱이 뜨도록 check_dir=False
+app.mount("/static", StaticFiles(directory=STATIC_DIR, check_dir=False), name="static")

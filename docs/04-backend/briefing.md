@@ -1,6 +1,6 @@
 ---
 stage: BE
-tickets: [TKT-BE-M2-01, TKT-BE-M3-01, TKT-BE-M3-02, TKT-BE-M3-03, TKT-BE-M3-04, TKT-BE-M3-05, TKT-BE-M4-01, TKT-BE-M4-02, TKT-BE-M4-03]
+tickets: [TKT-BE-M2-01, TKT-BE-M3-01, TKT-BE-M3-02, TKT-BE-M3-03, TKT-BE-M3-04, TKT-BE-M3-05, TKT-BE-M4-01, TKT-BE-M4-02, TKT-BE-M4-03, TKT-BE-M5-01]
 status: done
 inputs_read: [AR-MAP, AR-HAND, AR-SYS, AR-API, AR-CONV, AR-GATE, AR-ADR, DB-BRIEF, PM-DOMAIN, PM-AC]
 next_readers: [DB, FE, QA]
@@ -34,11 +34,20 @@ next_readers: [DB, FE, QA]
 | TKT-BE-M4-02 | Swagger Authorize로 로그인 성공 | 충족(임시 SQLite) | OpenAPI `securitySchemes.OAuth2PasswordBearer`(password flow, `tokenUrl=/api/auth/token`), 같은 form(`username`·`password`)으로 `/api/auth/token` 200. 브라우저 Swagger 화면은 직접 열어 보지 않음 |
 | | 응답에 해시 없음 | 충족 | `signup`·`me` 응답 본문에 `hashed_password` 없음 |
 | | SEQ-01~04b 동작 | 충족(임시 SQLite) | 스크립트로 가입·중복·형식 오류·로그인 실패·토큰 발급·인증·재발급·로그아웃·차단 19건 확인(아래 검증 결과). PostgreSQL 미확인 |
+| TKT-BE-M5-01 | 화면 6개 200(토큰 없이) | 부분 충족 | 임시 템플릿(저장소 밖)으로 PAGE-01~06 모두 200, URL 값이 컨텍스트로 전달됨. 실제 템플릿은 TKT-FE-M5-01~05가 만든 뒤 확인 |
+| | 콘솔 로그 형식 일치 | 충족 | `request method=GET path=/rooms/7 status=200 duration_ms=0.5` (쿼리 문자열 없음) |
 | TKT-BE-M4-03 | `grep -rn "X-Debug-User-Id" src/` 0줄 | 충족 | 명령 출력 0줄 |
 | | 로그아웃한 access 토큰 401 | 충족(가짜 레포지토리) | 블랙리스트에 넣은 access 토큰으로 `GET /api/rooms` → 401. 실제 DB 위 확인은 못 함 |
 | | AC-02-3·06-5 수동 curl 확인 | 부분 충족 | 실제 DB 대신 가짜 서비스로 400(정원 마감·삭제된 방) 응답 형식 확인. 실제 데이터 흐름은 미확인 |
 
 ## 만든 것
+### TKT-BE-M5-01
+- `src/logging_middleware.py`: 교안 4장 방식의 함수 미들웨어 `log_requests(request, call_next)`. 로그 한 줄 `method=… path=… status=… duration_ms=…`(로거 이름 `request`), 응답 헤더 `X-Process-Time`. 쿼리 문자열·본문·토큰은 남기지 않는다(CONV-07)
+- `src/main.py`: `app.middleware("http")(log_requests)` 다음 `CORSMiddleware`(`settings.cors_origins`, GET·POST·PATCH·DELETE, `Authorization`·`Content-Type`, CONV-10·11) / auth·rooms 화면 라우터 등록 / `app.mount("/static", StaticFiles(directory=src/static, check_dir=False))`
+- `src/auth/presentation/pages.py`(`page_router`, `include_in_schema=False`): PAGE-01 `GET /signup` → `auth/signup.html`, PAGE-02 `GET /login`(`?expired=1` → `notice` "로그인이 만료되었습니다. 다시 로그인해 주세요") → `auth/login.html`
+- `src/rooms/presentation/pages.py`(`page_router`): PAGE-03 `GET /` → `rooms/list.html`(컨텍스트 `cond` = `{keyword, available_only, sort, page}`, `notice` = `?notice=dissolved`면 "게임이 시작되어 방이 해산되었습니다"), PAGE-04 `GET /rooms/{room_id}` → `rooms/detail.html`(`room_id`), PAGE-05 `GET /me/history` → `rooms/history.html`(`page`), PAGE-06 `GET /me/history/{room_id}` → `rooms/archived.html`(`room_id`)
+- 화면 라우트는 인증하지 않는다(D-021). `TemplateResponse(request=, name=, context=)`(교안 3장)
+
 ### TKT-BE-M4-03
 - `src/auth/presentation/dependencies.py`: 임시 헤더 인증(`X-Debug-User-Id`)을 지우고 `get_current_user_id(user = Depends(get_current_user)) -> int`로 바꿨다(SEQ-03 3단계). rooms 라우터는 이름이 같아 그대로 쓴다
 - 이제 rooms API 11개 모두 `Authorization: Bearer <access_token>`이 필요하다. refresh 토큰·만료·위조·블랙리스트·없는 회원 토큰은 401
@@ -162,12 +171,31 @@ next_readers: [DB, FE, QA]
 - TKT-BE-M3-04: `src/auth/presentation/dependencies.py`의 `X-Debug-User-Id` 헤더 인증(`TODO(TKT-BE-M4-03)` 주석). TKT-BE-M4-03에서 SEQ-03(JWT·쿠키·블랙리스트)으로 바꾸고 `grep -rn "X-Debug-User-Id" src/` 0줄을 확인한다
 
 ## 프론트엔드에게 전달할 것
+- TKT-BE-M5-01: **템플릿 6개를 이 경로·이름으로 만든다**: `src/templates/auth/signup.html`, `auth/login.html`, `rooms/list.html`, `rooms/detail.html`, `rooms/history.html`, `rooms/archived.html`. 서버가 넘기는 값: login → `notice`(문자열 또는 None) / list → `cond`(dict: `keyword` 문자열, `available_only` bool, `sort` 문자열, `page` int), `notice`(문자열 또는 None) / detail·archived → `room_id`(int) / history → `page`(int) / signup → 없음. 정적 파일은 `src/static/` 아래에 두고 템플릿에서 `url_for('static', path='css/app.css')` 또는 `/static/css/app.css`로 부른다. `src/static/` 폴더가 생기기 전에는 `/static/…` 요청이 500이다
 - TKT-BE-M4-03: rooms API도 모두 `Authorization: Bearer <access_token>`으로 부른다(TKT-BE-M4-02 안내와 같음)
 - TKT-BE-M4-02: 로그인은 `application/x-www-form-urlencoded`로 `username`(=아이디)·`password`를 `POST /api/auth/token`에 보낸다. 응답의 `access_token`·`refresh_token`을 `localStorage`에 저장한다. 이후 요청은 `Authorization: Bearer <access_token>`. 401이면 `POST /api/auth/refresh`(JSON `{"refresh_token"}`)로 한 번 재발급. 로그아웃은 `POST /api/auth/logout`에 Bearer 헤더 + JSON `{"refresh_token"}`. 헤더 없이 부르면 401 `{"detail": "Not authenticated"}`(FastAPI 기본 문구). 스키마는 `src/auth/presentation/schemas.py`
 - TKT-BE-M3-04: 요청·응답 스키마는 `src/rooms/presentation/schemas.py`(필드 이름은 `04-interfaces-api.md` §5.2와 같음). 오류 문구는 `src/rooms/domain/exceptions.py`. 상세 조회 410은 해산 신호(SEQ-13). 화면 라우트(PAGE)는 TKT-BE-M5-01
 - TKT-BE-M2-01: 없음 (API 없음)
 
 ## 구현 중 자율 결정
+
+#### TKT-BE-M5-01 로깅 미들웨어 형태
+- 결정: 클래스(`RequestLoggingMiddleware`) 대신 함수 `log_requests`를 `app.middleware("http")`로 등록한다 — CONV-07·11, `05-structure-conventions.md` §8(교안 4장 `@app.middleware("http")`)
+- 선택지: **A. 교안 4장 함수 미들웨어 (권장·채택)** / B. 설계 이름대로 `BaseHTTPMiddleware` 상속 클래스
+- 권장 이유: D-020(교안 수준 규칙)상 교안 4장에 나온 방식으로 같은 결과(로그·처리 시간)를 낼 수 있다. 등록 순서(로깅 안쪽, CORS 바깥)도 그대로다.
+- trade-off: A — 설계 문서의 클래스 이름과 다르다. B — 교안에 없는 클래스 상속 방식이 하나 늘어난다.
+
+#### TKT-BE-M5-01 정적 폴더가 없을 때
+- 결정: `StaticFiles(..., check_dir=False)`로 등록해 `src/static/`이 없어도 앱이 뜨게 한다 — CONV-12, AGENTS.md 단계 표(`src/static/`은 FE 담당)
+- 선택지: **A. `check_dir=False` (권장·채택)** / B. 빈 `src/static/` 폴더를 BE가 만듦 / C. FE 티켓까지 마운트를 미룸
+- 권장 이유: FE 담당 경로를 건드리지 않으면서 지금 앱이 기동되고, FE가 폴더를 만들면 바로 동작한다.
+- trade-off: A — 폴더가 생기기 전에는 `/static/…` 요청이 404가 아니라 500이다. B — 다른 단계 경로에 파일을 만든다. C — FE 티켓에서 `main.py`(BE 파일)를 다시 고쳐야 한다.
+
+#### TKT-BE-M5-01 화면 쿼리 값 검증
+- 결정: 화면 라우트는 쿼리 값을 `str`·`bool`·`int` 기본값으로만 받고 범위 검증(정렬 값 목록, 페이지 크기 상한)은 하지 않는다 — PAGE-03("쿼리 값 그대로: 검색 폼 초기값")
+- 선택지: **A. 그대로 넘김 (권장·채택)** / B. API와 같은 `Literal`·`ge`·`le` 검증
+- 권장 이유: 화면은 값을 폼 초기값으로만 쓰고, 실제 검증은 JS가 부르는 API-ROOM-01이 한다(422).
+- trade-off: A — 이상한 값(`sort=x`)이 폼에 그대로 보일 수 있다. B — 같은 검증이 두 곳에 생기고, 화면이 JSON 422를 보여 주게 된다.
 
 #### TKT-BE-M4-02 인증 의존성을 이 티켓에서 일부 추가
 - 결정: API-AUTH-03·04가 Bearer 인증을 써야 해서, `dependencies.py`에 `oauth2_scheme`·`get_current_user`를 이번 티켓에서 추가했다. rooms가 쓰는 `get_current_user_id` 교체와 X-Debug 삭제는 TKT-BE-M4-03에 남겼다 — HANDOFF TKT-BE-M4-02·03, SEQ-03
@@ -278,6 +306,9 @@ next_readers: [DB, FE, QA]
 - trade-off: A — 일부 테스트만 다른 루프 범위가 필요하면 그 테스트에서 따로 지정해야 한다. B — 모듈마다 같은 줄을 반복하고 빠뜨리면 루프 불일치 오류가 난다.
 
 ## 설계와 다르게 한 것 / 질문 / DB 에이전트에게 요청
+- TKT-BE-M5-01: CONV-07의 `user_id=5` 필드는 넣지 않았다. 이 값을 채울 `request.state.user_id`를 정하는 곳이 설계에 없다(인증 의존성은 `request`를 받지 않음). 로그에 회원 ID가 필요하면 ARCH가 설정 위치를 정해 주세요
+- TKT-BE-M5-01: 로깅 미들웨어를 함수로 만들었다(위 자율 결정). ARCH에 CONV-07·11의 `RequestLoggingMiddleware` 표기를 `log_requests`로 갱신 요청
+- TKT-BE-M5-01: 완료 조건 "화면 6개 200"은 실제 템플릿이 FE 티켓에서 생겨야 끝까지 확인된다. 지금은 임시 템플릿으로 라우트·컨텍스트만 확인했다
 - TKT-BE-M4-03: 헤더가 아예 없으면 `OAuth2PasswordBearer`가 FastAPI 기본 문구 `{"detail": "Not authenticated"}`(영문)로 401을 낸다. 형식(NFR-02 문자열 `detail`·`WWW-Authenticate: Bearer`)은 맞지만 다른 오류와 달리 영문이다. 교안 6장 방식 그대로 두었다. 한글로 맞출지는 PM·ARCH 확인이 필요하다
 - TKT-BE-M4-03: 통합 테스트(`tests/integration/test_rooms_api.py`·`test_errors.py`)는 아직 `X-Debug-User-Id`를 쓰므로 이제 테스트 DB에서 돌리면 401로 실패한다. TKT-QA-M4-01(선행: 이 티켓)에서 실제 토큰으로 바꾸는 범위다
 - TKT-BE-M4-03: 검증 중 pyjwt가 HMAC 키가 32바이트보다 짧으면 `InsecureKeyLengthWarning`을 낸다. `.env`의 `JWT_SECRET_KEY`는 32자 이상으로 정하도록 `.env.example` 설명 보강을 제안한다(BE 담당 파일이라 다음 BE 티켓에서 반영 가능)
@@ -293,6 +324,13 @@ next_readers: [DB, FE, QA]
 - pytest는 `tests/`가 없어 "No files were found in testpaths" 경고를 낸다. QA가 `tests/`를 만들면 사라진다(정상).
 
 ## 검증 결과
+
+### TKT-BE-M5-01
+- GATE-05: `ruff check src` 통과, `ruff format --check src` 39 files already formatted / GATE-02·03·06·07 0줄 / GATE-04: 63 passed, 63 skipped
+- 화면(실제 `main.app`, 저장소 밖 임시 템플릿을 로더로 지정, 임시 스크립트): `/signup`·`/login`·`/login?expired=1`·`/`·`/?keyword=fun&available_only=true&sort=oldest&page=2&notice=dissolved`·`/rooms/7`·`/me/history?page=3`·`/me/history/9` 모두 200(토큰 없이), `notice`·`cond`·`room_id`·`page` 값 전달 확인, OpenAPI에 화면 경로 0개
+- 미들웨어: 모든 응답에 `X-Process-Time`, 로그 `request method=GET path=/api/rooms status=401 duration_ms=0.4`(쿼리 문자열 `token=secret` 미기록) / CORS 사전 요청: 허용 출처 200 + `access-control-allow-origin: http://localhost:8000`, 다른 출처 400
+- `/static/…`: 폴더가 없어 500 `RuntimeError`(예상, 위 자율 결정)
+- 확인하지 못함: 실제 템플릿 렌더링, PostgreSQL 위 기동
 
 ### TKT-BE-M4-03
 - GATE-05: `ruff check src` 통과, `ruff format --check src` 36 files already formatted / GATE-02·06·07 0줄 / `grep -rn "X-Debug-User-Id" src/` 0줄
