@@ -100,7 +100,7 @@
 ### 3.6 결정 기록 (어디에 무엇을)
 | 종류 | 위치 |
 |---|---|
-| 범위·요구사항 결정 (`D-xx`), Architect 자율 결정 | `docs/01-pm/decision-log.md` |
+| 범위·요구사항 결정 (`D-xx`), Architect 자율 결정 (자율 결정은 선택지·권장 이유·trade-off 포함, `pm-agent` §4.3) | `docs/01-pm/decision-log.md` |
 | 기술·아키텍처 결정 (`ADR-xxx`) | `docs/02-arch/adr/` |
 | UX·디자인 결정 | `docs/uiux/decisions.md` |
 

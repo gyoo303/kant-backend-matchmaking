@@ -7,29 +7,32 @@
 3. 작업 전 `node scripts/check-handoff.mjs <STAGE>`를 실행한다(DB·BE·FE·QA는 `--ticket <TKT>`를 붙여 HANDOFF 선행 티켓의 브리핑까지 확인). 마지막 줄이 `STATUS: READY`가 아니면 작업하지 않고 그 STATUS 줄을 보고한 뒤 멈춘다. 사용자가 예외를 승인하면 `docs/PIPELINE.md` §2-5대로 기록한다.
 4. 산출물은 레지스트리에서 `만드는 단계`가 내 단계인 경로에만 쓰고, 끝나면 `node scripts/check-handoff.mjs <STAGE> --post --ticket <TKT>`로 확인한다.
 5. 순차 실행은 `scripts/run-stage.sh <STAGE> [TKT]`로 한다 (`docs/PIPELINE.md` §5).
+6. 구현 단계(DB·BE·FE·QA)는 필수 범위 티켓(M2~M5, M7)을 먼저 구현한다. 도전 과제 티켓(M6, HANDOFF에 "요청 시" 표시: 동시성·백그라운드 작업·CSV·캐시)은 사용자가 티켓을 지정해 따로 요청할 때만 착수하고, 필수 티켓에 도전 범위를 미리 넣지 않는다(D-018).
 
 ## 디렉토리 지도
 
-파일 전체를 탐색하기 전에 이 지도부터 본다. 구조는 발제(`docs/00-inputs/kant-rubric.md` §4.2) 기준이며, 기능 폴더 이름과 상세 규칙은 ARCH가 `docs/02-arch/05-structure-conventions.md`에서 확정하고 이 지도를 갱신한다.
+파일 전체를 탐색하기 전에 이 지도부터 본다. 구조는 발제(`docs/00-inputs/kant-rubric.md` §4.2) 기준이며, 파일 단위 트리와 규칙은 `docs/02-arch/05-structure-conventions.md`에 있다. 기능 폴더는 `auth`, `rooms` 두 개다(ADR-001).
 
 | 경로 | 책임 |
 |---|---|
-| `pyproject.toml` · `uv.lock` | 의존성 (uv) |
-| `src/main.py` | 앱 엔트리, lifespan(테이블 생성·시드 주입), 라우터·미들웨어 조립 |
-| `src/database.py` | AsyncEngine, AsyncSessionLocal, Base, `get_db()` |
-| `src/auth/` | 회원·OAuth2 로그인·JWT 블랙리스트 (4계층) |
-| `src/<기능>/domain/` | 순수 파이썬 도메인 클래스. fastapi·sqlalchemy import 금지 |
-| `src/<기능>/infrastructure/` | `models.py`(테이블), `repositories.py`(ORM ↔ 도메인 객체 변환) |
-| `src/<기능>/application/` | `service.py`(흐름 조율, commit) |
-| `src/<기능>/presentation/` | `schemas.py`(Pydantic), `router.py`(APIRouter, 예외 변환) |
-| `src/templates/` · `src/static/` | Jinja2 화면, 정적 파일 |
-| `tests/` | 테스트 |
+| `pyproject.toml` · `uv.lock` · `.env.example` | 의존성(uv), ruff 설정, 환경변수 이름 |
+| `src/main.py` | 앱 엔트리, lifespan(테이블 생성·시드), 미들웨어, 전역 예외 핸들러, 라우터·StaticFiles |
+| `src/config.py` · `src/database.py` · `src/exceptions.py` | 설정(pydantic-settings) · AsyncEngine·`get_db()` · 도메인 예외 기반 클래스 |
+| `src/seed.py` · `src/logging_middleware.py` | 초기 시드 · 요청 로깅 미들웨어 |
+| `src/auth/` | 회원가입·OAuth2 로그인(JWT+쿠키)·블랙리스트 로그아웃·현재 회원 의존성 |
+| `src/rooms/` | 2vs2 방 생성·참가·팀·나가기·게임 시작(해산), 목록·상세·이력 조회, 화면 라우트 |
+| `src/<기능>/domain/` | 순수 파이썬 도메인 클래스·예외. 외부 라이브러리 import 금지 |
+| `src/<기능>/infrastructure/` | `models.py`, `repositories.py`(ORM ↔ 도메인 변환, `FOR UPDATE`), auth만 `security.py` |
+| `src/<기능>/application/` | `service.py`(변경·commit), rooms만 `queries.py`·`read_models.py`·`list_cache.py` |
+| `src/<기능>/presentation/` | `schemas.py`, `router.py`(`/api`), `pages.py`(Jinja2 화면), auth만 `dependencies.py` |
+| `src/templates/` · `src/static/` | Jinja2 화면, CSS·JS(폴링) |
+| `tests/` | `unit/`(도메인), `integration/`(API), `concurrency/`(CH-A) |
 
 | 단계 | 쓰는 곳 | 읽는 설계 문서 |
 |---|---|---|
-| DB | `src/database.py`, `src/<기능>/infrastructure/`, 시드 데이터 | `03-db-schema.md`, `HANDOFF.md` |
-| BE | `src/<기능>/{domain,application,presentation}/`, `src/auth/`, `src/main.py`, `pyproject.toml` | `04-interfaces-api.md`, `docs/03-db/briefing.md` |
-| FE | `src/templates/`, `src/static/`, `README.md` | `04-interfaces-api.md`(화면 데이터 계약), `07-screens.md`, `05-structure-conventions.md` |
+| DB | `src/database.py`, `src/<기능>/infrastructure/models.py`·`repositories.py`, `src/seed.py` | `03-db-schema.md`, `04-interfaces-api.md` §2, `HANDOFF.md` |
+| BE | `src/<기능>/{domain,application,presentation}/`, `src/auth/infrastructure/security.py`, `src/main.py`, `src/config.py`, `src/exceptions.py`, `src/logging_middleware.py`, `pyproject.toml`, `.env.example` | `04-interfaces-api.md`, `05-structure-conventions.md`, `docs/03-db/briefing.md` |
+| FE | `src/templates/`, `src/static/`, `README.md` | `04-interfaces-api.md` §7(PAGE), `07-screens.md`, `05-structure-conventions.md` |
 | QA | `tests/`, `docs/06-qa/` | `06-quality-gates.md`, PM-AC |
 
 설계 문서: `docs/02-arch/` (ADR은 `adr/`). 티켓: `docs/02-arch/HANDOFF.md`.
