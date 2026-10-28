@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{# SCR-01 회원가입 (07-screens.md §4, PAGE-01, API-AUTH-01) #}
+{% block title %}회원가입 · 2vs2 매치메이킹{% endblock %}
+{% block require_login %}false{% endblock %}
+
+{% block content %}
+<section class="card">
+  <h1>회원가입</h1>
+  <form id="signup-form">
+    <div class="form-field">
+      <label for="login_id">아이디</label>
+      <input id="login_id" name="login_id" autocomplete="username" required>
+      <p class="muted">4~20자 영문 소문자·숫자</p>
+    </div>
+    <div class="form-field">
+      <label for="nickname">닉네임</label>
+      <input id="nickname" name="nickname" autocomplete="nickname" required>
+      <p class="muted">2~12자</p>
+    </div>
+    <div class="form-field">
+      <label for="password">비밀번호</label>
+      <input id="password" name="password" type="password" autocomplete="new-password" required>
+      <p class="muted">8자 이상</p>
+    </div>
+    <button type="submit" id="signup-button">가입</button>
+  </form>
+  <p class="muted">이미 계정이 있나요? <a href="/login">로그인</a></p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // 가입 실패 시 사유를 보이고 아이디·닉네임은 그대로 둔다. 비밀번호만 지운다(AC-17-1).
+  document.getElementById("signup-form").addEventListener("submit", async function (event) {
+    event.preventDefault();
+    const button = document.getElementById("signup-button");
+    const passwordInput = document.getElementById("password");
+    button.disabled = true;
+    hideNotice();
+    const result = await apiRequest("POST", "/api/auth/signup", {
+      login_id: document.getElementById("login_id").value,
+      nickname: document.getElementById("nickname").value,
+      password: passwordInput.value,
+    });
+    if (result.ok) {
+      location.href = "/login";
+      return;
+    }
+    showNotice(errorMessage(result), "error");
+    passwordInput.value = "";
+    button.disabled = false;
+  });
+</script>
+{% endblock %}

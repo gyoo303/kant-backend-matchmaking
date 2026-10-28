@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{# SCR-02 로그인 (07-screens.md §4, PAGE-02, API-AUTH-02). 만료로 오면 서버가 notice를 넘긴다. #}
+{% block title %}로그인 · 2vs2 매치메이킹{% endblock %}
+{% block require_login %}false{% endblock %}
+
+{% block content %}
+<section class="card">
+  <h1>로그인</h1>
+  <form id="login-form">
+    <div class="form-field">
+      <label for="login_id">아이디</label>
+      <input id="login_id" name="username" autocomplete="username" required>
+    </div>
+    <div class="form-field">
+      <label for="password">비밀번호</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+    </div>
+    <button type="submit" id="login-button">로그인</button>
+  </form>
+  <p class="muted">계정이 없나요? <a href="/signup">회원가입</a></p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.getElementById("login-form").addEventListener("submit", async function (event) {
+    event.preventDefault();
+    const button = document.getElementById("login-button");
+    const passwordInput = document.getElementById("password");
+    button.disabled = true;
+    hideNotice();
+    const result = await loginWithPassword(
+      document.getElementById("login_id").value,
+      passwordInput.value
+    );
+    if (result.ok) {
+      location.href = "/";
+      return;
+    }
+    showNotice(errorMessage(result), "error");
+    passwordInput.value = "";
+    button.disabled = false;
+  });
+</script>
+{% endblock %}
