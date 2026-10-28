@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{# SCR-04 방 상세(현황 대시보드) (07-screens.md §3, PAGE-04). 서버는 room_id만 넘기고, 내용은 rooms.js가 API로 채운다. #}
+{% block title %}방 상세 · 2vs2 매치메이킹{% endblock %}
+
+{% block content %}
+<section class="card" id="room" data-room-id="{{ room_id }}" aria-labelledby="room-title" hidden>
+  <h1 id="room-title"></h1>
+  <p class="muted">인원 <span id="room-count"></span></p>
+
+  {# 방장만 보인다(AC-16-2). 제목 옆 입력칸 + [변경](사용자 확인 ④).
+     .form-row의 display가 hidden 속성을 덮으므로 hidden은 바깥 div에 둔다. #}
+  <div id="rename-box" hidden>
+    <form id="rename-form" class="form-row">
+      <div>
+        <label for="rename-title">제목 변경</label>
+        <input id="rename-title" name="title" required>
+      </div>
+      <button type="submit" id="rename-button" class="secondary">변경</button>
+    </form>
+  </div>
+
+  <div class="teams">
+    <section class="card team-a" aria-labelledby="team-a-title">
+      <h2 id="team-a-title">A팀 (<span id="team-a-count"></span>)</h2>
+      <ul id="team-a-members"></ul>
+    </section>
+    <section class="card team-b" aria-labelledby="team-b-title">
+      <h2 id="team-b-title">B팀 (<span id="team-b-count"></span>)</h2>
+      <ul id="team-b-members"></ul>
+    </section>
+  </div>
+
+  {# 참가자만 보인다 #}
+  <div id="member-actions" hidden>
+    <div class="form-row">
+      <button type="button" id="move-button" class="secondary"></button>
+      <button type="button" id="leave-button" class="secondary">나가기</button>
+    </div>
+  </div>
+
+  {# 방장만 보인다. A·B 각 2명일 때만 누를 수 있다 #}
+  <div id="host-actions" hidden>
+    <div class="form-row">
+      <button type="button" id="start-button">게임 시작</button>
+    </div>
+  </div>
+
+  {# 참가자가 아닌 회원에게만 보인다 #}
+  <div id="guest-actions" hidden>
+    <div class="form-row">
+      <button type="button" id="join-button">참가</button>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/polling.js') }}"></script>
+<script src="{{ url_for('static', path='js/rooms.js') }}"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", initRoomDetailPage);
+</script>
+{% endblock %}

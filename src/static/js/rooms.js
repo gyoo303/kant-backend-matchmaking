@@ -171,3 +171,203 @@ function initRoomListPage() {
     }
   });
 }
+
+// ---------------------------------------------------------------------------
+// SCR-04 방 상세 (현황 대시보드)
+// ---------------------------------------------------------------------------
+
+const TEAM_SIZE = 2;
+
+let detailPolling = null;
+let lastDetail = null;
+let lastDetailSnapshot = "";
+// 변경 요청을 보내는 동안 버튼을 막는다. 폴링이 다시 그려도 풀리지 않게 따로 둔다.
+let detailBusy = false;
+
+function detailRoomId() {
+  return document.getElementById("room").dataset.roomId;
+}
+
+function teamMembers(detail, team) {
+  return detail.participants.filter(function (p) {
+    return p.team === team;
+  });
+}
+
+// 팀 칸: 닉네임(방장은 ★·"(방장)"), 남은 자리는 "(빈자리)". 입장 순서는 보이지 않는다(REQ-045).
+function renderTeam(team, members) {
+  const key = team.toLowerCase();
+  document.getElementById("team-" + key + "-count").textContent = members.length + "/" + TEAM_SIZE;
+  const list = document.getElementById("team-" + key + "-members");
+  list.textContent = "";
+  members.forEach(function (member) {
+    const item = document.createElement("li");
+    item.textContent = member.is_host ? "★" + member.nickname + " (방장)" : member.nickname;
+    list.append(item);
+  });
+  for (let i = members.length; i < TEAM_SIZE; i += 1) {
+    const empty = document.createElement("li");
+    empty.className = "muted";
+    empty.textContent = "(빈자리)";
+    list.append(empty);
+  }
+}
+
+// 버튼 노출·활성은 응답의 my_team·am_i_host와 팀 인원으로 정한다(AC-16-2).
+function updateDetailButtons() {
+  const detail = lastDetail;
+  if (detail === null) {
+    return;
+  }
+  const isMember = detail.my_team !== null;
+  const teamA = teamMembers(detail, "A").length;
+  const teamB = teamMembers(detail, "B").length;
+
+  document.getElementById("rename-box").hidden = !detail.am_i_host;
+  document.getElementById("rename-button").disabled = detailBusy;
+
+  document.getElementById("member-actions").hidden = !isMember;
+  const otherTeam = detail.my_team === "A" ? "B" : "A";
+  const moveButton = document.getElementById("move-button");
+  moveButton.textContent = otherTeam + "팀으로 이동";
+  moveButton.disabled = detailBusy;
+  document.getElementById("leave-button").disabled = detailBusy;
+
+  document.getElementById("host-actions").hidden = !detail.am_i_host;
+  document.getElementById("start-button").disabled =
+    detailBusy || teamA !== TEAM_SIZE || teamB !== TEAM_SIZE;
+
+  document.getElementById("guest-actions").hidden = isMember || detail.is_full;
+  document.getElementById("join-button").disabled = detailBusy;
+}
+
+// 1초마다 다시 그리면 포커스가 사라지므로 바뀌었을 때만 다시 그린다. 제목 변경 입력칸은 건드리지 않는다.
+function renderDetail(detail) {
+  lastDetail = detail;
+  const snapshot = JSON.stringify(detail);
+  if (snapshot !== lastDetailSnapshot) {
+    lastDetailSnapshot = snapshot;
+    document.getElementById("room-title").textContent = detail.title;
+    document.getElementById("room-count").textContent = detail.current_count + "/" + detail.capacity;
+    renderTeam("A", teamMembers(detail, "A"));
+    renderTeam("B", teamMembers(detail, "B"));
+  }
+  updateDetailButtons();
+  document.getElementById("room").hidden = false;
+}
+
+function stopDetailPolling() {
+  if (detailPolling !== null) {
+    detailPolling.stop();
+  }
+}
+
+// 410: 게임 시작으로 해산 → 목록 + 해산 안내(AC-16-4). 404: 해산과 다른 안내(AC-16-7).
+// 401: api.js가 로그인 화면으로 보낸다(AC-16-6). 통신 실패: 마지막 정보 유지(AC-16-5).
+function handleDetailError(result) {
+  if (result.status === 410) {
+    stopDetailPolling();
+    location.href = "/?notice=dissolved";
+  } else if (result.status === 404) {
+    stopDetailPolling();
+    document.getElementById("room").hidden = true;
+    showNotice("방을 찾을 수 없습니다", "error");
+  } else if (result.status === 401) {
+    stopDetailPolling();
+  } else if (result.status === 0) {
+    showLoadError();
+  } else {
+    showNotice(errorMessage(result), "error");
+  }
+}
+
+// 변경 요청 공통: 보내는 동안 버튼을 막고, 성공하면 응답(RoomDetailResponse)으로 다시 그린다.
+async function sendDetailChange(method, url, body) {
+  detailBusy = true;
+  updateDetailButtons();
+  const result = await apiRequest(method, url, body);
+  detailBusy = false;
+  if (result.ok) {
+    hideNotice();
+    renderDetail(result.data);
+  } else {
+    showNotice(errorMessage(result), "error");
+    updateDetailButtons();
+  }
+  return result;
+}
+
+async function renameRoom(event) {
+  event.preventDefault();
+  const input = document.getElementById("rename-title");
+  const result = await sendDetailChange("PATCH", "/api/rooms/" + detailRoomId(), {
+    title: input.value,
+  });
+  if (result.ok) {
+    input.value = "";
+  }
+}
+
+function moveTeam() {
+  const otherTeam = lastDetail.my_team === "A" ? "B" : "A";
+  sendDetailChange("PATCH", "/api/rooms/" + detailRoomId() + "/participants/me", { team: otherTeam });
+}
+
+function joinFromDetail() {
+  sendDetailChange("POST", "/api/rooms/" + detailRoomId() + "/participants");
+}
+
+// 나가기 성공 → 공개 방 목록(사용자 확인 ②)
+async function leaveRoom() {
+  detailBusy = true;
+  updateDetailButtons();
+  const result = await apiRequest("DELETE", "/api/rooms/" + detailRoomId() + "/participants/me");
+  if (result.ok) {
+    stopDetailPolling();
+    location.href = "/";
+    return;
+  }
+  detailBusy = false;
+  showNotice(errorMessage(result), "error");
+  updateDetailButtons();
+}
+
+// 게임 시작 성공 → 조회 중단 후 공개 방 목록(AC-16-3)
+async function startGame() {
+  detailBusy = true;
+  updateDetailButtons();
+  const result = await apiRequest("POST", "/api/rooms/" + detailRoomId() + "/start");
+  if (result.ok) {
+    stopDetailPolling();
+    location.href = "/";
+    return;
+  }
+  detailBusy = false;
+  showNotice(errorMessage(result), "error");
+  updateDetailButtons();
+}
+
+function initRoomDetailPage() {
+  if (!getAccessToken()) {
+    return;
+  }
+  document.getElementById("rename-form").addEventListener("submit", renameRoom);
+  document.getElementById("move-button").addEventListener("click", moveTeam);
+  document.getElementById("leave-button").addEventListener("click", leaveRoom);
+  document.getElementById("start-button").addEventListener("click", startGame);
+  document.getElementById("join-button").addEventListener("click", joinFromDetail);
+
+  // 상세를 1초마다 조회한다(SEQ-13). 다른 사람의 참가·이동이 2초 안에 보인다(AC-16-1).
+  detailPolling = startPolling(async function (isCurrent) {
+    const result = await apiRequest("GET", "/api/rooms/" + detailRoomId());
+    if (!isCurrent()) {
+      return;
+    }
+    if (result.ok) {
+      clearLoadError();
+      renderDetail(result.data);
+    } else {
+      handleDetailError(result);
+    }
+  });
+}
