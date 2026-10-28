@@ -24,3 +24,13 @@ class DuplicateLoginIdError(DomainRuleError):
 class DuplicateNicknameError(DomainRuleError):
     def __init__(self) -> None:
         super().__init__("이미 사용 중인 닉네임입니다")
+
+
+class InvalidRefreshTokenError(DomainRuleError):
+    def __init__(self) -> None:
+        super().__init__("유효하지 않거나 이미 만료된 토큰입니다")
+
+
+class AlreadyLoggedOutError(DomainRuleError):
+    def __init__(self) -> None:
+        super().__init__("이미 로그아웃 처리된 토큰입니다")

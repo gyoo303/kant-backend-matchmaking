@@ -1,8 +1,8 @@
 ---
 stage: BE
-tickets: [TKT-BE-M2-01, TKT-BE-M3-01, TKT-BE-M3-02, TKT-BE-M3-03, TKT-BE-M3-04, TKT-BE-M3-05]
+tickets: [TKT-BE-M2-01, TKT-BE-M3-01, TKT-BE-M3-02, TKT-BE-M3-03, TKT-BE-M3-04, TKT-BE-M3-05, TKT-BE-M4-01]
 status: done
-inputs_read: [AR-MAP, AR-HAND, AR-SYS, AR-API, AR-CONV, AR-GATE, AR-ADR, DB-BRIEF, PM-DOMAIN]
+inputs_read: [AR-MAP, AR-HAND, AR-SYS, AR-API, AR-CONV, AR-GATE, AR-ADR, DB-BRIEF, PM-DOMAIN, PM-AC]
 next_readers: [DB, FE, QA]
 ---
 # 백엔드 에이전트 브리핑
@@ -29,9 +29,23 @@ next_readers: [DB, FE, QA]
 | TKT-BE-M3-04 | Swagger에 API 11개 | 충족 | 라우터를 붙인 시험 앱의 OpenAPI에 API-ROOM-01~11 경로·summary 11개 |
 | | 응답에 입장 순서·해시 없음 | 충족 | 상세 응답 키·참가자 키 확인(`join_order`·`hashed_password` 없음) |
 | TKT-BE-M3-05 | GATE-01(시드 로그 1회) | **미확인 — 사용자 승인으로 건너뜀(2026-10-28)** | 로컬 PostgreSQL·`.env`가 없어 실제 기동·`create_all`·시드를 실행하지 못함. 아래 "설계와 다르게 한 것 / 질문" 참고 |
+| TKT-BE-M4-01 | GATE-06 | 충족 | `.env` 미커밋, 비밀값 하드코딩 grep 0줄. 비밀키는 `get_settings().jwt_secret_key`로만 읽음 |
+| | GATE-07 | 충족 | 금지 패턴 grep 0줄 |
+| | SEQ-01~04b 동작 | 충족(임시 SQLite) | 스크립트로 가입·중복·형식 오류·로그인 실패·토큰 발급·인증·재발급·로그아웃·차단 19건 확인(아래 검증 결과). PostgreSQL 미확인 |
 | | AC-02-3·06-5 수동 curl 확인 | 부분 충족 | 실제 DB 대신 가짜 서비스로 400(정원 마감·삭제된 방) 응답 형식 확인. 실제 데이터 흐름은 미확인 |
 
 ## 만든 것
+### TKT-BE-M4-01
+- `src/auth/infrastructure/security.py` (교안 6장 1강 3.3절 모양): 기존 `PasswordHasher` 유지 + `create_access_token(data)`(만료 `access_token_expire_minutes`, `token_type: "access"`), `create_refresh_token(data)`(만료 `refresh_token_expire_days`, `token_type: "refresh"`), `decode_token(token)`(`jwt.decode`, HS256, pyjwt 예외 그대로 올림)
+- `src/auth/application/service.py` `AuthApplicationService(db)`
+  - `signup(login_id, nickname, password) -> User` (SEQ-01): 비밀번호 길이 → 아이디 중복 → 닉네임 중복 → 해시 → `User.register` → save → commit
+  - `login(login_id, password) -> dict` (SEQ-02): 없는 아이디·틀린 비밀번호 모두 401 "아이디 또는 비밀번호가 올바르지 않습니다". `{"access_token", "refresh_token", "token_type": "bearer"}`, `sub` = 아이디
+  - `refresh(refresh_token) -> dict` (SEQ-04b): 블랙리스트 → 401 "로그아웃 처리되어…", 디코드 실패·access 토큰·`sub` 없음 → 401 "리프레시 토큰이 만료되었습니다…"
+  - `logout(access_token, refresh_token) -> None` (SEQ-04): refresh 디코드 실패 → 400 `InvalidRefreshTokenError`, 이미 차단 → 400 `AlreadyLoggedOutError`, 두 토큰 모두 블랙리스트 저장 → commit
+  - `authenticate(token) -> User` (SEQ-03): 디코드 실패·refresh 토큰·`sub` 없음·블랙리스트·회원 없음 → 401 "인증 토큰이 올바르지 않거나 로그인이 만료되었습니다"
+- `src/auth/domain/exceptions.py`: `InvalidRefreshTokenError`, `AlreadyLoggedOutError`(둘 다 `DomainRuleError` → 400)
+- API·의존성은 아직 없다(TKT-BE-M4-02·03)
+
 ### TKT-BE-M2-01
 - `pyproject.toml`: 런타임 의존성(`02-system-architecture.md` §3 그대로, `bcrypt==4.0.1` 고정), dev 그룹(pytest·pytest-asyncio·httpx·ruff), `[tool.ruff]`(ADR-005), `[tool.pytest.ini_options]`(STK-01·STK-11)
 - `uv.lock`: 설치된 주요 버전 — fastapi 0.162.0, starlette 1.10.0, sqlalchemy 2.1.6, asyncpg 0.32.0, pydantic 2.14.1, pydantic-settings 2.16.1, pyjwt 2.15.1, passlib 1.7.4, bcrypt 4.0.1, jinja2 3.1.6, python-multipart 0.0.32, uvicorn 0.54.0, pytest 9.2.0, pytest-asyncio 1.4.1, httpx 0.28.1, ruff 0.17.3 (Python 3.13.14)
@@ -109,12 +123,14 @@ next_readers: [DB, FE, QA]
 - 해산 로그(BackgroundTasks)는 도전 B(TKT-BE-M6-01) 범위라 넣지 않았다
 
 ## 계층 확인 포인트
+- TKT-BE-M4-01: 서비스는 레포지토리·`security.py`·도메인만 호출하고 직접 쿼리하지 않는다. commit은 `signup`·`logout`에서 한 번씩. 도메인 예외 파일은 외부 import 없음. 시각은 `security.py`에서만 얻는다(CONV-06)
 - 도메인 코드 없음. `exceptions.py`는 외부 import 없음(GATE-02 대상 grep 0줄)
 - 저장소 모델·트랜잭션: 해당 없음(이후 티켓)
 - TKT-BE-M3-02: 서비스는 레포지토리·도메인만 호출하고 직접 쿼리하지 않는다. 비즈니스 판단은 모두 도메인 메서드에 있고, 서비스의 조건문은 방 없음 확인과 결과 조립(방장 변경 여부)뿐이다
 - TKT-BE-M3-01: 도메인은 표준 라이브러리(`dataclasses`, `datetime`, `enum`, `re`)와 `exceptions`, 같은 기능 도메인만 import. 시각은 모두 `now` 인자로 받음. `read_models.py`는 `rooms.domain`만 참조
 
 ## 보안 확인 포인트
+- TKT-BE-M4-01: 비밀번호는 bcrypt 해시만 저장. 로그인 실패는 아이디 존재 여부를 드러내지 않게 같은 문구. 토큰 원문은 블랙리스트 테이블에만 저장하고 로그에 남기지 않는다. 로그아웃은 access·refresh 모두 차단(D-021). refresh 토큰으로 API 인증 불가(`token_type` 검사)
 - 비밀값은 `Settings`로만 읽는다. 코드에 기본값 없음(`jwt_secret_key`, `database_url`, `seed_user_password`는 필수 — 없으면 `ValidationError`로 실패, 확인함)
 - GATE-06: `.env` 미커밋, 비밀값 하드코딩 grep 0줄, `.venv` 무시 확인
 - 필요한 환경변수: `.env.example` 참고
@@ -127,6 +143,18 @@ next_readers: [DB, FE, QA]
 - TKT-BE-M2-01: 없음 (API 없음)
 
 ## 구현 중 자율 결정
+
+#### TKT-BE-M4-01 닉네임 중복 확인 값
+- 결정: 닉네임 중복은 `nickname.strip()`으로 확인한다 — SEQ-01, `User.register`(닉네임을 다듬어 저장)
+- 선택지: **A. 다듬은 값으로 확인 (권장·채택)** / B. 입력값 그대로 확인
+- 권장 이유: 저장되는 값이 다듬은 값이라, 그대로 확인하면 " 고양이 " 같은 입력이 중복 검사를 통과한 뒤 DB `unique`에서 500이 난다.
+- trade-off: A — `strip`이 도메인과 서비스 두 곳에 있다. B — 앞뒤 공백 입력에서 400 대신 500.
+
+#### TKT-BE-M4-01 토큰 문구 상수
+- 결정: 401 문구 4개를 `service.py` 모듈 상수로 둔다 — `04-interfaces-api.md` §1.2·SEQ-04b
+- 선택지: **A. 서비스 모듈 상수 (권장·채택)** / B. `AuthenticationError` 하위 클래스 4개
+- 권장 이유: 교안 6장처럼 문구만 다른 같은 401이라 클래스를 늘릴 필요가 없다.
+- trade-off: A — 테스트가 문구를 문자열로 비교해야 한다. B — 클래스가 늘어난다.
 
 #### TKT-BE-M3-05 로깅 설정 시점
 - 결정: `main.py`에서 `logging.basicConfig(level=INFO)`를 한 번 호출한다 — GATE-01("시드 로그 1회"), CONV-07(로그 형식은 TKT-BE-M5-01 미들웨어)
@@ -219,6 +247,7 @@ next_readers: [DB, FE, QA]
 - trade-off: A — 일부 테스트만 다른 루프 범위가 필요하면 그 테스트에서 따로 지정해야 한다. B — 모듈마다 같은 줄을 반복하고 빠뜨리면 루프 불일치 오류가 난다.
 
 ## 설계와 다르게 한 것 / 질문 / DB 에이전트에게 요청
+- TKT-BE-M4-01: **알려진 제한(사용자 결정, 2026-10-28: 교안 그대로 유지).** 페이로드가 `sub`·`exp`(초 단위)·`token_type`뿐이라 같은 회원이 같은 초에 받은 토큰은 문자열이 완전히 같다. 그래서 로그아웃 직후 1초 안에 다시 로그인·재발급하면 이미 차단된 토큰을 받아 401이 난다. **QA는 로그아웃 → 재로그인 테스트에서 재로그인 전에 1초 이상 기다려야 한다**(예: `await asyncio.sleep(1.1)`). 실사용·시연에서는 거의 생기지 않는다. 고치려면 페이로드에 `jti`(uuid4)를 더하면 된다(사용자가 이번에는 채택하지 않음)
 - TKT-BE-M3-05: **완료 조건 GATE-01(실제 기동·시드 로그 1회)을 사용자 승인으로 건너뛰었다(2026-10-28).** 로컬 PostgreSQL이 없다(Docker Desktop 설치돼 있으나 꺼져 있음). 남은 확인: PostgreSQL·`.env` 준비 후 `uv run uvicorn main:app --app-dir src` 기동 → 콘솔에 `seed inserted: … total=42` 1회 → 재기동 시 `seed skipped` → `/docs` 200. TKT-QA-M3-01 또는 DB가 준비되는 첫 시점에 확인해야 한다
 - TKT-BE-M3-05: 이제 `main`을 import하면 `database`가 설정을 읽으므로 `.env`(또는 환경변수) 없이는 서버가 기동하지 않는다. TKT-BE-M2-01의 "DB 없이 `/docs` 200"은 더 이상 성립하지 않는다(설계대로의 변화)
 - TKT-BE-M3-04: **GATE-08 명령이 오탐**한다. `grep -rnE "import .*Model|Model,"`가 `src/rooms/presentation/schemas.py`의 `from pydantic import BaseModel, ConfigDict, Field`를 잡는다(ORM 모델 아님). 대신 `grep -rnE "infrastructure.models" src/*/application src/*/presentation`로 확인했고 0줄이다. ARCH에 GATE-08 명령을 이 형태로 바꾸도록 요청한다
@@ -230,6 +259,13 @@ next_readers: [DB, FE, QA]
 - pytest는 `tests/`가 없어 "No files were found in testpaths" 경고를 낸다. QA가 `tests/`를 만들면 사라진다(정상).
 
 ## 검증 결과
+
+### TKT-BE-M4-01
+- GATE-05: `ruff check src tests` 통과, `ruff format --check src tests` 40 files already formatted
+- GATE-04: `uv run pytest -q` → 63 passed, 44 skipped(테스트 DB 없음)
+- GATE-02·06·07: 명령 모두 0줄. GATE-08: 알려진 오탐 1줄(`pydantic BaseModel`)만
+- 동작(임시 SQLite + aiosqlite, 저장소 밖 스크립트): 가입 성공(닉네임 다듬음, 해시 저장, id·created_at 채움) / 아이디 중복·닉네임 중복(앞뒤 공백 포함)·7자 비밀번호·대문자 아이디 → 각 예외 / 틀린 비밀번호·없는 아이디 → 같은 401 / 로그인 키 `access_token`·`refresh_token`·`token_type=bearer`, 페이로드 `sub`·`exp`·`token_type` / `authenticate`: 정상 통과, refresh 토큰·위조 토큰·없는 회원 → 401 / 재발급 성공, access 토큰으로 재발급 → 401 / 로그아웃: 잘못된 refresh → 400, 성공 후 새 세션에서 그 access → 401, 그 refresh로 재발급 → 401 "로그아웃 처리되어…", 두 번째 로그아웃 → 400 / 같은 초 재발급 토큰이 원래 토큰과 같음을 확인(위 알려진 제한)
+- 확인하지 못함: PostgreSQL에서의 동작(테스트 DB 없음)
 
 ### TKT-BE-M3-05
 - GATE-05: `ruff check src` 통과, `ruff format --check src` 33 files already formatted
