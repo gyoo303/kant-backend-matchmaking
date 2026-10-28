@@ -33,6 +33,10 @@ target-version = "py313"
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI 의존성·매개변수 선언은 인자 기본값 호출이 표준 방식이다(RC-12)
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header", "fastapi.Path"]
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]

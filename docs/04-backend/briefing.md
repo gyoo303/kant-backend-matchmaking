@@ -1,6 +1,6 @@
 ---
 stage: BE
-tickets: [TKT-BE-M2-01, TKT-BE-M3-01, TKT-BE-M3-02, TKT-BE-M3-03]
+tickets: [TKT-BE-M2-01, TKT-BE-M3-01, TKT-BE-M3-02, TKT-BE-M3-03, TKT-BE-M3-04]
 status: done
 inputs_read: [AR-MAP, AR-HAND, AR-SYS, AR-API, AR-CONV, AR-GATE, AR-ADR, DB-BRIEF, PM-DOMAIN]
 next_readers: [DB, FE, QA]
@@ -20,6 +20,8 @@ next_readers: [DB, FE, QA]
 | | 순차 요청 기준 INV 위반 0 | 충족 | 가짜 레포지토리로 흐름 18건 확인(아래 검증 결과) |
 | TKT-BE-M3-03 | GATE-08 | 충족 | `application`·`presentation`에서 Model import 0줄 |
 | | 404·410 분기(D-016) | 충족 | 가짜 레포지토리로 조회 분기 12건 확인 |
+| TKT-BE-M3-04 | Swagger에 API 11개 | 충족 | 라우터를 붙인 시험 앱의 OpenAPI에 API-ROOM-01~11 경로·summary 11개 |
+| | 응답에 입장 순서·해시 없음 | 충족 | 상세 응답 키·참가자 키 확인(`join_order`·`hashed_password` 없음) |
 
 ## 만든 것
 ### TKT-BE-M2-01
@@ -40,6 +42,29 @@ next_readers: [DB, FE, QA]
 - `src/rooms/domain/participation.py`: `TeamSide`(A·B), `Participation`(dataclass) — `is_current`, `change_team(team)`, `end(now)`, 생성 시 `join_order >= 1`·`left_at >= joined_at` 검사
 - `src/rooms/domain/room.py`: `DeleteReason`, `RoomTitle`(`of(raw)`), `Room` — `create`, `rename`, `join`, `change_team`, `leave`, `start_game`, 조회 속성 `is_active`·`current_participants`·`current_count`·`is_full`·`available_seats`·`team_count`·`participation_of`. 거부 검사 순서는 §2.3 주석 순서 그대로(삭제 방 → 권한·참가 여부 → 정원·구성)
 - `src/rooms/application/read_models.py`: `RoomListCondition`, `RoomSummary`, `ParticipantView`, `RoomDetail`, `CurrentRoom`, `HistoryItem`, `MyRecord`, `ArchivedRoom`, `RoomPage`, `HistoryPage`, `LeaveResult`, `GameStartResult` (frozen dataclass, 필드는 §5 응답 스키마와 같은 이름)
+
+### TKT-BE-M3-04
+- `src/rooms/presentation/schemas.py`: §5.2 요청 3개·응답 11개(`from_attributes=True`, 모든 필드 `Field(description)`, snake_case). 팀 값은 `Literal["A","B"]`
+- `src/rooms/presentation/router.py`: `router = APIRouter(prefix="/api")`, 서비스 팩토리 `get_room_service`·`get_room_query_service`(`Depends(get_db)`, CONV-04)
+
+| API-ID | 메서드 | 경로 | tags | 권한 | 성공 | 오류 |
+|---|---|---|---|---|---|---|
+| API-ROOM-01 | GET | `/api/rooms` | rooms | 로그인 | 200 `RoomListResponse` | 401, 422 |
+| API-ROOM-02 | POST | `/api/rooms` | rooms | 로그인 | 200 `RoomDetailResponse` | 400, 401, 422 |
+| API-ROOM-03 | GET | `/api/rooms/{room_id}` | rooms | 로그인 | 200 `RoomDetailResponse` | 401, 404, 410 |
+| API-ROOM-04 | PATCH | `/api/rooms/{room_id}` | rooms | 방장 | 200 `RoomDetailResponse` | 400, 401, 404, 422 |
+| API-ROOM-05 | POST | `/api/rooms/{room_id}/participants` | rooms | 로그인 | 200 `RoomDetailResponse` | 400, 401, 404 |
+| API-ROOM-06 | PATCH | `/api/rooms/{room_id}/participants/me` | rooms | 참가자 본인 | 200 `RoomDetailResponse` | 400, 401, 404, 422 |
+| API-ROOM-07 | DELETE | `/api/rooms/{room_id}/participants/me` | rooms | 참가자 본인 | 200 `LeaveResponse` | 400, 401, 404 |
+| API-ROOM-08 | POST | `/api/rooms/{room_id}/start` | rooms | 방장 | 200 `GameStartResponse` | 400, 401, 404 |
+| API-ROOM-09 | GET | `/api/me/room` | me | 로그인 | 200 `CurrentRoomResponse` | 401 |
+| API-ROOM-10 | GET | `/api/me/room-history` | me | 본인 | 200 `HistoryListResponse` | 401, 422 |
+| API-ROOM-11 | GET | `/api/me/room-history/{room_id}` | me | 과거 참가자 | 200 `ArchivedRoomResponse` | 401, 404 |
+
+- 목록 `keyword`는 라우터가 strip하고 빈 문자열이면 `None`(SEQ-10). 변경 API(02·04·05·06)는 처리 후 `RoomQueryService.get_room_detail`로 상세를 다시 읽어 응답한다
+- 오류 상태 코드 변환(400·401·404·410·422 형식)은 TKT-BE-M3-05의 전역 핸들러가 한다. 지금은 라우터만 있고 `main.py`에 등록하지 않았다
+- `src/auth/presentation/dependencies.py`: **임시** `get_current_user_id` — 요청 헤더 `X-Debug-User-Id`(숫자)를 회원 ID로 쓰고, 없거나 숫자가 아니면 `AuthenticationError`
+- `pyproject.toml`: `[tool.ruff.lint.flake8-bugbear] extend-immutable-calls`에 `fastapi.Depends`·`Query`·`Header`·`Path` 추가(아래 자율 결정)
 
 ### TKT-BE-M3-03
 - `src/rooms/application/queries.py`: `RoomQueryService(db)` — commit하지 않는다
@@ -80,12 +105,25 @@ next_readers: [DB, FE, QA]
 - 필요한 환경변수: `.env.example` 참고
 
 ## 임시 코드
-- 없음
+- TKT-BE-M3-04: `src/auth/presentation/dependencies.py`의 `X-Debug-User-Id` 헤더 인증(`TODO(TKT-BE-M4-03)` 주석). TKT-BE-M4-03에서 SEQ-03(JWT·쿠키·블랙리스트)으로 바꾸고 `grep -rn "X-Debug-User-Id" src/` 0줄을 확인한다
 
 ## 프론트엔드에게 전달할 것
-- 없음 (API 없음)
+- TKT-BE-M3-04: 요청·응답 스키마는 `src/rooms/presentation/schemas.py`(필드 이름은 `04-interfaces-api.md` §5.2와 같음). 오류 문구는 `src/rooms/domain/exceptions.py`. 상세 조회 410은 해산 신호(SEQ-13). 화면 라우트(PAGE)는 TKT-BE-M5-01
+- TKT-BE-M2-01: 없음 (API 없음)
 
 ## 구현 중 자율 결정
+
+#### TKT-BE-M3-04 ruff B008과 FastAPI 의존성
+- 결정: `pyproject.toml`에 `extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header", "fastapi.Path"]`를 둔다 — ADR-005(규칙 `B` 사용), RC-12(`Depends(get_db)`)
+- 선택지: **A. FastAPI 호출을 B008 예외로 등록 (권장·채택)** / B. 모든 매개변수를 `Annotated[..., Depends(...)]` 방식으로 작성
+- 권장 이유: ADR-005의 규칙 집합은 그대로 두고, 발제 예시와 같은 `= Depends(get_db)` 표준 형태를 쓸 수 있다.
+- trade-off: A — 설정 4줄이 늘고, 목록에 없는 다른 함수 호출 기본값은 여전히 경고된다. B — 설정은 그대로지만 모든 라우터가 발제 예시와 다른 문법이 되고 코드가 길어진다.
+
+#### TKT-BE-M3-04 변경 API의 응답 만들기
+- 결정: 생성·제목·참가·팀 변경 뒤에는 `RoomQueryService.get_room_detail(room_id, user_id)`로 상세를 다시 읽어 응답한다 — SEQ-05("router가 get_room_detail로 응답")
+- 선택지: **A. 상세 재조회 (권장·채택)** / B. 서비스가 돌려준 `Room` 도메인 객체로 응답을 직접 조립
+- 권장 이유: 닉네임은 조회 쿼리에만 있어 도메인 객체로는 `RoomDetailResponse`를 만들 수 없고, 상세 응답 형식이 한 곳에서 만들어진다.
+- trade-off: A — 변경 요청마다 조회 쿼리가 2번 더 나간다. B — 닉네임 조회 코드가 라우터에 따로 생긴다.
 
 #### TKT-BE-M3-03 조회 서비스의 목록 캐시 매개변수
 - 결정: `RoomQueryService(db)`만 받고 `list_cache` 매개변수는 두지 않는다 — `04-interfaces-api.md` §3(`(db, list_cache=None)`), D-018
@@ -154,6 +192,8 @@ next_readers: [DB, FE, QA]
 - trade-off: A — 일부 테스트만 다른 루프 범위가 필요하면 그 테스트에서 따로 지정해야 한다. B — 모듈마다 같은 줄을 반복하고 빠뜨리면 루프 불일치 오류가 난다.
 
 ## 설계와 다르게 한 것 / 질문 / DB 에이전트에게 요청
+- TKT-BE-M3-04: **GATE-08 명령이 오탐**한다. `grep -rnE "import .*Model|Model,"`가 `src/rooms/presentation/schemas.py`의 `from pydantic import BaseModel, ConfigDict, Field`를 잡는다(ORM 모델 아님). 대신 `grep -rnE "infrastructure.models" src/*/application src/*/presentation`로 확인했고 0줄이다. ARCH에 GATE-08 명령을 이 형태로 바꾸도록 요청한다
+- TKT-BE-M3-04: B008 예외 설정(위 자율 결정)을 `05-structure-conventions.md` 스택 주의(STK)에 추가하도록 ARCH에 제안한다
 - TKT-BE-M3-03: `RoomQueryService` 생성자에서 `list_cache`를 뺐다(위 자율 결정). 상세 조회는 DB 브리핑 TKT-DB-M3-02의 사용자 확인 결과(활성 방만 반환, 서비스가 404/410 판단)를 따랐다
 - TKT-BE-M3-02: `list_cache` 타입은 Protocol로 받았다(위 자율 결정). ARCH에 `04-interfaces-api.md` §3 표기 갱신(`ListCacheInvalidator`) 여부 확인 요청
 - STK-11 보완(위 자율 결정): ARCH에 STK-11 문구를 "ini 옵션 `asyncio_default_test_loop_scope = "session"`으로 지정(모듈별 `pytestmark`는 필요 없음)"으로 갱신 요청
@@ -161,6 +201,13 @@ next_readers: [DB, FE, QA]
 - pytest는 `tests/`가 없어 "No files were found in testpaths" 경고를 낸다. QA가 `tests/`를 만들면 사라진다(정상).
 
 ## 검증 결과
+
+### TKT-BE-M3-04
+- GATE-05: `ruff check src` 통과(B008 예외 설정 후), `ruff format --check src` 33 files already formatted
+- GATE-07: `session.execute`·`select(` 0줄, `hashed_password` in schemas 0줄
+- GATE-08: 문서 명령은 pydantic `BaseModel` 1줄을 오탐(위 질문). ORM 모델 import(`infrastructure.models`)는 0줄
+- 시험 앱(가짜 서비스, 임시 스크립트): OpenAPI 경로 11개와 summary가 §4.2와 일치 / 목록 keyword strip(" Fun " → "Fun")·공백만 → None / `size=51`·`page=0`·잘못된 `sort` → 422 / 생성 시 정의되지 않은 `capacity` 필드 무시 / 상세 응답 키 10개·참가자 키 4개(입장 순서·해시 없음) / 팀 "C" → 422, "A" → `TeamSide.A`로 서비스 호출 / 나가기·시작·현재 방(없으면 null 둘)·이력·보관 정보 응답 형식 / 헤더 없으면 `AuthenticationError`(401 변환은 TKT-BE-M3-05)
+- 실제 DB 위 동작: **확인하지 못함 (환경 문제)**
 
 ### TKT-BE-M3-03
 - GATE-05: 30 files already formatted, check 통과 / GATE-07(application 항목)·GATE-08: 0줄
