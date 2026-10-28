@@ -1,6 +1,6 @@
 ---
 stage: DB
-tickets: [TKT-DB-M2-01, TKT-DB-M3-01]
+tickets: [TKT-DB-M2-01, TKT-DB-M3-01, TKT-DB-M3-02]
 status: done
 inputs_read: [AR-MAP, AR-HAND, AR-DB, AR-API, AR-CONV, AR-GATE, AR-ADR, BE-BRIEF]
 next_readers: [BE, QA]
@@ -14,8 +14,33 @@ next_readers: [BE, QA]
 | | 세션 생성 확인 | 충족 (DB 접속 없이 세션 생성·풀 설정·예외 시 rollback 확인). 실제 PostgreSQL 접속은 확인하지 못함(아래 검증 결과) |
 | TKT-DB-M3-01 | GATE-02 | 충족 (세 명령 0줄) |
 | | GATE-08 | 충족 (`application`·`presentation`에서 Model import 0줄) |
+| TKT-DB-M3-02 | GATE-02 | 충족 (세 명령 0줄) |
+| | GATE-08 | 충족 (0줄) |
+| | 제약 이름이 문서와 같음 | 충족 (DDL 컴파일 결과 대조, 아래 검증 결과) |
 
 ## 만든 것
+
+### TKT-DB-M3-02
+- `src/rooms/infrastructure/models.py`
+
+| 테이블 | 컬럼 | 제약·인덱스 이름 | 근거 INV |
+|---|---|---|---|
+| `rooms` (`RoomModel`) | `id`(identity PK), `title` String(20), `capacity` SmallInteger DEFAULT 4, `host_user_id` FK `users.id` RESTRICT, `last_join_order` DEFAULT 0, `created_at`, `deleted_at`, `delete_reason` String(20) | `ck_rooms_title_not_blank`, `ck_rooms_capacity_fixed`, `ck_rooms_last_join_order`, `ck_rooms_delete_state`, `ix_rooms_active_created`(`created_at DESC, id DESC WHERE deleted_at IS NULL`), `ix_rooms_host_user_id` | INV-01·07·11·12 |
+| `participations` (`ParticipationModel`) | `id`(identity PK), `room_id` FK `rooms.id` RESTRICT, `user_id` FK `users.id` RESTRICT, `join_order`, `team` String(1), `joined_at`, `left_at` | `ck_participations_join_order`, `ck_participations_team`, `ck_participations_left_after_join`, `uq_participations_room_join_order`, `ix_participations_room_current`(`WHERE left_at IS NULL`), `ix_participations_user_joined`(`user_id, joined_at DESC, id DESC`) | INV-10·11 |
+
+- 도전 A 범위는 넣지 않았다: 부분 유니크 인덱스 `uq_participations_user_current`, `find_by_id_for_update`, `IntegrityError` → `AlreadyParticipatingError` 변환 (D-018, TKT-DB-M6-01)
+- `src/rooms/infrastructure/repositories.py`
+
+| 클래스 | 메서드 | 반환 |
+|---|---|---|
+| `RoomRepository(session)` | `find_by_id(room_id)` — 방 행 + 현재 참가 기록(입장 순서순, 별도 쿼리) | `Room` 또는 `None` |
+| | `find_current_participation(user_id)` — `left_at IS NULL` 기록 중 가장 최근 | `Participation` 또는 `None` |
+| | `save(room)` — 방 insert/update 후 `room.participations` 전체 저장(id 없으면 insert, 있으면 `team`·`left_at` update), `flush` | id가 채워진 `Room`(이번에 저장한 참가 기록 포함) |
+| `RoomQueryRepository(session)` | `list_active_rooms(cond)` — 삭제 제외, 현재 인원 집계, 제목 ILIKE ESCAPE, 빈자리 필터, 최신순·오래된순(동률 id), LIMIT/OFFSET, 같은 조건 전체 건수 | `(list[RoomSummary], int)` |
+| | `get_room_detail(room_id)` — **활성 방만**, 참가자 닉네임 조인(A팀 먼저, 팀 안에서 입장 순서), `my_team=None`·`am_i_host=False` | `RoomDetail` 또는 `None`(없음·삭제) |
+| | `list_history(user_id, page, size)` — 본인 기록만, `joined_at DESC, id DESC` | `(list[HistoryItem], int)` |
+| | `get_archived_room(room_id, user_id)` — 삭제된 방이고 본인 기록이 있을 때만, 본인 기록 입장순 | `ArchivedRoom` 또는 `None` |
+
 
 ### TKT-DB-M2-01
 - `src/database.py` (`04-interfaces-api.md` §8, ADR-003)
@@ -51,6 +76,13 @@ next_readers: [BE, QA]
 
 ## 다음 단계(BE)가 쓸 것
 
+### TKT-DB-M3-02
+- 변경 서비스(SEQ-05~09): `find_current_participation` → `find_by_id`(없으면 `RoomNotFoundError`는 서비스가 낸다) → 도메인 메서드 → `save` → 서비스 commit. 필수 범위에는 잠금이 없다(D-018)
+- `save`가 돌려준 `Room`의 `id`로 상세 응답을 조회한다(방 생성 직후 등)
+- 상세 조회(`RoomQueryService.get_room_detail`): `RoomQueryRepository.get_room_detail`이 `None`이면 `RoomRepository.find_by_id`로 방을 다시 읽어 없음·EMPTY → `RoomNotFoundError`, GAME_STARTED → `RoomDissolvedError`. 값이 있으면 `my_team`·`am_i_host`를 조회 회원 기준으로 채운다(`dataclasses.replace`)
+- 목록 조건의 `keyword`는 서비스·라우터가 strip하고 빈 문자열을 `None`으로 넘긴다. 이스케이프는 레포지토리가 한다
+- 보관 정보: `None`이면 `RoomNotFoundError`
+
 ### TKT-DB-M3-01
 - 회원가입(SEQ-01): `exists_login_id` → `exists_nickname` → `save`. 동시 가입으로 제약이 위반되면 `save`가 `Duplicate*Error`를 낸다. 그 뒤 세션은 실패 상태이므로 서비스는 예외를 그대로 올린다(`get_db`가 rollback)
 - 로그인(SEQ-02): `find_by_login_id`
@@ -84,10 +116,31 @@ next_readers: [BE, QA]
 - 권장 이유: 제약 이름이 문서와 같게 고정되어 있어 정확히 구분할 수 있고, 드라이버 래핑이 바뀌어도 대체 경로가 있다.
 - trade-off: A — 판별 함수가 하나 생긴다. B — DB 메시지 형식이 바뀌면 판별이 틀린다.
 
+#### TKT-DB-M3-02 참가자 로딩 방식
+- 결정: ORM 관계(`relationship`) 없이 방 행과 참가 기록을 별도 `select`로 읽는다 — STK-02·STK-03
+- 선택지: **A. 별도 select (권장·채택)** / B. `relationship` + `selectinload`
+- 권장 이유: 비동기 lazy loading 오류가 생길 경로가 없고, 도전 A에서 방 행만 `FOR UPDATE`로 잠그는 구조(STK-03)와 그대로 맞는다.
+- trade-off: A — 방 하나를 읽을 때 쿼리가 2번 나간다. B — 쿼리 수는 같지만 관계 설정이 늘고, 잠금 쿼리와 함께 쓸 때 조인 범위를 따로 신경 써야 한다.
+
+#### TKT-DB-M3-02 현재 참가 기록이 여러 건일 때
+- 결정: `find_current_participation`은 `left_at IS NULL` 기록 중 가장 최근(`joined_at DESC, id DESC`) 1건을 돌려준다 — INV-04
+- 선택지: **A. 가장 최근 1건 (권장·채택)** / B. 2건 이상이면 예외
+- 권장 이유: 필수 범위에는 부분 유니크 인덱스가 없어(D-018) 동시 요청으로 2건이 생길 수 있는데, 조회 자체가 실패하면 그 회원이 나가기도 못 한다.
+- trade-off: A — 중복 상태를 조용히 넘긴다(도전 A 인덱스가 근본 대책). B — 중복을 바로 드러내지만 회원이 방을 정리할 방법이 없어진다.
+
 ## 설계와 다르게 한 것 / 질문
-- 없음
+- TKT-DB-M3-02 사용자 확인 결과(2026-10-28): `03-db-schema.md` §5의 `get_room_detail(room_id) -> RoomDetail | None` 시그니처에 조회 회원·삭제 사유가 없어, 서비스가 `my_team`·`am_i_host`를 채우고 404/410을 구분할 방법이 정의되지 않았다. 사용자가 선택한 방식: **레포지토리는 활성 방만 반환(없음·삭제 → None), 서비스가 None일 때만 `RoomRepository.find_by_id`로 삭제 사유를 확인하고 조회 회원 기준 필드를 채운다.** 시그니처는 바꾸지 않았다. ARCH에 `03-db-schema.md` §5와 `04-interfaces-api.md` §3 `get_room_detail` 설명 갱신을 요청한다
+- TKT-DB-M3-02: `rooms.host_user_id`의 인덱스는 문서에 "INDEX"로만 적혀 있어 SQLAlchemy 기본 이름 `ix_rooms_host_user_id`를 썼다. ARCH 문서에 이름을 적어 달라고 요청한다
 
 ## 검증 결과
+
+### TKT-DB-M3-02
+- GATE-02: 세 명령 0줄 / GATE-08: 0줄 / GATE-05: `ruff check src` 통과, `ruff format --check src` 27 files already formatted
+- ADR-001: `auth.infrastructure.models`를 import하는 곳은 `src/rooms/infrastructure/repositories.py` 한 곳(닉네임 조인)
+- DDL 확인(PostgreSQL 방언으로 컴파일): `rooms`·`participations`의 컬럼·타입·DEFAULT·FK(`ON DELETE RESTRICT`)·CHECK 4개·3개·UNIQUE·부분 인덱스 조건이 `03-db-schema.md` §3.3·§3.4와 일치. `uq_participations_user_current`는 없음(도전 A)
+- 조회 SQL 확인(컴파일): 목록은 현재 인원 서브쿼리 LEFT JOIN + `deleted_at IS NULL` + `ILIKE … ESCAPE '\'` + 빈자리 조건 + 정렬·LIMIT/OFFSET, 전체 건수는 같은 조건의 `count(*)`. 이력은 본인 `user_id` 조건 + `joined_at DESC, id DESC`
+- 도메인 변환: `RoomModel`·`ParticipationModel` → `Room` 변환 확인
+- 실제 DB 실행(저장·조회·집계·검색 이스케이프 결과): **확인하지 못함 (환경 문제)** — PostgreSQL 서버 없음. TKT-QA-M3-01 통합 테스트에서 확인 필요
 
 ### TKT-DB-M3-01
 - GATE-02: 세 명령 0줄 / GATE-08: 0줄 / GATE-05: `ruff check src` 통과, `ruff format --check src` 25 files already formatted
