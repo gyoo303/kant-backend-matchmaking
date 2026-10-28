@@ -61,9 +61,8 @@ presentation ──▶ application ──▶ domain
       │                 └──▶ infrastructure ──▶ domain
       └──▶ domain(예외·열거형 참조만)
 
-기능 간: rooms.presentation ──▶ auth.presentation.dependencies (get_current_user_id, get_page_user_id)
-         rooms.presentation(pages) ──▶ auth.application.service (get_user: 머리글 닉네임)
-         rooms.infrastructure.repositories(RoomQueryRepository) ──▶ auth.infrastructure.models (UserModel 조인)
+기능 간: rooms.presentation ──▶ auth.presentation.dependencies (get_current_user_id)
+         rooms.infrastructure.repositories(RoomQueryRepository) ──▶ auth.infrastructure.models (UserModel: 닉네임 조회)
          auth ──▶ rooms : 금지
 공통:    모든 계층 ──▶ src/exceptions.py, domain 제외 모든 계층 ──▶ config.py, database.py
 ```
@@ -83,7 +82,7 @@ presentation ──▶ application ──▶ domain
 | CONV-06 | 시각: `datetime.now(UTC)`는 서비스의 `clock`과 `security.py`에서만 호출한다. |
 | CONV-07 | 로깅: `logging.getLogger(__name__)`. 미들웨어 한 줄 형식 `method=GET path=/api/rooms status=200 duration_ms=12.3 user_id=5`(user_id는 `request.state.user_id`가 있을 때만). 쿼리 문자열·본문·토큰·비밀번호는 남기지 않는다. |
 | CONV-08 | (도전 A 적용 후) 방을 바꾸는 서비스 메서드(참가·제목·팀·나가기·게임 시작)는 반드시 `RoomRepository.find_by_id_for_update`로 방을 읽는다(ADR-009). 필수 범위에서는 `find_by_id`를 쓴다. |
-| CONV-09 | 쿠키: `access_token`, `httponly=True`, `samesite="lax"`, `secure=settings.cookie_secure`, `path="/"`. 상태 변경은 JSON `fetch`로만 보낸다(ADR-002). |
+| CONV-09 | 인증은 `Authorization: Bearer` 헤더만 쓴다(쿠키 없음, ADR-002·D-021). 화면 JS는 access·refresh 토큰을 `localStorage`에 두고 `api.js`로만 API를 부른다. 상태 변경은 JSON `fetch`로만 보낸다. |
 | CONV-10 | CORS: `CORSMiddleware(allow_origins=settings.cors_origins, allow_credentials=True, allow_methods=["GET","POST","PATCH","DELETE"], allow_headers=["Authorization","Content-Type"])`. 와일드카드 `*` 금지. |
 | CONV-11 | 미들웨어 등록 순서(`main.py`): `RequestLoggingMiddleware` 다음 `CORSMiddleware`를 `add_middleware`(마지막에 추가한 CORS가 가장 바깥). |
 | CONV-12 | 템플릿: `Jinja2Templates(directory=<src>/templates)`, 정적 `app.mount("/static", StaticFiles(directory=<src>/static))`. 경로는 `Path(__file__).parent` 기준. 템플릿은 자동 이스케이프를 끄지 않는다. |
@@ -134,14 +133,40 @@ presentation ──▶ application ──▶ domain
 | ID | 대상 | 주의 |
 |---|---|---|
 | STK-01 | import 경로 | 실행이 `--app-dir src`라서 import는 `src.` 없이 쓴다(`from rooms.domain.room import Room`). pytest도 같게 하려고 `pyproject.toml`에 `[tool.pytest.ini_options] pythonpath = ["src"]`를 둔다. |
-| STK-02 | 비동기 lazy loading | AsyncSession에서 관계 속성을 지연 로딩하면 `MissingGreenlet` 오류가 난다. 레포지토리는 참가자를 `selectinload` 또는 별도 `select`로 **명시적으로** 읽고 도메인 객체로 바꾼다. ORM 관계(`relationship`)는 쓰지 않아도 된다. |
+| STK-02 | 비동기 lazy loading | AsyncSession에서 관계 속성을 지연 로딩하면 `MissingGreenlet` 오류가 난다(교안 5장 2강). `RoomModel.participations`·`ParticipationModel.room`은 쿼리에 `options(selectinload(...))`를 붙여 **미리** 읽는다. 세션에 이미 있는 객체에는 연쇄 `selectinload`가 안 채워질 수 있으므로 다른 기능의 모델(회원 닉네임)은 `session.get`으로 읽는다. |
 | STK-03 | `FOR UPDATE`와 조인 (도전 A) | PostgreSQL은 outer join의 nullable 쪽에 `FOR UPDATE`를 걸 수 없다. `find_by_id_for_update`는 `select(RoomModel).where(...).with_for_update()`로 방 행만 잠그고, 참가자는 별도 쿼리로 읽는다. |
 | STK-04 | 부분 유니크 인덱스 (도전 A) | `Index("uq_participations_user_current", ParticipationModel.user_id, unique=True, postgresql_where=text("left_at IS NULL"))`. `create_all`은 이미 있는 테이블에 인덱스·제약을 추가하지 않으므로 개발 DB를 지우고 다시 만든다. |
-| STK-05 | 제목 검색 | `RoomModel.title.ilike(pattern, escape="\\")`. 패턴을 만들 때 `\`·`%`·`_` 앞에 `\`를 붙인다. |
+| STK-05 | 제목 검색 | 목록을 읽은 뒤 파이썬에서 `keyword.lower() in title.lower()`로 거른다(교안 2·3장, D-020). `%`·`_`도 일반 글자로 비교된다. |
 | STK-06 | 시각 | 컬럼은 `DateTime(timezone=True)`이고 읽으면 UTC aware 값이다. 비교·저장하는 값도 `datetime.now(UTC)`(aware)만 쓴다. naive 값과 섞으면 오류가 난다. |
 | STK-07 | bcrypt | passlib 1.7.4는 bcrypt 4.1 이상에서 버전 감지 경고, 5.x에서 오류가 난다. `bcrypt==4.0.1`을 바꾸지 않는다(ADR-002). |
 | STK-08 | 로그인 폼 | `OAuth2PasswordRequestForm`은 `python-multipart`가 필요하다. 필드 이름은 `username`이며 값은 아이디다. |
+| STK-13 | 스키마 변경과 개발 DB | `create_all`은 이미 있는 테이블을 고치지 않는다. D-020·D-021로 `token_blacklist` 컬럼이 바뀌었으므로 기존 개발 DB는 테이블을 지우고 다시 만든다(제약·인덱스 제거는 남아 있어도 동작에 지장 없음). |
 | STK-09 | 템플릿 응답 | 최신 Starlette는 `templates.TemplateResponse(request, "rooms/list.html", context)` 순서다(예전 `{"request": request}` 방식은 쓰지 않는다). `.html` 템플릿은 자동 이스케이프가 켜져 있다. |
 | STK-10 | 설정 파일 | pydantic-settings의 `env_file=".env"`는 실행한 작업 디렉토리 기준이다. 서버·테스트는 저장소 루트에서 실행한다. `Settings`는 `extra="ignore"`로 테스트용 변수(`TEST_DATABASE_URL`)를 무시한다. |
 | STK-11 | 비동기 테스트 루프 | 엔진·세션 fixture와 테스트가 같은 이벤트 루프를 써야 한다. `[tool.pytest.ini_options]`에 `asyncio_mode = "auto"`, `asyncio_default_fixture_loop_scope = "session"`을 두고, 테스트 모듈은 `pytestmark = pytest.mark.asyncio(loop_scope="session")`을 쓴다. |
 | STK-12 | 엔진 정리 | lifespan 종료 시 `await engine.dispose()`. 테스트는 앱 엔진 대신 `TEST_DATABASE_URL` 엔진을 `dependency_overrides`로 주입한다. |
+
+## 8. 교안 수준 규칙 (D-020, DB·BE·FE 공통)
+
+구현 코드는 수강 중인 **KANT 백엔드 교안 1~6장**(1년차 부트캠프 대상)과 그 예제 코드로 이해할 수 있는 수준으로 쓴다. 스킬 문서의 예시·기본값보다 이 절이 우선한다(AGENTS.md 규칙 7·9).
+
+| 등급 | 기준 | 처리 |
+|---|---|---|
+| A | 교안 범위를 확실히 넘는 코드 | 교안 예제 수준으로 같은 결과가 나오면 교안 방식으로 쓴다. 교안에 나온 개념·기술로 같은 결과가 나오면 그것을 쓴다. 반드시 필요하지 않은 구현(도메인이 이미 검사하는 규칙의 DB CHECK, 이름 붙인 제약, 성능용 복합·조건부 인덱스, 드라이버 예외 속성 파싱 등 중복 방어선)은 넣지 않는다 |
+| B | 교안에는 없지만 조금 공부하면 이해할 수 있는 문법 | 써도 된다: `@dataclass`(`frozen`, `__post_init__`), `StrEnum`, `@property`, `typing.Protocol`, `Callable` 주입, `dataclasses.replace`, pydantic-settings `BaseSettings`, 예외 클래스 계층, `RequestValidationError` 핸들러, `select(exists().where(...))` |
+| C | 인증·보안 | 교안 6장 1강 설계를 따른다(ADR-002, D-021) |
+
+교안에 나오는 기술(이 목록 안에서 해결되면 A로 보지 않는다):
+
+| 장 | 기술·개념 |
+|---|---|
+| 1장 | uv(`init`·`add`·`run`), uvicorn 옵션, `logging.basicConfig`·`getLogger`, `async def` 엔드포인트, HTTP 메서드(GET·POST·PUT·DELETE), `Body`, `HTTPException`·`status`, 순수 도메인 클래스(생성자 검증 + `ValueError`, 상태 변경 메서드, `to_dict`), 쿼리 문자열 필터·정렬(파이썬 리스트) |
+| 2장 | 타입 힌트·`typing`(`List`·`Optional`·`Dict`·`Union`·`Literal`·`Generic`·`TypeVar`), Pydantic `BaseModel`·`Field`(`min_length`·`max_length`·`gt`·`ge`·`le`·`description`), `field_validator`·`model_validator`, 중첩 모델, `model_dump(exclude_unset=True)`, `response_model`, 제네릭 응답 모델, `FastAPI(title, description, version)`, `lifespan`(`asynccontextmanager`) |
+| 3장 | `Path`·`Query`(`alias`, 제약), `Annotated`, `HTTPException(headers=...)`, 커스텀 예외 + `@app.exception_handler` + `JSONResponse`, 목록 `offset`·`limit` 슬라이싱, `Jinja2Templates`·`TemplateResponse(request=, name=, context=)`, `{% extends %}`·`{% block %}`·`{% include %}`·`{% macro %}`·필터, `StaticFiles`·`url_for`, `Form` |
+| 4장 | `APIRouter(prefix, tags, dependencies)`·`include_router`, `Depends`·`Header` 의존성, `@app.middleware("http")`(전처리·`call_next`·후처리, 처리 시간 헤더), `add_middleware`·등록 순서, `TrustedHostMiddleware`, `UploadFile`·`File`, `BackgroundTasks.add_task`, `StreamingResponse`(async 제너레이터), `aiofiles` |
+| 5장 | docker-compose PostgreSQL, `create_async_engine`(`pool_size`·`max_overflow`·`pool_timeout`·`pool_recycle`·`pool_pre_ping`), `async_sessionmaker(expire_on_commit=False)`, `DeclarativeBase`, `get_db`(yield·rollback·close), `Mapped`·`mapped_column`(`primary_key`·`nullable`·`unique`·`index`·`server_default`·`String`·`Integer`·`Boolean`), `ForeignKey(ondelete=)`, `relationship(back_populates, cascade, uselist, secondary)`, `select().where().offset().limit()`, `db.get`, `scalars().all()`·`scalar_one_or_none()`, `add`·`flush`·`commit`·`refresh`·`delete`, `joinedload`·`selectinload`(N+1), `with_for_update()`, `engine.begin()`+`run_sync(create_all)`, `engine.dispose()`, `from_attributes` |
+| 6장 | 인증·인가, bcrypt(passlib `CryptContext`, `bcrypt==4.0.1`), JWT(pyjwt `encode`·`decode`, `ExpiredSignatureError`·`InvalidTokenError`), access·refresh 토큰과 `token_type`, `OAuth2PasswordBearer`·`OAuth2PasswordRequestForm`, `get_current_user` 의존성, `WWW-Authenticate` 헤더, 블랙리스트 로그아웃·`/refresh` |
+| 7장(발제) | 도메인 중심 4계층(presentation·application·domain·infrastructure), 레포지토리(ORM ↔ 도메인 변환), 서비스의 commit, CORS·캐싱 미들웨어, 배포 — 교안 링크에는 아직 없지만 발제(`kant-rubric.md` §2·§4)가 요구하므로 A로 보지 않는다 |
+
+- FE(Jinja2·JS): 교안 3장 템플릿 문법을 쓴다. JS는 교안에 없으므로 `fetch`·`localStorage`·`setInterval`·DOM 조작 정도로 단순하게 쓰고 외부 라이브러리·번들러는 쓰지 않는다.
+- 판단이 애매하면 교안 방식으로 쓰고 브리핑 "구현 중 자율 결정"에 적는다. 교안 방식으로 같은 결과를 낼 수 없으면 추측하지 말고 사용자에게 확인한다(AGENTS.md 규칙 7).

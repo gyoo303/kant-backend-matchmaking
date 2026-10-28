@@ -72,7 +72,7 @@ grep -rnE "import .*Model\b|Model," src/*/application src/*/presentation
 - **테스트 작성 담당**: `tests/` 아래 테스트 파일은 QA 티켓이 쓴다(티켓 "산출"에 테스트 경로가 있는 티켓만 테스트를 쓴다). DB·BE·FE 티켓은 테스트를 쓰지 않고, 완료 조건을 확인한 방법(curl·Swagger·브라우저·스크립트)과 결과를 브리핑에 적는다. 다른 단계가 테스트를 남기고 싶으면 브리핑에 제안으로 적고 QA가 옮긴다.
 - pytest 설정은 `05-structure-conventions.md` STK-01·STK-11대로 `pyproject.toml`에 둔다(TKT-BE-M2-01).
 - 테스트 DB: 환경변수 `TEST_DATABASE_URL`(별도 PostgreSQL DB). `tests/conftest.py`가 세션 시작 시 `drop_all`·`create_all`, 테스트마다 테이블을 `TRUNCATE … RESTART IDENTITY CASCADE`. 시드는 주입하지 않는다(테스트가 직접 만든다). 앱의 `get_db`는 `dependency_overrides`로 테스트 세션 팩토리를 쓴다. 동시성 테스트는 요청마다 다른 세션이 필요하므로 오버라이드도 요청마다 새 세션을 연다.
-- SQLite 대체 금지: `ILIKE ESCAPE`, (도전 A의) 부분 유니크 인덱스·`FOR UPDATE`가 PostgreSQL 동작이다.
+- SQLite 대체 금지: `timestamptz`(시간대 보존), (도전 A의) 부분 유니크 인덱스·`FOR UPDATE`가 PostgreSQL 동작이다.
 - 도메인 테스트에 목(mock)이 필요하면 설계 결함으로 보고 A4·A5로 되돌린다.
 - 화면(US-15~17)의 폴링 동작(AC-15-5·6, AC-16-3~6)은 자동 테스트 대상이 아니다. QA가 브라우저 수동 점검 체크리스트로 확인한다.
 

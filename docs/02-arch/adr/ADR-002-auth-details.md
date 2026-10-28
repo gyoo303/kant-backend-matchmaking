@@ -1,25 +1,29 @@
-# ADR-002: 인증 세부 (JWT·쿠키·블랙리스트·bcrypt 고정)
-- 상태: Accepted (user, 2026-10-28)
+# ADR-002: 인증 세부 (교안 6장 1강: access·refresh JWT, 블랙리스트, 헤더 전용)
+- 상태: Accepted (user, 2026-10-28) — D-021로 개정. 이전 안(쿠키·`jti`·만료 행 정리)은 폐기
 - 관련 계층: [인프라] [모듈 협력 구조]
-- 근거: RISK-06, RISK-09, RISK-10, ARCH-Q-05, US-08~11, D-005, EV-06, RC-15·16
+- 근거: D-020, D-021, 교안 6장 1강, 발제 §4.6, US-08~11, RISK-06, RISK-10
 
 ## 맥락
-발제는 OAuth2 로그인·JWT·블랙리스트만 정했다. Swagger는 Bearer 헤더를 쓰지만 Jinja2 화면은 서버 렌더링 페이지라 비로그인 시 로그인 화면으로 보내야 한다(D-005). 토큰 보관 위치, 블랙리스트 식별·정리, passlib과 bcrypt 버전 호환(passlib 1.7.4는 bcrypt 4.1 이상에서 버전 감지 경고, 5.x에서 오류)을 정해야 한다.
+사용자가 인증·보안 설계를 교안 6장 1강에 맞추도록 정했다(D-021). 교안은 access(30분)·refresh(7일) 토큰, `token_type` 클레임, `/refresh` 재발급, refresh 토큰을 블랙리스트(메모리 `set`)에 넣는 로그아웃, `OAuth2PasswordBearer` 헤더 인증을 쓴다. 교안 그대로면 로그아웃 뒤에도 access 토큰이 만료까지 통과해 발제 §4.6·AC-10-2와 어긋나고, 메모리 블랙리스트는 재시작 때 사라진다.
 
 ## 검토한 옵션
-| 옵션 | 장점 | 단점 | AI 부채 영향(D2~D4) | 평가표 영향 | 되돌리기 비용 |
-|---|---|---|---|---|---|
-| A. HS256, 만료 60분, `jti`(uuid4) 포함. `POST /auth/token`이 JSON 토큰을 돌려주고 같은 토큰을 `access_token` 쿠키(HttpOnly, SameSite=Lax, Path=/)로도 설정. 인증 의존성은 Authorization 헤더 → 쿠키 순서로 읽음. 블랙리스트는 `jti`+만료 시각 저장, 로그아웃 때 만료 지난 행을 함께 삭제. `bcrypt==4.0.1` 고정 | 로그인 API 하나로 Swagger·화면 모두 지원, 페이지 라우트에서 서버가 리다이렉트, JS가 토큰을 못 읽음 | 쿠키 사용으로 CSRF 고려 필요(SameSite=Lax + 변경 요청은 JSON fetch만) | 낮음 | 충족 | 낮음 |
-| B. 헤더 전용. 화면 JS가 토큰을 localStorage에 저장 | 쿠키·CSRF 고려 없음 | XSS 시 토큰 탈취, 서버가 페이지 접근을 판단 못 해 JS 리다이렉트 필요 | 중 | 충족 | 중 |
-| C. A와 같되 블랙리스트를 토큰 원문 해시로 저장, 정리 없음 | `jti` 생성 불필요 | 행이 무한 증가(RISK-06) | 중 | 충족 | 낮음 |
+| 옵션 | 장점 | 단점 | 평가표 영향 | 되돌리기 비용 |
+|---|---|---|---|---|
+| A. 교안 구조 + 로그아웃 때 access·refresh 모두 차단, 블랙리스트는 DB에 토큰 원문, 헤더 전용 | 교안 코드와 거의 같음, AC-10-2 충족, 재시작 후에도 차단 | 블랙리스트 행이 계속 늘어남, 화면은 JS가 토큰을 다룸 | 충족 | 중 |
+| B. 교안 그대로(refresh만 차단, 메모리 `set`) | 교안과 완전히 같음 | 로그아웃한 access 토큰이 만료까지 통과(AC-10-2 미충족), 재시작 시 차단 해제 | 위험 | 낮음 |
+| C. 이전 안(쿠키 + `jti` + 만료 행 정리) | 서버 렌더링·리다이렉트 | 교안 밖 기술(쿠키·`jti`·정리 쿼리) | 충족 | 중 |
+
+## 결정
+A (사용자 선택, D-021).
 
 ## 계층 관점 설명
-[모듈 협력 구조] 인증 의존성 순서: 토큰 추출(헤더 → 쿠키) → `jwt.decode`(서명·만료) → `TokenBlacklistRepository.exists(jti)` → 회원 존재 확인 → `user_id` 반환. 실패는 모두 401. 페이지 라우트는 같은 검사를 하되 401 대신 `/login`으로 303 리다이렉트한다. [인프라] 비밀키는 환경변수(ADR-003), bcrypt는 4.0.1로 고정해 passlib 호환 문제를 피한다.
-
-## 결정 / 추천
-결정: A — 로그인 API 하나로 Swagger와 화면을 모두 지원하고, 블랙리스트가 무한히 늘지 않는다.
+- [인프라] `src/auth/infrastructure/security.py`: 교안 3.3절과 같은 함수 — `hash_password(password)`·`verify_password(plain, hashed)`(passlib `CryptContext(schemes=["bcrypt"])`, 기존 `PasswordHasher` 클래스로 감싸도 됨), `create_access_token(data: dict) -> str`·`create_refresh_token(data: dict) -> str`(`exp`·`token_type` 추가 후 `jwt.encode(..., settings.jwt_secret_key, algorithm="HS256")`), `decode_token(token: str) -> dict`(`jwt.decode`). 만료·서명 오류는 pyjwt의 `ExpiredSignatureError`·`InvalidTokenError`.
+- [모듈 협력 구조] 인증 의존성(`src/auth/presentation/dependencies.py`): `oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")`(헤더 없으면 FastAPI가 401) → 응용 서비스 `authenticate(token)`: `jwt.decode`(만료·위조 → 401) → `token_type == "refresh"` → 401 → `sub` 없음 → 401 → 블랙리스트에 토큰 있음 → 401 → `find_by_login_id(sub)` 없음 → 401 → `User` 반환. 실패는 모두 `AuthenticationError`(401, `WWW-Authenticate: Bearer`).
+- 로그아웃: 현재 access 토큰(헤더)과 본문의 `refresh_token`을 받아 refresh를 `decode`(실패 → 400 "유효하지 않거나 이미 만료된 토큰입니다"), 이미 차단됨 → 400 "이미 로그아웃 처리된 토큰입니다", 두 토큰을 `token_blacklist`에 저장 → commit.
+- 화면: 쿠키 없음. 화면 라우트는 인증 없이 템플릿 틀만 돌려주고, `api.js`가 `localStorage`의 access 토큰을 `Authorization: Bearer`로 붙인다. 401이면 refresh로 한 번 재발급을 시도하고, 실패하면 토큰을 지우고 `/login?expired=1`로 보낸다.
+- 비밀키는 환경변수(ADR-003). bcrypt는 4.0.1 고정(교안과 같음, passlib 1.7.4 호환).
 
 ## 결과
-- 좋아지는 점: 401 시연(EV-06)과 화면 리다이렉트(D-005)를 같은 검사 로직으로 처리
-- 감수할 점: 쿠키 속성·CSRF 규칙을 CONV로 지켜야 함, bcrypt 업그레이드 시 ADR 필요
-- 후속 작업: TKT-DB-01, TKT-BE-M4-01~03
+- 좋아지는 점: 교안 6장 예제를 그대로 읽으면 인증 코드를 이해할 수 있다. 쿠키·CSRF 고려가 없다.
+- 감수할 점: `localStorage` 토큰은 XSS에 노출(템플릿 자동 이스케이프 유지), 블랙리스트 행 정리 없음, 비로그인 이동은 JS가 한다.
+- 후속 작업: TKT-BE-M4-01~03, TKT-BE-M5-01, TKT-FE-M5-01~05

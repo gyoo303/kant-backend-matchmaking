@@ -48,7 +48,7 @@ flowchart LR
 
 | 모듈 | 책임 | 도메인 | PM 근거 |
 |---|---|---|---|
-| `auth` | 회원가입, OAuth2 로그인(JWT 발급·쿠키), 로그아웃(블랙리스트), 현재 회원 의존성 | `User`, `TokenBlacklist` | US-08~11 |
+| `auth` | 회원가입, OAuth2 로그인(access·refresh JWT 발급), 재발급, 로그아웃(블랙리스트), 현재 회원 의존성 | `User`, `TokenBlacklist` | US-08~11 |
 | `rooms` | 방 생성·참가·제목·팀 변경·나가기·게임 시작, 목록·상세·이력·보관 정보 조회, 화면 라우트 | `Room`, `Participation`, `RoomTitle`, `TeamSide`, `DeleteReason` | US-01~07, US-12~20 |
 
 ## 3. 기술 스택
@@ -85,7 +85,7 @@ flowchart LR
 | ADR | 주제 | 파일 (모두 Accepted, 2026-10-28) |
 |---|---|---|
 | ADR-001 | 기능 폴더 분할과 기능 간 참조 | `adr/ADR-001-feature-modules.md` |
-| ADR-002 | 인증 세부(JWT·쿠키·블랙리스트·bcrypt 고정) | `adr/ADR-002-auth-details.md` |
+| ADR-002 | 인증 세부(교안 6장 1강: access·refresh JWT·블랙리스트·헤더 전용·bcrypt 고정) | `adr/ADR-002-auth-details.md` |
 | ADR-003 | 설정·환경변수 | `adr/ADR-003-settings.md` |
 | ADR-004 | 422 입력 검증 에러 형식 | `adr/ADR-004-validation-error-format.md` |
 | ADR-005 | 개발 도구 | `adr/ADR-005-dev-tools.md` |

@@ -27,6 +27,8 @@
 | | `InvalidPasswordError` | `DomainRuleError` | "비밀번호는 8자 이상이어야 합니다" |
 | | `DuplicateLoginIdError` | `DomainRuleError` | "이미 사용 중인 아이디입니다" |
 | | `DuplicateNicknameError` | `DomainRuleError` | "이미 사용 중인 닉네임입니다" |
+| | `InvalidRefreshTokenError` | `DomainRuleError` | "유효하지 않거나 이미 만료된 토큰입니다" (로그아웃 본문의 refresh 토큰, 교안 6장) |
+| | `AlreadyLoggedOutError` | `DomainRuleError` | "이미 로그아웃 처리된 토큰입니다" |
 | `src/rooms/domain/exceptions.py` | `InvalidRoomTitleError` | `DomainRuleError` | "방 제목은 앞뒤 공백을 빼고 1~20자여야 합니다" |
 | | `RoomDeletedError` | `DomainRuleError` | "이미 삭제된 방입니다" |
 | | `RoomFullError` | `DomainRuleError` | "정원이 마감되었습니다" |
@@ -39,7 +41,7 @@
 | | `RoomNotFoundError` | `NotFoundError` | "방을 찾을 수 없습니다" |
 | | `RoomDissolvedError` | `GoneError` | "게임이 시작되어 방이 해산되었습니다" |
 
-- 로그인 실패·토큰 문제는 `AuthenticationError("아이디 또는 비밀번호가 올바르지 않습니다")` / `AuthenticationError("인증이 필요합니다")`.
+- 로그인 실패·토큰 문제는 `AuthenticationError("아이디 또는 비밀번호가 올바르지 않습니다")` / `AuthenticationError("인증 토큰이 올바르지 않거나 로그인이 만료되었습니다")`(교안 6장 문구). Authorization 헤더가 아예 없으면 `OAuth2PasswordBearer`가 FastAPI 기본 401(`{"detail": "Not authenticated"}`)을 낸다.
 
 ## 2. 도메인 클래스 시그니처
 
@@ -68,9 +70,7 @@ class User:
 ```
 @dataclass(frozen=True)
 class TokenBlacklist:
-    jti: str              # 빈 문자열 → ValueError
-    expires_at: datetime
-    def is_expired(self, now: datetime) -> bool
+    token: str            # 로그아웃한 access·refresh 토큰 원문. 빈 문자열 → ValueError
 ```
 
 ### 2.3 `src/rooms/domain/room.py`
@@ -151,11 +151,11 @@ class Participation:
 
 | 클래스 (위치) | 메서드 | 반환 | 흐름 |
 |---|---|---|---|
-| `AuthApplicationService` (`src/auth/application/service.py`) — 생성자 `(db: AsyncSession, hasher: PasswordHasher, tokens: JwtTokenService, clock: Callable[[], datetime])` | `signup(login_id, nickname, password)` | `User` | SEQ-01 |
-| | `login(login_id, password)` | `IssuedToken(access_token: str, expires_at: datetime)` | SEQ-02 |
-| | `logout(claims: TokenClaims)` | `None` | SEQ-04 |
-| | `authenticate(token: str \| None)` | `TokenClaims` | SEQ-03 |
-| | `get_user(user_id)` | `User` | `/api/auth/me` |
+| `AuthApplicationService` (`src/auth/application/service.py`) — 생성자 `(db: AsyncSession)` | `signup(login_id, nickname, password)` | `User` | SEQ-01 |
+| | `login(login_id, password)` | `dict`: `{"access_token", "refresh_token", "token_type": "bearer"}` | SEQ-02 |
+| | `refresh(refresh_token)` | `dict`: `{"access_token", "token_type": "bearer"}` | SEQ-04b |
+| | `logout(access_token, refresh_token)` | `None` | SEQ-04 |
+| | `authenticate(token)` | `User` | SEQ-03 |
 | `RoomApplicationService` (`src/rooms/application/service.py`) — 생성자 `(db: AsyncSession, clock, list_cache: RoomListCache \| None = None)` | `create_room(user_id, title)` | `Room` | SEQ-05 |
 | | `join_room(room_id, user_id)` | `Room` | SEQ-06 |
 | | `rename_room(room_id, user_id, title)` | `Room` | SEQ-07 |
@@ -170,7 +170,7 @@ class Participation:
 | | `iter_history_csv(user_id)` (CH-B) | `AsyncIterator[str]` | SEQ-14 |
 
 - 읽기 모델·조건은 `src/rooms/application/read_models.py`의 frozen dataclass: `RoomListCondition(keyword: str \| None, available_only: bool, sort: Literal["newest","oldest"], page: int, size: int)`, `RoomSummary`, `RoomDetail`, `ParticipantView`, `CurrentRoom`, `HistoryItem`, `ArchivedRoom`, `RoomPage`, `HistoryPage`, `LeaveResult`, `GameStartResult`. 필드는 §5 응답 스키마와 같은 이름이다.
-- 인증 보조(`src/auth/infrastructure/security.py`): `PasswordHasher.hash(raw) -> str`, `PasswordHasher.verify(raw, hashed) -> bool`(passlib `CryptContext(schemes=["bcrypt"])`), `JwtTokenService.issue(user_id, now) -> tuple[str, TokenClaims]`, `JwtTokenService.decode(token) -> TokenClaims`(서명·만료 오류 → `AuthenticationError`). `TokenClaims(user_id: int, jti: str, expires_at: datetime)`는 `src/auth/application/service.py`에 둔다. JWT 페이로드: `sub`(user_id 문자열), `jti`, `iat`, `exp`.
+- 인증 보조(`src/auth/infrastructure/security.py`, 교안 6장 1강 3.3절과 같은 모양): `PasswordHasher.hash(raw) -> str`, `PasswordHasher.verify(raw, hashed) -> bool`(passlib `CryptContext(schemes=["bcrypt"])`), `create_access_token(data: dict) -> str`(만료 `settings.access_token_expire_minutes`, `token_type: "access"`), `create_refresh_token(data: dict) -> str`(만료 `settings.refresh_token_expire_days`, `token_type: "refresh"`), `decode_token(token: str) -> dict`(`jwt.decode(token, settings.jwt_secret_key, algorithms=["HS256"])`, 오류는 pyjwt `ExpiredSignatureError`·`InvalidTokenError` 그대로). JWT 페이로드: `sub`(아이디 `login_id`), `exp`, `token_type` (ADR-002, D-021).
 
 ## 4. REST API 명세
 
@@ -179,12 +179,13 @@ class Participation:
 | API-ID | Method | URI | 인증 | 매개변수 | 요청 스키마 | 응답 스키마 | 성공 | 에러 코드와 `detail` 예시 | US/AC |
 |---|---|---|---|---|---|---|---|---|---|
 | API-AUTH-01 | POST | `/api/auth/signup` | 없음 | — | `SignupRequest` | `UserResponse` | 200 | 400 "이미 사용 중인 아이디입니다", 400 "비밀번호는 8자 이상이어야 합니다", 422 | US-08 / AC-08-1~5 |
-| API-AUTH-02 | POST | `/api/auth/token` | 없음 | form `username`(=아이디), `password` (`OAuth2PasswordRequestForm`) | form | `TokenResponse` + `Set-Cookie: access_token` | 200 | 401 "아이디 또는 비밀번호가 올바르지 않습니다" | US-09 / AC-09-1·2 |
-| API-AUTH-03 | POST | `/api/auth/logout` | Bearer 또는 쿠키 | — | — | `MessageResponse` + 쿠키 삭제 | 200 | 401 "인증이 필요합니다" | US-10 / AC-10-1~3 |
-| API-AUTH-04 | GET | `/api/auth/me` | Bearer 또는 쿠키 | — | — | `UserResponse` | 200 | 401 | US-11 |
+| API-AUTH-02 | POST | `/api/auth/token` | 없음 | form `username`(=아이디), `password` (`OAuth2PasswordRequestForm`) | form | `TokenResponse` | 200 | 401 "아이디 또는 비밀번호가 올바르지 않습니다" | US-09 / AC-09-1·2 |
+| API-AUTH-03 | POST | `/api/auth/logout` | Bearer | — | `RefreshRequest` | `MessageResponse` | 200 | 401, 400 "유효하지 않거나 이미 만료된 토큰입니다", 400 "이미 로그아웃 처리된 토큰입니다" | US-10 / AC-10-1~3 |
+| API-AUTH-04 | GET | `/api/auth/me` | Bearer | — | — | `UserResponse` | 200 | 401 | US-11 |
+| API-AUTH-05 | POST | `/api/auth/refresh` | 없음(본문의 refresh 토큰) | — | `RefreshRequest` | `AccessTokenResponse` | 200 | 401 "로그아웃 처리되어 사용할 수 없는 토큰입니다", 401 "리프레시 토큰이 만료되었습니다. 다시 로그인하세요" | US-09 (교안 6장 1강) |
 
-- Swagger summary: 01 "회원가입", 02 "로그인(OAuth2 토큰 발급)", 03 "로그아웃(토큰 차단)", 04 "내 정보".
-- `OAuth2PasswordBearer(tokenUrl="/api/auth/token", auto_error=False)`로 Swagger Authorize를 쓴다.
+- Swagger summary: 01 "회원가입", 02 "로그인(OAuth2 토큰 발급)", 03 "로그아웃(토큰 차단)", 04 "내 정보", 05 "access 토큰 재발급".
+- `OAuth2PasswordBearer(tokenUrl="/api/auth/token")`로 Swagger Authorize를 쓴다. 쿠키는 쓰지 않는다(D-021).
 
 ### 4.2 rooms — `src/rooms/presentation/router.py`, prefix `/api`, tags `["rooms"]`, `["me"]`
 
@@ -212,7 +213,7 @@ class Participation:
 
 | API-ID | 비로그인 | 회원 | 본인·역할 조건 |
 |---|---|---|---|
-| AUTH-01, AUTH-02 | 허용 | 허용 | — |
+| AUTH-01, AUTH-02, AUTH-05 | 허용 | 허용 | — (AUTH-05는 유효한 refresh 토큰 필요) |
 | AUTH-03, AUTH-04 | 401 | 허용 | 본인 토큰 |
 | ROOM-01, ROOM-02, ROOM-03, ROOM-05, ROOM-09 | 401 | 허용 | — |
 | ROOM-04, ROOM-08 | 401 | 허용 | 현재 방장 (아니면 400) |
@@ -230,7 +231,9 @@ class Participation:
 | | `nickname` | `str` | Y | `max_length=50` | "닉네임(2~12자 한글·영문·숫자)" |
 | | `password` | `str` | Y | `max_length=128` | "비밀번호(8자 이상)" |
 | `UserResponse` | `id`, `login_id`, `nickname`, `created_at` | `int`, `str`, `str`, `datetime` | Y | — | 해시 필드 없음 (INV-13) |
-| `TokenResponse` | `access_token`, `token_type` | `str`, `Literal["bearer"]` | Y | — | |
+| `TokenResponse` | `access_token`, `refresh_token`, `token_type` | `str`, `str`, `str` | Y | — | 교안 6장 `Token` (`token_type` 기본 "bearer") |
+| `RefreshRequest` | `refresh_token` | `str` | Y | — | "토큰 재발급 및 로그아웃용 리프레시 토큰" |
+| `AccessTokenResponse` | `access_token`, `token_type` | `str`, `str` | Y | — | 재발급 응답 |
 | `MessageResponse` | `message` | `str` | Y | — | "로그아웃되었습니다" |
 
 - 형식 규칙(길이·문자)은 스키마가 아니라 도메인이 검사해 400을 낸다(AC-08-2~4). 스키마 `max_length`는 비정상 입력 방어용(422)이다.
@@ -260,7 +263,7 @@ class Participation:
 | 코드 | 기준 | 발생 위치 |
 |---|---|---|
 | 400 | `DomainRuleError` 하위: 입력 규칙 위반, 정원·팀 정원, 삭제된 방 변경, 방장·참가자가 아닌 요청 | 도메인 → 전역 핸들러 |
-| 401 | `AuthenticationError`: 토큰 없음·서명 오류·만료·블랙리스트·회원 없음, 로그인 실패 | 인증 의존성, `AuthApplicationService.login` |
+| 401 | `AuthenticationError`: 서명 오류·만료·refresh 토큰으로 API 접근·블랙리스트·회원 없음, 로그인 실패. 헤더 없음은 `OAuth2PasswordBearer` 기본 401 | 인증 의존성, `AuthApplicationService.login`·`refresh` |
 | 404 | `NotFoundError`: 없는 방, EMPTY로 삭제된 방 상세, 보관 정보 권한 없음 | 응용 서비스 |
 | 410 | `GoneError`: GAME_STARTED로 삭제된 방 상세 조회 (폴링 해산 신호) | `RoomQueryService.get_room_detail` |
 | 422 | `RequestValidationError` → `{"detail": "<loc 마지막>: <msg>; …"}`(최대 3개) | 전역 핸들러 (ADR-004) |
@@ -271,20 +274,21 @@ class Participation:
 
 ## 7. 화면 데이터 계약 (PAGE)
 
-화면 라우터: `src/rooms/presentation/pages.py`(`page_router`), `src/auth/presentation/pages.py`(`page_router`). `include_in_schema=False`. 템플릿은 `src/templates/`. 로그인이 필요한 화면은 `get_page_user_id`(토큰 없음·무효 → `None`)로 확인하고 `None`이면 `RedirectResponse("/login", 303)`.
+화면 라우터: `src/rooms/presentation/pages.py`(`page_router`), `src/auth/presentation/pages.py`(`page_router`). `include_in_schema=False`. 템플릿은 `src/templates/`. **화면 라우트는 인증하지 않는다**(쿠키 없음, D-021). 서버는 템플릿 틀과 URL에서 온 값만 넘기고, 회원 데이터는 JS가 `localStorage`의 access 토큰으로 API를 불러 채운다. 로그인이 필요한 화면은 JS가 토큰이 없으면 바로 `/login`으로 이동한다(AC-11-3).
 
-| PAGE | SCR | 경로 | 템플릿 | 호출하는 서비스 메서드 | 컨텍스트 변수(타입) | 데이터 없음·오류 시 |
+| PAGE | SCR | 경로 | 템플릿 | 서버 컨텍스트 변수(타입) | JS가 부르는 API | 데이터 없음·오류 시 |
 |---|---|---|---|---|---|---|
-| PAGE-01 | SCR-01 | `GET /signup` | `auth/signup.html` | — | `error: str \| None` | 제출은 JS가 API-AUTH-01 호출, 실패 문구 표시 |
-| PAGE-02 | SCR-02 | `GET /login` | `auth/login.html` | — | `notice: str \| None` (`?expired=1` → "로그인이 만료되었습니다. 다시 로그인해 주세요") | 로그인은 JS가 API-AUTH-02(form) 호출 후 `/`로 이동 |
-| PAGE-03 | SCR-03 | `GET /` (쿼리 `keyword`, `available_only`, `sort`, `page`, `notice`) | `rooms/list.html` | `RoomQueryService.list_rooms`, `get_current_room`, `AuthApplicationService.get_user` | `me: User`, `current_room: CurrentRoom \| None`, `page: RoomPage`, `cond: RoomListCondition`, `notice: str \| None` (`notice=dissolved` → "게임이 시작되어 방이 해산되었습니다") | `page.items` 비면 "조건에 맞는 방이 없습니다. 새 방을 만들어 보세요" |
-| PAGE-04 | SCR-04 | `GET /rooms/{room_id}` | `rooms/detail.html` | `RoomQueryService.get_room_detail` | `me: User`, `room: RoomDetail` | `RoomDissolvedError` → `/?notice=dissolved` 303, `RoomNotFoundError` → 같은 템플릿에 `not_found=True`("방을 찾을 수 없습니다") |
-| PAGE-05 | SCR-05 | `GET /me/history` (쿼리 `page`) | `rooms/history.html` | `RoomQueryService.list_history` | `me: User`, `history: HistoryPage` | 비면 "아직 이용 기록이 없습니다" |
-| PAGE-06 | SCR-06 | `GET /me/history/{room_id}` | `rooms/archived.html` | `RoomQueryService.get_archived_room` | `me: User`, `archived: ArchivedRoom` | `RoomNotFoundError` → `not_found=True`("찾을 수 없습니다") |
+| PAGE-01 | SCR-01 | `GET /signup` | `auth/signup.html` | — | API-AUTH-01 | 실패 문구 표시, 성공 시 `/login` |
+| PAGE-02 | SCR-02 | `GET /login` | `auth/login.html` | `notice: str \| None` (`?expired=1` → "로그인이 만료되었습니다. 다시 로그인해 주세요") | API-AUTH-02(form) → 두 토큰을 `localStorage`에 저장 후 `/` | 401 문구 표시 |
+| PAGE-03 | SCR-03 | `GET /` (쿼리 `keyword`, `available_only`, `sort`, `page`, `notice`) | `rooms/list.html` | `cond`(쿼리 값 그대로: 검색 폼 초기값), `notice: str \| None` (`notice=dissolved` → "게임이 시작되어 방이 해산되었습니다") | API-AUTH-04(머리글 닉네임), API-ROOM-01·02·05·09 | 목록 비면 "조건에 맞는 방이 없습니다. 새 방을 만들어 보세요" |
+| PAGE-04 | SCR-04 | `GET /rooms/{room_id}` | `rooms/detail.html` | `room_id: int` | API-AUTH-04, API-ROOM-03·04·06·07·08 | 410 → `/?notice=dissolved`, 404 → "방을 찾을 수 없습니다" |
+| PAGE-05 | SCR-05 | `GET /me/history` (쿼리 `page`) | `rooms/history.html` | `page: int` | API-AUTH-04, API-ROOM-10 | 비면 "아직 이용 기록이 없습니다" |
+| PAGE-06 | SCR-06 | `GET /me/history/{room_id}` | `rooms/archived.html` | `room_id: int` | API-AUTH-04, API-ROOM-11 | 404 → "찾을 수 없습니다" |
 
-- 공통 레이아웃 `base.html`, 조각 `partials/room_row.html`, `partials/history_row.html`, `partials/pagination.html`, `partials/notice.html`.
-- 정적 파일: `src/static/css/app.css`, `src/static/js/api.js`(fetch 래퍼: `credentials: "same-origin"`, JSON, `detail` 추출, 401 → `/login?expired=1`), `src/static/js/polling.js`(SEQ-13), `src/static/js/rooms.js`(목록·상세 동작).
-- 변경 요청(생성·참가·팀·나가기·시작·로그아웃)은 모두 `api.js`의 JSON `fetch`로 보낸다. HTML `<form method="post">`로 상태를 바꾸지 않는다(ADR-002 CSRF 규칙).
+- 공통 레이아웃 `base.html`, 조각 `partials/notice.html`, `partials/pagination.html`(필요 시). 목록 행은 JS가 그린다.
+- 정적 파일: `src/static/css/app.css`, `src/static/js/api.js`(fetch 래퍼: `localStorage`의 access 토큰을 `Authorization: Bearer`로 붙임, JSON, `detail` 추출, 401 → `/api/auth/refresh`로 한 번 재발급 후 재시도, 실패하면 토큰 삭제 후 `/login?expired=1`, 로그아웃 → API-AUTH-03 후 토큰 삭제), `src/static/js/polling.js`(SEQ-13), `src/static/js/rooms.js`(목록·상세 동작).
+- 변경 요청(생성·참가·팀·나가기·시작·로그아웃)은 모두 `api.js`의 JSON `fetch`로 보낸다.
+- JS는 교안 수준을 넘지 않게 단순하게 쓴다: `fetch`·`localStorage`·`setInterval`·DOM 조작만, 외부 라이브러리·번들러 없음(D-020).
 
 ---
 
@@ -300,20 +304,22 @@ class Participation:
 ## 9. 시퀀스
 
 ### SEQ-01 회원가입 (API-AUTH-01)
-router → `AuthApplicationService.signup` → `User.validate_raw_password` → `UserRepository.exists_login_id` (참 → `DuplicateLoginIdError`) → `exists_nickname` (참 → `DuplicateNicknameError`) → `hasher.hash` → `User.register` → `UserRepository.save` → commit → `UserResponse`. 동시에 같은 아이디가 들어오면 `uq_users_login_id` 위반을 레포지토리가 `DuplicateLoginIdError`로 바꾼다(닉네임도 같음).
+router → `AuthApplicationService.signup` → `User.validate_raw_password` → `UserRepository.exists_login_id` (참 → `DuplicateLoginIdError`) → `exists_nickname` (참 → `DuplicateNicknameError`) → `hasher.hash` → `User.register` → `UserRepository.save` → commit → `UserResponse`. (동시에 같은 아이디가 들어오는 경우는 다루지 않는다: DB `unique`가 막고 500, D-020)
 
-### SEQ-02 로그인 (API-AUTH-02)
-router(form) → `login` → `find_by_login_id` (없음 → `AuthenticationError`) → `hasher.verify` (거짓 → 같은 `AuthenticationError`) → `tokens.issue(user.id, now)` → router가 `TokenResponse` 반환 + `response.set_cookie("access_token", token, httponly=True, samesite="lax", secure=settings.cookie_secure, max_age=expire_minutes*60, path="/")`.
+### SEQ-02 로그인 (API-AUTH-02, 교안 6장 `/login`)
+router(`OAuth2PasswordRequestForm = Depends()`) → `login` → `find_by_login_id` (없음 → `AuthenticationError`) → `hasher.verify` (거짓 → 같은 `AuthenticationError`) → `create_access_token({"sub": login_id})`, `create_refresh_token({"sub": login_id})` → `TokenResponse`.
 
-### SEQ-03 인증 의존성 (`get_current_user_id`, `src/auth/presentation/dependencies.py`)
-1. 토큰 추출: `OAuth2PasswordBearer(auto_error=False)` 결과 → 없으면 `request.cookies["access_token"]` → 없으면 `AuthenticationError`
-2. `tokens.decode` (서명·만료 오류 → `AuthenticationError`)
-3. `TokenBlacklistRepository.exists(jti)` 참 → `AuthenticationError`
-4. `UserRepository.find_by_id(sub)` 없음 → `AuthenticationError`
-5. `user_id` 반환. `get_current_claims`는 같은 과정으로 `TokenClaims`를 반환(로그아웃용). `get_page_user_id`는 `AuthenticationError`를 잡아 `None`을 반환.
+### SEQ-03 인증 의존성 (`src/auth/presentation/dependencies.py`, 교안 6장 `get_current_user`)
+1. `oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")` — 헤더 없으면 FastAPI가 401
+2. `get_current_user(token = Depends(oauth2_scheme), db = Depends(get_db)) -> User` → `AuthApplicationService(db).authenticate(token)`:
+   `decode_token` (`ExpiredSignatureError`·`InvalidTokenError` → `AuthenticationError`) → `token_type == "refresh"` → `AuthenticationError` → `sub` 없음 → `AuthenticationError` → `TokenBlacklistRepository.exists(token)` 참 → `AuthenticationError` → `find_by_login_id(sub)` 없음 → `AuthenticationError` → `User`
+3. `get_current_user_id(user = Depends(get_current_user)) -> int` — rooms 라우터가 쓴다.
 
 ### SEQ-04 로그아웃 (API-AUTH-03)
-`get_current_claims` → `AuthApplicationService.logout(claims)` → `TokenBlacklistRepository.save(TokenBlacklist(jti, expires_at))` → `delete_expired(now)` → commit → `response.delete_cookie("access_token", path="/")`. 참가 상태는 건드리지 않는다(AC-10-3).
+router: `token = Depends(oauth2_scheme)`, `Depends(get_current_user)`(유효한 access 토큰만), 본문 `RefreshRequest` → `logout(token, body.refresh_token)`: `decode_token(refresh)` 실패 → `InvalidRefreshTokenError`(400) → 블랙리스트에 refresh 있음 → `AlreadyLoggedOutError`(400) → `TokenBlacklistRepository.save(TokenBlacklist(access))`, `save(TokenBlacklist(refresh))` → commit → `MessageResponse("로그아웃되었습니다")`. 이후 그 access 토큰은 SEQ-03의 블랙리스트 확인에서 401(AC-10-2). 참가 상태는 건드리지 않는다(AC-10-3).
+
+### SEQ-04b 재발급 (API-AUTH-05, 교안 6장 `/refresh`)
+`refresh(refresh_token)`: 블랙리스트에 있음 → `AuthenticationError("로그아웃 처리되어 사용할 수 없는 토큰입니다")` → `decode_token` 실패 → `AuthenticationError("리프레시 토큰이 만료되었습니다. 다시 로그인하세요")` → `token_type != "refresh"` → 같은 401 → `create_access_token({"sub": sub})` → `AccessTokenResponse`.
 
 ### SEQ-05 방 생성 (API-ROOM-02)
 `create_room` → `RoomRepository.find_current_participation(user_id)` → `Room.create(title, user_id, current, now)` → `RoomRepository.save(room)` (방 insert → 참가 insert. 도전 A 적용 후에는 `uq_participations_user_current` 위반 → `AlreadyParticipatingError`) → commit → 캐시 clear(CH-C) → router가 `RoomQueryService.get_room_detail(room.id, user_id)`로 응답.
@@ -334,10 +340,10 @@ router(form) → `login` → `find_by_login_id` (없음 → `AuthenticationError
 - 도전 A: 동시 반복 요청은 잠금을 기다린 뒤 같은 결과가 된다(AC-18-4). 시작과 나가기 경합도 같은 방 행 잠금으로 순서가 정해져 AC-18-5의 두 결과 중 하나만 생긴다.
 
 ### SEQ-10 공개 방 목록 (API-ROOM-01)
-router가 쿼리를 `RoomListCondition`으로 묶음(keyword strip, 빈 문자열 → None) → `RoomQueryService.list_rooms` → (CH-C) 캐시 조회 → `RoomQueryRepository.list_active_rooms`: `rooms LEFT JOIN (participations WHERE left_at IS NULL GROUP BY room_id)` + `deleted_at IS NULL` + 제목 ILIKE(ESCAPE) + `available_only`면 `current_count < 4` + 정렬(`created_at DESC, id DESC` / `ASC, ASC`) + `LIMIT size OFFSET (page-1)*size`, 같은 조건의 `count(*)` → `RoomPage`.
+router가 쿼리를 `RoomListCondition`으로 묶음(keyword strip, 빈 문자열 → None) → `RoomQueryService.list_rooms` → (CH-C) 캐시 조회 → `RoomQueryRepository.list_active_rooms`: `select(RoomModel).where(deleted_at IS NULL).options(selectinload(participations)).order_by(created_at, id 정렬)` → 파이썬에서 방마다 현재 인원(`left_at is None` 개수) 계산 → `keyword.lower() in title.lower()`·`available_only`(인원 < 4)로 거름 → `total = len(목록)` → `목록[(page-1)*size : page*size]` → `RoomPage` (교안 2·3장 방식, D-020).
 
 ### SEQ-11 화면 렌더링 (PAGE-03 예)
-page_router → `get_page_user_id` (None → `/login` 303) → `get_user`, `get_current_room`, `list_rooms` → `templates.TemplateResponse(request, "rooms/list.html", context)`.
+page_router → `templates.TemplateResponse(request, "rooms/list.html", {"cond": …, "notice": …})`(인증 없음) → 브라우저에서 `api.js`가 토큰 확인(없으면 `/login`) → API-AUTH-04·ROOM-01·09를 불러 화면을 채운다.
 
 ### SEQ-12 lifespan
 `create_all`(`run_sync(Base.metadata.create_all)`) → `async with AsyncSessionLocal() as s: await seed_initial_data(s, settings); await s.commit()` → yield → `engine.dispose()`.
@@ -345,7 +351,7 @@ page_router → `get_page_user_id` (None → `/login` 303) → `get_user`, `get_
 ### SEQ-13 화면 폴링 (`polling.js`)
 - `startPolling(fetchFn, intervalMs=1000)`: 진행 중인 요청이 있으면 건너뜀, 요청마다 증가하는 `seq`를 붙여 조건 변경 전 응답은 버림, `document.visibilitychange`로 숨김 시 중단·보이면 즉시 1회 후 재개.
 - 목록(SCR-03): `GET /api/rooms?…`와 `GET /api/me/room`을 같은 주기로 호출.
-- 상세(SCR-04): `GET /api/rooms/{id}` — 200 → 갱신, 410 → 중단 후 `/?notice=dissolved`, 404 → 중단 후 "방을 찾을 수 없습니다", 401 → 중단 후 `/login?expired=1`, 네트워크 오류·5xx → 마지막 정보 유지 + "최신 정보를 불러오지 못했습니다".
+- 상세(SCR-04): `GET /api/rooms/{id}` — 200 → 갱신, 410 → 중단 후 `/?notice=dissolved`, 404 → 중단 후 "방을 찾을 수 없습니다", 401 → (`api.js`가 재발급에 실패하면) 중단 후 `/login?expired=1`, 네트워크 오류·5xx → 마지막 정보 유지 + "최신 정보를 불러오지 못했습니다".
 - 게임 시작 성공(방장): 폴링 중단 → `/?notice=dissolved`.
 
 ### SEQ-14 도전 B
