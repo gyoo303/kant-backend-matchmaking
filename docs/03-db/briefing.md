@@ -1,6 +1,6 @@
 ---
 stage: DB
-tickets: [TKT-DB-M2-01, TKT-DB-M3-01, TKT-DB-M3-02]
+tickets: [TKT-DB-M2-01, TKT-DB-M3-01, TKT-DB-M3-02, TKT-DB-M3-03]
 status: done
 inputs_read: [AR-MAP, AR-HAND, AR-DB, AR-API, AR-CONV, AR-GATE, AR-ADR, BE-BRIEF]
 next_readers: [BE, QA]
@@ -17,8 +17,31 @@ next_readers: [BE, QA]
 | TKT-DB-M3-02 | GATE-02 | 충족 (세 명령 0줄) |
 | | GATE-08 | 충족 (0줄) |
 | | 제약 이름이 문서와 같음 | 충족 (DDL 컴파일 결과 대조, 아래 검증 결과) |
+| TKT-DB-M3-03 | 합계 42건 | 충족 (가짜 저장소로 실행해 회원 14·방 8·참가 20 확인) |
+| | 재실행 시 0건 추가(NFR-06) | 충족 (`seed01`이 있으면 건너뜀 확인). 실제 DB 재기동 확인은 못 함 |
 
 ## 만든 것
+
+### TKT-DB-M3-03
+- `src/seed.py`: `async def seed_initial_data(session: AsyncSession, settings: Settings) -> None`
+  - `seed01`이 있으면 로그를 남기고 아무것도 넣지 않는다(RISK-12)
+  - 회원 14명(`seed01`~`seed14`, 닉네임 `시드유저01`~`14`), 비밀번호는 `settings.seed_user_password`를 bcrypt 해시(코드에 비밀번호 없음)
+  - 방은 **도메인 메서드로 만든다**(`Room.create` → `join` → 삭제 방은 `start_game` 또는 `leave`) → `RoomRepository.save`. 팀은 도메인 자동 배정 규칙(인원이 적은 팀, 같으면 A)을 그대로 따른다
+  - 기준 시각 `base = datetime.now(UTC)`에서 분 단위로 빼서 생성·입장 시각을 만든다(입장은 1분 간격, 삭제 방은 생성 30분 뒤 종료)
+  - commit하지 않는다. lifespan이 같은 세션으로 호출하고 commit한다(SEQ-12)
+
+| 구분 | 방 | 참가(회원 번호) | 상태 |
+|---|---|---|---|
+| 활성 | R1 "2vs2 시연 방" | 01·02·03·04 (A2·B2) | 정원 마감, 게임 시작 가능 (D-014) |
+| | R2 "한 자리 남음" | 05·06·07 (A2·B1) | 마감 직전 |
+| | R3 "Fun Room" | 08·09 (A1·B1) | 검색 대소문자 시연 |
+| | R4 "100% 즐겜" | 10 | `%` 검색 시연 |
+| | R5 "초보 환영" | 11 | |
+| 삭제 | D1 "어제 한 판" | 01~04 과거 기록 | GAME_STARTED |
+| | D2 "아무도 없음" | 12 과거 기록 | EMPTY |
+| | D3 "저녁 매치" | 05~08 과거 기록 | GAME_STARTED |
+
+- 합계: 회원 14 + 방 8 + 참가 20(현재 11, 과거 9) = 42. 참가 중이 아닌 회원은 seed12~14
 
 ### TKT-DB-M3-02
 - `src/rooms/infrastructure/models.py`
@@ -76,6 +99,11 @@ next_readers: [BE, QA]
 
 ## 다음 단계(BE)가 쓸 것
 
+### TKT-DB-M3-03
+- lifespan(TKT-BE-M3-05): `create_all` 뒤 `async with AsyncSessionLocal() as s: await seed_initial_data(s, get_settings()); await s.commit()`
+- 시드 로그 한 줄: 처음엔 `seed inserted: users=14 rooms=8 participations=20 total=42`, 재기동 시 `seed skipped: seed01 already exists` (GATE-01 "시드 로그 1회" 확인용)
+- `seed`는 `auth.infrastructure.security.PasswordHasher`를 쓴다(TKT-BE-M3-01 산출)
+
 ### TKT-DB-M3-02
 - 변경 서비스(SEQ-05~09): `find_current_participation` → `find_by_id`(없으면 `RoomNotFoundError`는 서비스가 낸다) → 도메인 메서드 → `save` → 서비스 commit. 필수 범위에는 잠금이 없다(D-018)
 - `save`가 돌려준 `Room`의 `id`로 상세 응답을 조회한다(방 생성 직후 등)
@@ -128,11 +156,29 @@ next_readers: [BE, QA]
 - 권장 이유: 필수 범위에는 부분 유니크 인덱스가 없어(D-018) 동시 요청으로 2건이 생길 수 있는데, 조회 자체가 실패하면 그 회원이 나가기도 못 한다.
 - trade-off: A — 중복 상태를 조용히 넘긴다(도전 A 인덱스가 근본 대책). B — 중복을 바로 드러내지만 회원이 방을 정리할 방법이 없어진다.
 
+#### TKT-DB-M3-03 시드를 만드는 방식
+- 결정: ORM 행을 직접 넣지 않고 도메인 메서드와 레포지토리로 만든다 — `03-db-schema.md` §6
+- 선택지: **A. 도메인 메서드 + 레포지토리 (권장·채택)** / B. ORM 모델 행을 직접 insert
+- 권장 이유: 팀 배정·입장 순서·방장·삭제 상태가 도메인 규칙과 같은 방식으로 만들어져, 시드가 불변 규칙을 어길 수 없다.
+- trade-off: A — 시드가 도메인 코드에 의존해 규칙이 바뀌면 시드 결과도 바뀐다. B — 값을 자유롭게 넣을 수 있지만 규칙에 맞는지 사람이 직접 맞춰야 한다.
+
+#### TKT-DB-M3-03 시드 시각 간격
+- 결정: 활성 방은 기준 시각 5·15·25·35·45분 전(R1이 가장 최신), 삭제 방은 1440·600·300분 전 생성, 입장 1분 간격, 삭제 방은 생성 30분 뒤 종료 — `03-db-schema.md` §6("분 단위로 빼서")
+- 선택지: **A. 위 간격 (권장·채택)** / B. 모든 방을 같은 시각에 생성
+- 권장 이유: 기본 정렬(최신순)에서 시연 방 R1이 맨 위에 오고, 이력 화면에서 기록 순서가 자연스럽다.
+- trade-off: A — 간격 값은 임의다. B — 정렬이 방 식별자 순으로만 정해져 시연에서 순서를 설명하기 어렵다.
+
 ## 설계와 다르게 한 것 / 질문
 - TKT-DB-M3-02 사용자 확인 결과(2026-10-28): `03-db-schema.md` §5의 `get_room_detail(room_id) -> RoomDetail | None` 시그니처에 조회 회원·삭제 사유가 없어, 서비스가 `my_team`·`am_i_host`를 채우고 404/410을 구분할 방법이 정의되지 않았다. 사용자가 선택한 방식: **레포지토리는 활성 방만 반환(없음·삭제 → None), 서비스가 None일 때만 `RoomRepository.find_by_id`로 삭제 사유를 확인하고 조회 회원 기준 필드를 채운다.** 시그니처는 바꾸지 않았다. ARCH에 `03-db-schema.md` §5와 `04-interfaces-api.md` §3 `get_room_detail` 설명 갱신을 요청한다
 - TKT-DB-M3-02: `rooms.host_user_id`의 인덱스는 문서에 "INDEX"로만 적혀 있어 SQLAlchemy 기본 이름 `ix_rooms_host_user_id`를 썼다. ARCH 문서에 이름을 적어 달라고 요청한다
 
 ## 검증 결과
+
+### TKT-DB-M3-03
+- GATE-05: `ruff check src` 통과, `ruff format --check src` 28 files already formatted / GATE-06: 비밀값 하드코딩 grep 0줄
+- 시드 실행 확인(가짜 레포지토리·세션, 임시 스크립트): 회원 14·활성 방 5·삭제 방 3·현재 참가 11·과거 참가 9 = 42. R1은 A2·B2·정원 마감·방장 seed01, R2는 A2·B1, 삭제 사유 GAME_STARTED 2·EMPTY 1, 현재 참가 회원 중복 없음(한 회원 한 방), 비참가 회원 seed12~14, 비밀번호는 해시로 저장
+- 재실행 확인: `seed01`이 있으면 0건 추가
+- 실제 DB 주입·재기동 2회 확인(NFR-06): **확인하지 못함 (환경 문제)** — PostgreSQL 서버 없음. TKT-BE-M3-05 기동 확인과 TKT-QA에서 확인 필요
 
 ### TKT-DB-M3-02
 - GATE-02: 세 명령 0줄 / GATE-08: 0줄 / GATE-05: `ruff check src` 통과, `ruff format --check src` 27 files already formatted
