@@ -1,30 +1,16 @@
-from datetime import datetime
-
-from sqlalchemy import delete, exists, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.domain.exceptions import DuplicateLoginIdError, DuplicateNicknameError
 from auth.domain.token_blacklist import TokenBlacklist
 from auth.domain.user import User
 from auth.infrastructure.models import TokenBlacklistModel, UserModel
 
 
-def _violated_constraint(error: IntegrityError) -> str | None:
-    """IntegrityError에서 위반한 제약 이름을 꺼낸다(asyncpg 원인 예외 우선, 없으면 메시지)."""
-    cause = getattr(error.orig, "__cause__", None)
-    name = getattr(cause, "constraint_name", None)
-    if name:
-        return name
-    message = str(error.orig)
-    for candidate in ("uq_users_login_id", "uq_users_nickname"):
-        if candidate in message:
-            return candidate
-    return None
-
-
 class UserRepository:
-    """users ↔ User. flush만 하고 commit은 응용 서비스가 한다."""
+    """users ↔ User. flush만 하고 commit은 응용 서비스가 한다.
+
+    아이디·닉네임 중복은 서비스가 exists_login_id·exists_nickname으로 먼저 확인한다.
+    """
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -59,15 +45,9 @@ class UserRepository:
             model.login_id = user.login_id
             model.nickname = user.nickname
             model.hashed_password = user.hashed_password
-        try:
-            await self.session.flush()
-        except IntegrityError as error:
-            constraint = _violated_constraint(error)
-            if constraint == "uq_users_login_id":
-                raise DuplicateLoginIdError() from error
-            if constraint == "uq_users_nickname":
-                raise DuplicateNicknameError() from error
-            raise
+        await self.session.flush()
+        # DB가 채운 id·created_at을 객체에 다시 읽어 온다
+        await self.session.refresh(model)
         return self._to_domain(model)
 
     @staticmethod
@@ -95,24 +75,10 @@ class TokenBlacklistRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def exists(self, jti: str) -> bool:
-        stmt = select(exists().where(TokenBlacklistModel.jti == jti))
+    async def exists(self, token: str) -> bool:
+        stmt = select(exists().where(TokenBlacklistModel.token == token))
         return bool(await self.session.scalar(stmt))
 
     async def save(self, entry: TokenBlacklist) -> None:
-        self.session.add(self._to_model(entry))
+        self.session.add(TokenBlacklistModel(token=entry.token))
         await self.session.flush()
-
-    async def delete_expired(self, now: datetime) -> int:
-        result = await self.session.execute(
-            delete(TokenBlacklistModel).where(TokenBlacklistModel.expires_at < now)
-        )
-        return result.rowcount or 0
-
-    @staticmethod
-    def _to_domain(model: TokenBlacklistModel) -> TokenBlacklist:
-        return TokenBlacklist(jti=model.jti, expires_at=model.expires_at)
-
-    @staticmethod
-    def _to_model(entry: TokenBlacklist) -> TokenBlacklistModel:
-        return TokenBlacklistModel(jti=entry.jti, expires_at=entry.expires_at)

@@ -1,17 +1,12 @@
 from dataclasses import dataclass
-from datetime import datetime
 
 
 @dataclass(frozen=True)
 class TokenBlacklist:
-    """로그아웃한 토큰의 차단 기록 (INV-14)."""
+    """로그아웃한 토큰의 차단 기록 (INV-14). access·refresh 토큰 원문을 그대로 담는다."""
 
-    jti: str
-    expires_at: datetime
+    token: str
 
     def __post_init__(self) -> None:
-        if not self.jti:
-            raise ValueError("토큰 식별자(jti)가 비어 있습니다")
-
-    def is_expired(self, now: datetime) -> bool:
-        return self.expires_at <= now
+        if not self.token:
+            raise ValueError("차단할 토큰이 비어 있습니다")

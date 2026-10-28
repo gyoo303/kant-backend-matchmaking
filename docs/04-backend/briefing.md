@@ -7,6 +7,12 @@ next_readers: [DB, FE, QA]
 ---
 # 백엔드 에이전트 브리핑
 
+## 사용자 지시 변경 (D-020·D-021, 2026-10-28) — 아래 원래 기록보다 우선
+- 모든 BE 코드는 교안 1~6장 수준으로 쓴다(`AGENTS.md` 규칙 9, `05-structure-conventions.md` §8). B등급 문법(`dataclass`·`StrEnum`·`Protocol`·`clock` 주입·pydantic-settings·예외 계층·422 핸들러)은 유지했다.
+- 인증은 교안 6장 1강 설계로 바뀌었다(ADR-002 개정): access(30분)·refresh(7일) 토큰, `sub`=아이디, `token_type` 클레임, `security.py`의 `create_access_token`·`create_refresh_token`·`decode_token` 함수, `POST /api/auth/refresh`, 로그아웃은 Bearer access 토큰 + 본문 refresh 토큰을 **둘 다** 블랙리스트에 넣는다, 쿠키·`jti`·`JwtTokenService`·`TokenClaims`·`IssuedToken`·`get_page_user_id` 없음. 화면 라우트는 인증하지 않는다.
+- 설정: `jwt_expire_minutes`·`cookie_secure` → `access_token_expire_minutes=30`·`refresh_token_expire_days=7` (`src/config.py`, `.env.example`). 아직 이 값을 쓰는 코드는 없다(TKT-BE-M4-01에서 사용).
+- 이 변경으로 바뀐 BE 파일은 `src/config.py`, `.env.example`뿐이다. 나머지는 DB 계층 파일이다(`docs/03-db/briefing.md` 맨 위).
+
 ## 처리한 티켓
 | TKT | 완료 조건 | 충족 여부 | 확인 방법 |
 |---|---|---|---|

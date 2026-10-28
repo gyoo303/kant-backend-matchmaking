@@ -10,9 +10,9 @@ class Settings(BaseSettings):
 
     database_url: str
     jwt_secret_key: str
-    jwt_expire_minutes: int = 60
+    access_token_expire_minutes: int = 30
+    refresh_token_expire_days: int = 7
     cors_origins: list[str] = ["http://localhost:8000"]
-    cookie_secure: bool = False
     db_pool_size: int = 10
     db_max_overflow: int = 10
     seed_user_password: str

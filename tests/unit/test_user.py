@@ -1,7 +1,5 @@
 """User·TokenBlacklist 도메인 단위 테스트 (Q-04, D-011, INV-14)."""
 
-from datetime import UTC, datetime, timedelta
-
 import pytest
 
 from auth.domain.exceptions import InvalidLoginIdError, InvalidNicknameError, InvalidPasswordError
@@ -43,13 +41,11 @@ def test_raw_password_minimum_length():
     User.validate_raw_password("12345678")
 
 
-def test_inv_14_blacklist_expiry():
-    now = datetime(2026, 10, 28, tzinfo=UTC)
-    entry = TokenBlacklist("jti-1", now)
-    assert entry.is_expired(now)
-    assert not entry.is_expired(now - timedelta(seconds=1))
+def test_inv_14_blacklist_keeps_token():
+    entry = TokenBlacklist("header.payload.signature")
+    assert entry.token == "header.payload.signature"
 
 
-def test_blacklist_requires_jti():
+def test_blacklist_requires_token():
     with pytest.raises(ValueError):
-        TokenBlacklist("", datetime(2026, 10, 28, tzinfo=UTC))
+        TokenBlacklist("")

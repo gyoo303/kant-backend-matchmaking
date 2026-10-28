@@ -7,6 +7,16 @@ next_readers: [BE, QA]
 ---
 # DB 에이전트 브리핑
 
+## 사용자 지시 변경 (D-020·D-021, 2026-10-28) — 아래 원래 기록보다 우선
+교안 수준 규칙(D-020)과 교안 6장 인증 설계(D-021)에 따라 M3 DB 코드를 고쳤다. 현재 기준은 `docs/02-arch/03-db-schema.md`이다.
+- 모델: 이름 붙인 CHECK·UNIQUE·인덱스, `Identity()`, `eager_defaults`, `SmallInteger`를 뺐다. `primary_key=True`, `unique=True`(아이디·닉네임), `index=True`(블랙리스트 토큰), `ForeignKey`, `default`만 남겼다. `RoomModel.participations` ↔ `ParticipationModel.room` 관계(`relationship(back_populates=...)`)를 추가했다.
+- `token_blacklist`: `jti`·`expires_at` → `token`(토큰 원문, `String(500)`, `index=True`). `TokenBlacklistRepository`는 `exists(token)`·`save(entry)`만 남기고 `delete_expired`를 지웠다. 도메인 `TokenBlacklist(token)`.
+- `UserRepository.save`: `IntegrityError` 제약 이름 파싱(`_violated_constraint`)을 지우고 `flush` 후 `refresh(model)`로 id·`created_at`을 읽는다. 중복은 서비스가 `exists_*`로 먼저 확인한다.
+- `RoomRepository`: `select(RoomModel).options(selectinload(RoomModel.participations))`로 읽고, `save`는 새 참가를 `model.participations.append(...)`로 추가한다(`_upsert_*` 삭제).
+- `RoomQueryRepository`: 집계 서브쿼리·`ILIKE ESCAPE`·`count` 서브쿼리를 지우고 `selectinload`로 읽은 뒤 파이썬에서 인원 계산·검색(`lower() in`)·필터·`len`·슬라이싱을 한다. 상세 닉네임은 `session.get(UserModel, id)`.
+- **기존 개발 DB는 테이블을 지우고 다시 만들어야 한다**(`token_blacklist` 컬럼 변경, `create_all`은 기존 테이블을 고치지 않음, STK-13).
+- 검증: 단위 테스트 63 통과. PostgreSQL이 없어 임시 SQLite로 시드(42건·재실행 건너뜀)·목록 검색/필터/정렬/페이지·참가·팀·나가기(방장 위임·빈 방 삭제)·게임 시작(410)·이력·보관 정보·재참가 흐름을 점검했다(통과). PostgreSQL 통합 테스트는 아직 실행하지 못했다.
+
 ## 처리한 티켓
 | TKT | 완료 조건 | 충족 여부 |
 |---|---|---|
