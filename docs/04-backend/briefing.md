@@ -1,6 +1,6 @@
 ---
 stage: BE
-tickets: [TKT-BE-M2-01, TKT-BE-M3-01]
+tickets: [TKT-BE-M2-01, TKT-BE-M3-01, TKT-BE-M3-02]
 status: done
 inputs_read: [AR-MAP, AR-HAND, AR-SYS, AR-API, AR-CONV, AR-GATE, AR-ADR, DB-BRIEF, PM-DOMAIN]
 next_readers: [DB, FE, QA]
@@ -16,6 +16,8 @@ next_readers: [DB, FE, QA]
 | TKT-BE-M3-01 | GATE-02 | 충족 | 세 grep 명령 모두 0줄 |
 | | GATE-07(domain 항목) | 충족 | `datetime.now`·`random.` in `src/*/domain/` 0줄, `except:` 0줄, 승패 관련 이름 0줄 |
 | | INV-01~12가 메서드에 반영 | 충족 | 임시 검증 스크립트 54건 통과(아래 검증 결과) |
+| TKT-BE-M3-02 | GATE-07 | 충족 | 금지 패턴 grep 0줄(잠금 조회 강제 GATE-09는 도전 A 이후) |
+| | 순차 요청 기준 INV 위반 0 | 충족 | 가짜 레포지토리로 흐름 18건 확인(아래 검증 결과) |
 
 ## 만든 것
 ### TKT-BE-M2-01
@@ -37,9 +39,26 @@ next_readers: [DB, FE, QA]
 - `src/rooms/domain/room.py`: `DeleteReason`, `RoomTitle`(`of(raw)`), `Room` — `create`, `rename`, `join`, `change_team`, `leave`, `start_game`, 조회 속성 `is_active`·`current_participants`·`current_count`·`is_full`·`available_seats`·`team_count`·`participation_of`. 거부 검사 순서는 §2.3 주석 순서 그대로(삭제 방 → 권한·참가 여부 → 정원·구성)
 - `src/rooms/application/read_models.py`: `RoomListCondition`, `RoomSummary`, `ParticipantView`, `RoomDetail`, `CurrentRoom`, `HistoryItem`, `MyRecord`, `ArchivedRoom`, `RoomPage`, `HistoryPage`, `LeaveResult`, `GameStartResult` (frozen dataclass, 필드는 §5 응답 스키마와 같은 이름)
 
+### TKT-BE-M3-02
+- `src/rooms/application/service.py`: `RoomApplicationService(db, clock=UTC 현재 시각, list_cache=None)`
+
+| 메서드 | 흐름 (SEQ) | 반환 |
+|---|---|---|
+| `create_room(user_id, title)` | 현재 참가 조회 → `Room.create` → `save` → commit (SEQ-05) | `Room`(id 채워짐) |
+| `join_room(room_id, user_id)` | 현재 참가 조회 → `find_by_id`(없으면 `RoomNotFoundError`) → `room.join` → `save` → commit (SEQ-06) | `Room` |
+| `rename_room(room_id, user_id, title)` | `find_by_id` → `room.rename` → `save` → commit (SEQ-07) | `Room` |
+| `change_team(room_id, user_id, team)` | `find_by_id` → `room.change_team` → `save` → commit (SEQ-07) | `Room` |
+| `leave_room(room_id, user_id)` | `find_by_id` → 이전 방장 기억 → `room.leave` → `save` → commit (SEQ-08) | `LeaveResult(room_deleted, new_host_user_id)` |
+| `start_game(room_id, user_id)` | `find_by_id` → `room.start_game` → `save` → commit (SEQ-09) | `GameStartResult(room_id, dissolved_at)` |
+
+- 시각은 메서드마다 `self.clock()`으로 한 번 얻어 도메인에 넘긴다(CONV-06). commit은 메서드 끝에서 한 번, 성공 뒤에만 `list_cache.clear()`(도전 C 대비, 지금은 None)
+- 필수 범위라 잠금 없이 `find_by_id`를 쓴다(D-018). 도전 A(TKT-BE-M6-00)에서 `find_by_id_for_update`로 바꾼다
+- 해산 로그(BackgroundTasks)는 도전 B(TKT-BE-M6-01) 범위라 넣지 않았다
+
 ## 계층 확인 포인트
 - 도메인 코드 없음. `exceptions.py`는 외부 import 없음(GATE-02 대상 grep 0줄)
 - 저장소 모델·트랜잭션: 해당 없음(이후 티켓)
+- TKT-BE-M3-02: 서비스는 레포지토리·도메인만 호출하고 직접 쿼리하지 않는다. 비즈니스 판단은 모두 도메인 메서드에 있고, 서비스의 조건문은 방 없음 확인과 결과 조립(방장 변경 여부)뿐이다
 - TKT-BE-M3-01: 도메인은 표준 라이브러리(`dataclasses`, `datetime`, `enum`, `re`)와 `exceptions`, 같은 기능 도메인만 import. 시각은 모두 `now` 인자로 받음. `read_models.py`는 `rooms.domain`만 참조
 
 ## 보안 확인 포인트
@@ -54,6 +73,18 @@ next_readers: [DB, FE, QA]
 - 없음 (API 없음)
 
 ## 구현 중 자율 결정
+
+#### TKT-BE-M3-02 목록 캐시 매개변수 타입
+- 결정: `list_cache`를 `clear()` 하나만 가진 `ListCacheInvalidator` Protocol로 받는다 — `04-interfaces-api.md` §3(`list_cache: RoomListCache | None = None`), ADR-007
+- 선택지: **A. 최소 Protocol 정의 (권장·채택)** / B. 도전 C의 `RoomListCache` 클래스를 지금 만들어 import
+- 권장 이유: `RoomListCache`는 도전 C 티켓에서 만드는 파일이라 필수 범위에서 미리 만들 수 없고(D-018), 서비스가 쓰는 것은 `clear()` 하나뿐이다.
+- trade-off: A — 설계 문서의 타입 이름과 다르다(도전 C에서 `RoomListCache`가 이 Protocol을 만족하면 된다). B — 요청되지 않은 도전 범위 파일이 필수 티켓에 들어간다.
+
+#### TKT-BE-M3-02 `start_game` 반환 시각
+- 결정: `GameStartResult.dissolved_at`은 도메인에 넘긴 `now`와 같은 값이다 — SEQ-09
+- 선택지: **A. 같은 `now` 사용 (권장·채택)** / B. 저장된 방의 `deleted_at`을 다시 읽음
+- 권장 이유: 도메인이 그 `now`로 `deleted_at`을 기록하므로 값이 같고, 조회가 한 번 줄어든다.
+- trade-off: A — DB가 시각을 바꾸는 일은 없다는 전제다. B — 쿼리가 하나 늘어난다.
 
 #### TKT-BE-M3-01 `TeamSide` 정의 위치
 - 결정: `TeamSide`를 `participation.py`에 정의하고 `room.py`에서 다시 내보낸다(`from rooms.domain.room import TeamSide` 그대로 동작) — `04-interfaces-api.md` §2.3·§2.4
@@ -98,11 +129,17 @@ next_readers: [DB, FE, QA]
 - trade-off: A — 일부 테스트만 다른 루프 범위가 필요하면 그 테스트에서 따로 지정해야 한다. B — 모듈마다 같은 줄을 반복하고 빠뜨리면 루프 불일치 오류가 난다.
 
 ## 설계와 다르게 한 것 / 질문 / DB 에이전트에게 요청
+- TKT-BE-M3-02: `list_cache` 타입은 Protocol로 받았다(위 자율 결정). ARCH에 `04-interfaces-api.md` §3 표기 갱신(`ListCacheInvalidator`) 여부 확인 요청
 - STK-11 보완(위 자율 결정): ARCH에 STK-11 문구를 "ini 옵션 `asyncio_default_test_loop_scope = "session"`으로 지정(모듈별 `pytestmark`는 필요 없음)"으로 갱신 요청
 - 스택 주의 추가 제안: ruff `E501`과 `ruff format`은 한글 문자열의 폭 계산이 달라, 긴 한글 문자열을 괄호로 나누면 formatter가 다시 한 줄로 합치고 E501이 나는 경우가 있었다. 한글 문구는 100자 폭 안으로 짧게 쓰거나 상수로 분리한다.
 - pytest는 `tests/`가 없어 "No files were found in testpaths" 경고를 낸다. QA가 `tests/`를 만들면 사라진다(정상).
 
 ## 검증 결과
+
+### TKT-BE-M3-02
+- GATE-05: `ruff check src` 통과, `ruff format --check src` 29 files already formatted / GATE-07: 0줄 / GATE-08: 0줄 / GATE-02: 0줄
+- 흐름 수동 검증(가짜 레포지토리·세션, 임시 스크립트, 18건 통과): 생성(id 부여·방장), 참가 중 회원의 재생성 거부, 3명 참가 후 정원 마감 거부, 없는 방 404 예외, 같은 방 재참가 기록 유지, 방장 제목 변경, 팀 정원 거부, 방장 퇴장 시 위임 결과(`new_host_user_id`), 일반 퇴장 결과, 방장 아님 시작 거부 **실패 시 commit 0회**, 게임 시작 성공 후 GAME_STARTED·전원 종료, 반복 시작 거부, 혼자 나가면 EMPTY 삭제, 해산 뒤 새 방 생성 가능, commit마다 캐시 clear 1회
+- 실제 DB 위 동작: **확인하지 못함 (환경 문제)** — TKT-QA-M3-01 통합 테스트에서 확인
 
 ### TKT-BE-M3-01
 - GATE-02: 세 명령 모두 0줄
