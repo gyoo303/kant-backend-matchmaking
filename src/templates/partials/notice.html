@@ -1,0 +1,2 @@
+{# 안내 영역 (07-screens.md §2). 서버가 넘긴 notice가 있으면 처음부터 보이고, JS는 showNotice()로 같은 자리에 문구를 쓴다. #}
+<p id="notice" class="notice" role="status" aria-live="polite" {% if not notice %}hidden{% endif %}>{{ notice or "" }}</p>

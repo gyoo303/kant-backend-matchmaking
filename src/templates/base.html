@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}2vs2 매치메이킹{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
+</head>
+{# 로그인이 필요한 화면은 require_login을 true로 둔다. 토큰이 없으면 api.js가 /login으로 보낸다(AC-11-3). #}
+<body data-require-login="{% block require_login %}true{% endblock %}">
+  <header class="site-header">
+    <div class="container">
+      <a class="site-title" href="/">2vs2 매치메이킹</a>
+      <nav class="site-nav" aria-label="주 메뉴">
+        <span id="nav-member" hidden>
+          <span class="nickname" id="nav-nickname"></span>
+          <a href="/me/history">내 기록</a>
+          <button type="button" class="link" id="nav-logout">로그아웃</button>
+        </span>
+        <span id="nav-guest" hidden>
+          <a href="/login">로그인</a>
+          <a href="/signup">회원가입</a>
+        </span>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    {% include "partials/notice.html" %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">2vs2 매치메이킹</div>
+  </footer>
+
+  <script src="{{ url_for('static', path='js/api.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

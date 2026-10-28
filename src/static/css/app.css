@@ -1,0 +1,260 @@
+/* 스타일 토큰 (05-structure-conventions.md §6, D-019). 색·간격·글꼴은 여기서만 정한다. */
+:root {
+  --color-bg: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-text: #1f2328;
+  --color-text-muted: #57606a;
+  --color-border: #d0d7de;
+  --color-primary: #1f5fbf;
+  --color-on-primary: #ffffff;
+  --color-danger: #b42318;
+  --color-success: #1a7f37;
+  --color-notice: #0b5cad;
+  --color-disabled: #e3e7eb;
+  --color-team-a: #e8f0fe;
+  --color-team-b: #fdeceb;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --radius: 6px;
+  --font-body: system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-size-sm: 14px;
+  --font-size-base: 16px;
+  --font-size-lg: 20px;
+  --focus-ring: 3px solid var(--color-notice);
+}
+
+/* 기본 */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+a {
+  color: var(--color-primary);
+}
+
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--space-1);
+}
+
+h1,
+h2 {
+  font-size: var(--font-size-lg);
+  margin: 0 0 var(--space-3);
+}
+
+/* 머리글·본문·바닥글 */
+.site-header,
+.site-footer {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.site-footer {
+  border-top: 1px solid var(--color-border);
+  border-bottom: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: var(--space-3);
+}
+
+.site-header .container {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.site-title {
+  font-weight: 700;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.site-nav .nickname {
+  color: var(--color-text-muted);
+}
+
+/* 카드·표 */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--color-surface);
+}
+
+th,
+td {
+  text-align: left;
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+th {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.muted {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* 인원·시각처럼 짧은 칸은 좁은 화면에서도 한 줄로 둔다 */
+.nowrap {
+  white-space: nowrap;
+}
+
+/* 폼·버튼 */
+label {
+  display: block;
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--space-1);
+}
+
+input,
+select {
+  font: inherit;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  max-width: 100%;
+}
+
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.form-field {
+  margin-bottom: var(--space-3);
+}
+
+button,
+.button {
+  font: inherit;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+
+button.secondary,
+.button.secondary {
+  background: var(--color-surface);
+  color: var(--color-primary);
+}
+
+button.link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+button:disabled {
+  background: var(--color-disabled);
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+/* 안내 영역 (REQ-019) */
+.notice {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-notice);
+}
+
+.notice[hidden] {
+  display: none;
+}
+
+.notice.error {
+  color: var(--color-danger);
+}
+
+.notice.success {
+  color: var(--color-success);
+}
+
+/* 팀 영역 (SCR-04) */
+.teams {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-3);
+}
+
+.team-a {
+  background: var(--color-team-a);
+}
+
+.team-b {
+  background: var(--color-team-b);
+}
+
+/* 페이지 이동 */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin: var(--space-3) 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none;
+    animation: none;
+  }
+}
