@@ -1,6 +1,6 @@
 ---
 stage: BE
-tickets: [TKT-BE-M2-01, TKT-BE-M3-01, TKT-BE-M3-02]
+tickets: [TKT-BE-M2-01, TKT-BE-M3-01, TKT-BE-M3-02, TKT-BE-M3-03]
 status: done
 inputs_read: [AR-MAP, AR-HAND, AR-SYS, AR-API, AR-CONV, AR-GATE, AR-ADR, DB-BRIEF, PM-DOMAIN]
 next_readers: [DB, FE, QA]
@@ -18,6 +18,8 @@ next_readers: [DB, FE, QA]
 | | INV-01~12가 메서드에 반영 | 충족 | 임시 검증 스크립트 54건 통과(아래 검증 결과) |
 | TKT-BE-M3-02 | GATE-07 | 충족 | 금지 패턴 grep 0줄(잠금 조회 강제 GATE-09는 도전 A 이후) |
 | | 순차 요청 기준 INV 위반 0 | 충족 | 가짜 레포지토리로 흐름 18건 확인(아래 검증 결과) |
+| TKT-BE-M3-03 | GATE-08 | 충족 | `application`·`presentation`에서 Model import 0줄 |
+| | 404·410 분기(D-016) | 충족 | 가짜 레포지토리로 조회 분기 12건 확인 |
 
 ## 만든 것
 ### TKT-BE-M2-01
@@ -38,6 +40,17 @@ next_readers: [DB, FE, QA]
 - `src/rooms/domain/participation.py`: `TeamSide`(A·B), `Participation`(dataclass) — `is_current`, `change_team(team)`, `end(now)`, 생성 시 `join_order >= 1`·`left_at >= joined_at` 검사
 - `src/rooms/domain/room.py`: `DeleteReason`, `RoomTitle`(`of(raw)`), `Room` — `create`, `rename`, `join`, `change_team`, `leave`, `start_game`, 조회 속성 `is_active`·`current_participants`·`current_count`·`is_full`·`available_seats`·`team_count`·`participation_of`. 거부 검사 순서는 §2.3 주석 순서 그대로(삭제 방 → 권한·참가 여부 → 정원·구성)
 - `src/rooms/application/read_models.py`: `RoomListCondition`, `RoomSummary`, `ParticipantView`, `RoomDetail`, `CurrentRoom`, `HistoryItem`, `MyRecord`, `ArchivedRoom`, `RoomPage`, `HistoryPage`, `LeaveResult`, `GameStartResult` (frozen dataclass, 필드는 §5 응답 스키마와 같은 이름)
+
+### TKT-BE-M3-03
+- `src/rooms/application/queries.py`: `RoomQueryService(db)` — commit하지 않는다
+
+| 메서드 | 동작 | 반환·예외 |
+|---|---|---|
+| `list_rooms(cond)` | `RoomQueryRepository.list_active_rooms` (SEQ-10) | `RoomPage(items, total, page, size)` |
+| `get_room_detail(room_id, viewer_id)` | 활성 상세 조회 → 없으면 `RoomRepository.find_by_id`로 삭제 사유 확인. 있으면 `my_team`(조회 회원의 팀)·`am_i_host`를 채움 | `RoomDetail` / 해산(GAME_STARTED) → `RoomDissolvedError`(410), 없음·EMPTY → `RoomNotFoundError`(404) |
+| `get_current_room(user_id)` | 현재 참가 기록 → 그 방 | `CurrentRoom(room_id, title)` 또는 `None` |
+| `list_history(user_id, page, size)` | `RoomQueryRepository.list_history` | `HistoryPage` |
+| `get_archived_room(room_id, user_id)` | `RoomQueryRepository.get_archived_room` | `ArchivedRoom` / 없으면 `RoomNotFoundError`(404) |
 
 ### TKT-BE-M3-02
 - `src/rooms/application/service.py`: `RoomApplicationService(db, clock=UTC 현재 시각, list_cache=None)`
@@ -73,6 +86,18 @@ next_readers: [DB, FE, QA]
 - 없음 (API 없음)
 
 ## 구현 중 자율 결정
+
+#### TKT-BE-M3-03 조회 서비스의 목록 캐시 매개변수
+- 결정: `RoomQueryService(db)`만 받고 `list_cache` 매개변수는 두지 않는다 — `04-interfaces-api.md` §3(`(db, list_cache=None)`), D-018
+- 선택지: **A. 매개변수 생략 (권장·채택)** / B. 설계대로 `list_cache=None`을 받고 사용하지 않음
+- 권장 이유: 캐시 읽기 방식(get/set)은 도전 C(ADR-007)에서 정해지고, 지금 받으면 쓰이지 않는 매개변수가 된다.
+- trade-off: A — 도전 C 티켓에서 생성자에 매개변수를 추가해야 한다. B — 시그니처는 설계와 같지만 아무 일도 하지 않는 매개변수가 남는다.
+
+#### TKT-BE-M3-03 현재 참가 방이 삭제 상태일 때
+- 결정: `get_current_room`은 참가 기록이 가리키는 방이 없거나 삭제됐으면 `None`을 돌려준다 — US-07, AC-07-2
+- 선택지: **A. 활성 방일 때만 반환 (권장·채택)** / B. 참가 기록만 보고 그대로 반환
+- 권장 이유: 정상 흐름에서는 삭제된 방에 현재 참가가 남지 않지만(INV-06), 필수 범위에는 동시 요청 보호가 없어 어긋난 데이터가 생겨도 화면에 사라진 방 링크가 뜨지 않는다.
+- trade-off: A — 어긋난 데이터를 조용히 숨긴다. B — 화면 상단에 열 수 없는 방 링크가 남을 수 있다.
 
 #### TKT-BE-M3-02 목록 캐시 매개변수 타입
 - 결정: `list_cache`를 `clear()` 하나만 가진 `ListCacheInvalidator` Protocol로 받는다 — `04-interfaces-api.md` §3(`list_cache: RoomListCache | None = None`), ADR-007
@@ -129,12 +154,18 @@ next_readers: [DB, FE, QA]
 - trade-off: A — 일부 테스트만 다른 루프 범위가 필요하면 그 테스트에서 따로 지정해야 한다. B — 모듈마다 같은 줄을 반복하고 빠뜨리면 루프 불일치 오류가 난다.
 
 ## 설계와 다르게 한 것 / 질문 / DB 에이전트에게 요청
+- TKT-BE-M3-03: `RoomQueryService` 생성자에서 `list_cache`를 뺐다(위 자율 결정). 상세 조회는 DB 브리핑 TKT-DB-M3-02의 사용자 확인 결과(활성 방만 반환, 서비스가 404/410 판단)를 따랐다
 - TKT-BE-M3-02: `list_cache` 타입은 Protocol로 받았다(위 자율 결정). ARCH에 `04-interfaces-api.md` §3 표기 갱신(`ListCacheInvalidator`) 여부 확인 요청
 - STK-11 보완(위 자율 결정): ARCH에 STK-11 문구를 "ini 옵션 `asyncio_default_test_loop_scope = "session"`으로 지정(모듈별 `pytestmark`는 필요 없음)"으로 갱신 요청
 - 스택 주의 추가 제안: ruff `E501`과 `ruff format`은 한글 문자열의 폭 계산이 달라, 긴 한글 문자열을 괄호로 나누면 formatter가 다시 한 줄로 합치고 E501이 나는 경우가 있었다. 한글 문구는 100자 폭 안으로 짧게 쓰거나 상수로 분리한다.
 - pytest는 `tests/`가 없어 "No files were found in testpaths" 경고를 낸다. QA가 `tests/`를 만들면 사라진다(정상).
 
 ## 검증 결과
+
+### TKT-BE-M3-03
+- GATE-05: 30 files already formatted, check 통과 / GATE-07(application 항목)·GATE-08: 0줄
+- 조회 분기 수동 검증(가짜 레포지토리, 12건 통과): 상세에서 조회 회원의 팀·방장 여부(참가자 B팀·방장·비참가자), 해산 방 410 예외, EMPTY 방·없는 방 404 예외, 목록 페이지 정보, 현재 참가 방 있음·없음, 이력 페이지, 보관 정보 본인 있음·참가 기록 없음 404
+- 실제 DB 위 동작: **확인하지 못함 (환경 문제)**
 
 ### TKT-BE-M3-02
 - GATE-05: `ruff check src` 통과, `ruff format --check src` 29 files already formatted / GATE-07: 0줄 / GATE-08: 0줄 / GATE-02: 0줄
