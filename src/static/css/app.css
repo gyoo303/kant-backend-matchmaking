@@ -142,6 +142,11 @@ th {
   white-space: nowrap;
 }
 
+/* 좁은 화면에서 제목 칸이 한두 글자 폭으로 줄어들지 않게 한다. 넘치면 .table-wrap이 가로 스크롤 */
+.cell-title {
+  min-width: 8em;
+}
+
 /* 폼·버튼 */
 label {
   display: block;

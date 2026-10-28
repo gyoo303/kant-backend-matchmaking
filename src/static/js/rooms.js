@@ -54,6 +54,7 @@ function renderRoomRows(rooms) {
     const row = document.createElement("tr");
 
     const title = document.createElement("td");
+    title.className = "cell-title";
     title.textContent = room.title;
 
     const count = document.createElement("td");
