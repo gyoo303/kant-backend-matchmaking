@@ -1,6 +1,6 @@
 ---
 stage: BE
-tickets: [TKT-BE-M2-01, TKT-BE-M3-01, TKT-BE-M3-02, TKT-BE-M3-03, TKT-BE-M3-04, TKT-BE-M3-05, TKT-BE-M4-01, TKT-BE-M4-02]
+tickets: [TKT-BE-M2-01, TKT-BE-M3-01, TKT-BE-M3-02, TKT-BE-M3-03, TKT-BE-M3-04, TKT-BE-M3-05, TKT-BE-M4-01, TKT-BE-M4-02, TKT-BE-M4-03]
 status: done
 inputs_read: [AR-MAP, AR-HAND, AR-SYS, AR-API, AR-CONV, AR-GATE, AR-ADR, DB-BRIEF, PM-DOMAIN, PM-AC]
 next_readers: [DB, FE, QA]
@@ -34,9 +34,15 @@ next_readers: [DB, FE, QA]
 | TKT-BE-M4-02 | Swagger Authorize로 로그인 성공 | 충족(임시 SQLite) | OpenAPI `securitySchemes.OAuth2PasswordBearer`(password flow, `tokenUrl=/api/auth/token`), 같은 form(`username`·`password`)으로 `/api/auth/token` 200. 브라우저 Swagger 화면은 직접 열어 보지 않음 |
 | | 응답에 해시 없음 | 충족 | `signup`·`me` 응답 본문에 `hashed_password` 없음 |
 | | SEQ-01~04b 동작 | 충족(임시 SQLite) | 스크립트로 가입·중복·형식 오류·로그인 실패·토큰 발급·인증·재발급·로그아웃·차단 19건 확인(아래 검증 결과). PostgreSQL 미확인 |
+| TKT-BE-M4-03 | `grep -rn "X-Debug-User-Id" src/` 0줄 | 충족 | 명령 출력 0줄 |
+| | 로그아웃한 access 토큰 401 | 충족(가짜 레포지토리) | 블랙리스트에 넣은 access 토큰으로 `GET /api/rooms` → 401. 실제 DB 위 확인은 못 함 |
 | | AC-02-3·06-5 수동 curl 확인 | 부분 충족 | 실제 DB 대신 가짜 서비스로 400(정원 마감·삭제된 방) 응답 형식 확인. 실제 데이터 흐름은 미확인 |
 
 ## 만든 것
+### TKT-BE-M4-03
+- `src/auth/presentation/dependencies.py`: 임시 헤더 인증(`X-Debug-User-Id`)을 지우고 `get_current_user_id(user = Depends(get_current_user)) -> int`로 바꿨다(SEQ-03 3단계). rooms 라우터는 이름이 같아 그대로 쓴다
+- 이제 rooms API 11개 모두 `Authorization: Bearer <access_token>`이 필요하다. refresh 토큰·만료·위조·블랙리스트·없는 회원 토큰은 401
+
 ### TKT-BE-M4-02
 | API-ID | 메서드 | 경로 | 권한 | 성공·오류 |
 |---|---|---|---|---|
@@ -151,10 +157,12 @@ next_readers: [DB, FE, QA]
 - 필요한 환경변수: `.env.example` 참고
 
 ## 임시 코드
-- TKT-BE-M4-02 기준 현황: rooms API는 아직 `X-Debug-User-Id` 헤더로 회원을 받는다. auth API(`/me`·`/logout`)만 실제 Bearer 토큰을 쓴다. TKT-BE-M4-03에서 `get_current_user_id`를 `get_current_user` 기반으로 바꾸고 헤더 코드를 지운다
+- TKT-BE-M4-03 기준: **남은 임시 코드 없음.** `X-Debug-User-Id`는 `src/`에서 지웠다(grep 0줄). 테스트(`tests/integration/*`)에는 아직 남아 있어 TKT-QA-M4-01에서 실제 토큰으로 바꿔야 한다
+- TKT-BE-M4-02 기준 현황(지난 기록): rooms API는 아직 `X-Debug-User-Id` 헤더로 회원을 받는다. auth API(`/me`·`/logout`)만 실제 Bearer 토큰을 쓴다. TKT-BE-M4-03에서 `get_current_user_id`를 `get_current_user` 기반으로 바꾸고 헤더 코드를 지운다
 - TKT-BE-M3-04: `src/auth/presentation/dependencies.py`의 `X-Debug-User-Id` 헤더 인증(`TODO(TKT-BE-M4-03)` 주석). TKT-BE-M4-03에서 SEQ-03(JWT·쿠키·블랙리스트)으로 바꾸고 `grep -rn "X-Debug-User-Id" src/` 0줄을 확인한다
 
 ## 프론트엔드에게 전달할 것
+- TKT-BE-M4-03: rooms API도 모두 `Authorization: Bearer <access_token>`으로 부른다(TKT-BE-M4-02 안내와 같음)
 - TKT-BE-M4-02: 로그인은 `application/x-www-form-urlencoded`로 `username`(=아이디)·`password`를 `POST /api/auth/token`에 보낸다. 응답의 `access_token`·`refresh_token`을 `localStorage`에 저장한다. 이후 요청은 `Authorization: Bearer <access_token>`. 401이면 `POST /api/auth/refresh`(JSON `{"refresh_token"}`)로 한 번 재발급. 로그아웃은 `POST /api/auth/logout`에 Bearer 헤더 + JSON `{"refresh_token"}`. 헤더 없이 부르면 401 `{"detail": "Not authenticated"}`(FastAPI 기본 문구). 스키마는 `src/auth/presentation/schemas.py`
 - TKT-BE-M3-04: 요청·응답 스키마는 `src/rooms/presentation/schemas.py`(필드 이름은 `04-interfaces-api.md` §5.2와 같음). 오류 문구는 `src/rooms/domain/exceptions.py`. 상세 조회 410은 해산 신호(SEQ-13). 화면 라우트(PAGE)는 TKT-BE-M5-01
 - TKT-BE-M2-01: 없음 (API 없음)
@@ -270,6 +278,9 @@ next_readers: [DB, FE, QA]
 - trade-off: A — 일부 테스트만 다른 루프 범위가 필요하면 그 테스트에서 따로 지정해야 한다. B — 모듈마다 같은 줄을 반복하고 빠뜨리면 루프 불일치 오류가 난다.
 
 ## 설계와 다르게 한 것 / 질문 / DB 에이전트에게 요청
+- TKT-BE-M4-03: 헤더가 아예 없으면 `OAuth2PasswordBearer`가 FastAPI 기본 문구 `{"detail": "Not authenticated"}`(영문)로 401을 낸다. 형식(NFR-02 문자열 `detail`·`WWW-Authenticate: Bearer`)은 맞지만 다른 오류와 달리 영문이다. 교안 6장 방식 그대로 두었다. 한글로 맞출지는 PM·ARCH 확인이 필요하다
+- TKT-BE-M4-03: 통합 테스트(`tests/integration/test_rooms_api.py`·`test_errors.py`)는 아직 `X-Debug-User-Id`를 쓰므로 이제 테스트 DB에서 돌리면 401로 실패한다. TKT-QA-M4-01(선행: 이 티켓)에서 실제 토큰으로 바꾸는 범위다
+- TKT-BE-M4-03: 검증 중 pyjwt가 HMAC 키가 32바이트보다 짧으면 `InsecureKeyLengthWarning`을 낸다. `.env`의 `JWT_SECRET_KEY`는 32자 이상으로 정하도록 `.env.example` 설명 보강을 제안한다(BE 담당 파일이라 다음 BE 티켓에서 반영 가능)
 - TKT-BE-M4-01: **알려진 제한(사용자 결정, 2026-10-28: 교안 그대로 유지).** 페이로드가 `sub`·`exp`(초 단위)·`token_type`뿐이라 같은 회원이 같은 초에 받은 토큰은 문자열이 완전히 같다. 그래서 로그아웃 직후 1초 안에 다시 로그인·재발급하면 이미 차단된 토큰을 받아 401이 난다. **QA는 로그아웃 → 재로그인 테스트에서 재로그인 전에 1초 이상 기다려야 한다**(예: `await asyncio.sleep(1.1)`). 실사용·시연에서는 거의 생기지 않는다. 고치려면 페이로드에 `jti`(uuid4)를 더하면 된다(사용자가 이번에는 채택하지 않음)
 - TKT-BE-M3-05: **완료 조건 GATE-01(실제 기동·시드 로그 1회)을 사용자 승인으로 건너뛰었다(2026-10-28).** 로컬 PostgreSQL이 없다(Docker Desktop 설치돼 있으나 꺼져 있음). 남은 확인: PostgreSQL·`.env` 준비 후 `uv run uvicorn main:app --app-dir src` 기동 → 콘솔에 `seed inserted: … total=42` 1회 → 재기동 시 `seed skipped` → `/docs` 200. TKT-QA-M3-01 또는 DB가 준비되는 첫 시점에 확인해야 한다
 - TKT-BE-M3-05: 이제 `main`을 import하면 `database`가 설정을 읽으므로 `.env`(또는 환경변수) 없이는 서버가 기동하지 않는다. TKT-BE-M2-01의 "DB 없이 `/docs` 200"은 더 이상 성립하지 않는다(설계대로의 변화)
@@ -282,6 +293,11 @@ next_readers: [DB, FE, QA]
 - pytest는 `tests/`가 없어 "No files were found in testpaths" 경고를 낸다. QA가 `tests/`를 만들면 사라진다(정상).
 
 ## 검증 결과
+
+### TKT-BE-M4-03
+- GATE-05: `ruff check src` 통과, `ruff format --check src` 36 files already formatted / GATE-02·06·07 0줄 / `grep -rn "X-Debug-User-Id" src/` 0줄
+- 인증 흐름(실제 `main.app`, `get_db`·레포지토리만 가짜, 실제 토큰 함수 사용, 임시 스크립트): 헤더 없음 401 "Not authenticated" + `WWW-Authenticate: Bearer` / 예전 `X-Debug-User-Id` 헤더 401 / 유효한 access 200 / refresh 토큰을 access로 사용 401 / 위조 토큰 401 / 없는 회원 토큰 401 / 블랙리스트 access 401 / `get_current_user_id`가 `User.id` 반환
+- 확인하지 못함: PostgreSQL 위 동작(블랙리스트 저장·조회 포함)
 
 ### TKT-BE-M4-02
 - GATE-05: `ruff check src tests` 통과, `ruff format --check src tests` 42 files already formatted
