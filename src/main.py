@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 import auth.infrastructure.models  # noqa: F401  (create_all 전에 테이블 등록)
 import rooms.infrastructure.models  # noqa: F401
+from auth.presentation.router import router as auth_router
 from config import get_settings
 from database import AsyncSessionLocal, Base, engine
 from exceptions import AuthenticationError, DomainRuleError, GoneError, NotFoundError
@@ -82,4 +83,5 @@ async def handle_unexpected_error(request: Request, exc: Exception) -> JSONRespo
     return _detail(500, SERVER_ERROR_MESSAGE)
 
 
+app.include_router(auth_router)
 app.include_router(rooms_router)

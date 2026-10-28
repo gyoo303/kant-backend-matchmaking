@@ -1,6 +1,6 @@
 ---
 stage: BE
-tickets: [TKT-BE-M2-01, TKT-BE-M3-01, TKT-BE-M3-02, TKT-BE-M3-03, TKT-BE-M3-04, TKT-BE-M3-05, TKT-BE-M4-01]
+tickets: [TKT-BE-M2-01, TKT-BE-M3-01, TKT-BE-M3-02, TKT-BE-M3-03, TKT-BE-M3-04, TKT-BE-M3-05, TKT-BE-M4-01, TKT-BE-M4-02]
 status: done
 inputs_read: [AR-MAP, AR-HAND, AR-SYS, AR-API, AR-CONV, AR-GATE, AR-ADR, DB-BRIEF, PM-DOMAIN, PM-AC]
 next_readers: [DB, FE, QA]
@@ -31,10 +31,25 @@ next_readers: [DB, FE, QA]
 | TKT-BE-M3-05 | GATE-01(시드 로그 1회) | **미확인 — 사용자 승인으로 건너뜀(2026-10-28)** | 로컬 PostgreSQL·`.env`가 없어 실제 기동·`create_all`·시드를 실행하지 못함. 아래 "설계와 다르게 한 것 / 질문" 참고 |
 | TKT-BE-M4-01 | GATE-06 | 충족 | `.env` 미커밋, 비밀값 하드코딩 grep 0줄. 비밀키는 `get_settings().jwt_secret_key`로만 읽음 |
 | | GATE-07 | 충족 | 금지 패턴 grep 0줄 |
+| TKT-BE-M4-02 | Swagger Authorize로 로그인 성공 | 충족(임시 SQLite) | OpenAPI `securitySchemes.OAuth2PasswordBearer`(password flow, `tokenUrl=/api/auth/token`), 같은 form(`username`·`password`)으로 `/api/auth/token` 200. 브라우저 Swagger 화면은 직접 열어 보지 않음 |
+| | 응답에 해시 없음 | 충족 | `signup`·`me` 응답 본문에 `hashed_password` 없음 |
 | | SEQ-01~04b 동작 | 충족(임시 SQLite) | 스크립트로 가입·중복·형식 오류·로그인 실패·토큰 발급·인증·재발급·로그아웃·차단 19건 확인(아래 검증 결과). PostgreSQL 미확인 |
 | | AC-02-3·06-5 수동 curl 확인 | 부분 충족 | 실제 DB 대신 가짜 서비스로 400(정원 마감·삭제된 방) 응답 형식 확인. 실제 데이터 흐름은 미확인 |
 
 ## 만든 것
+### TKT-BE-M4-02
+| API-ID | 메서드 | 경로 | 권한 | 성공·오류 |
+|---|---|---|---|---|
+| API-AUTH-01 | POST | `/api/auth/signup` | 없음 | 200 `UserResponse` / 400 형식·중복 / 422 |
+| API-AUTH-02 | POST | `/api/auth/token` | 없음(form) | 200 `TokenResponse` / 401 |
+| API-AUTH-03 | POST | `/api/auth/logout` | Bearer access + 본문 `RefreshRequest` | 200 `MessageResponse` / 401 / 400 잘못된 refresh |
+| API-AUTH-04 | GET | `/api/auth/me` | Bearer access | 200 `UserResponse` / 401 |
+| API-AUTH-05 | POST | `/api/auth/refresh` | 본문 refresh 토큰 | 200 `AccessTokenResponse` / 401 |
+- `src/auth/presentation/schemas.py`: `SignupRequest`, `UserResponse`, `TokenResponse`, `RefreshRequest`, `AccessTokenResponse`, `MessageResponse` (§5.1)
+- `src/auth/presentation/router.py`: `APIRouter(prefix="/api/auth", tags=["auth"])`, 서비스 팩토리 `get_auth_service`(CONV-04)
+- `src/auth/presentation/dependencies.py`: 교안의 `oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")`, `get_current_user`(→ `AuthApplicationService.authenticate`)를 **추가**. 기존 임시 `get_current_user_id`(X-Debug)는 그대로 둠(M4-03에서 교체)
+- `src/main.py`: `app.include_router(auth_router)`
+
 ### TKT-BE-M4-01
 - `src/auth/infrastructure/security.py` (교안 6장 1강 3.3절 모양): 기존 `PasswordHasher` 유지 + `create_access_token(data)`(만료 `access_token_expire_minutes`, `token_type: "access"`), `create_refresh_token(data)`(만료 `refresh_token_expire_days`, `token_type: "refresh"`), `decode_token(token)`(`jwt.decode`, HS256, pyjwt 예외 그대로 올림)
 - `src/auth/application/service.py` `AuthApplicationService(db)`
@@ -136,13 +151,21 @@ next_readers: [DB, FE, QA]
 - 필요한 환경변수: `.env.example` 참고
 
 ## 임시 코드
+- TKT-BE-M4-02 기준 현황: rooms API는 아직 `X-Debug-User-Id` 헤더로 회원을 받는다. auth API(`/me`·`/logout`)만 실제 Bearer 토큰을 쓴다. TKT-BE-M4-03에서 `get_current_user_id`를 `get_current_user` 기반으로 바꾸고 헤더 코드를 지운다
 - TKT-BE-M3-04: `src/auth/presentation/dependencies.py`의 `X-Debug-User-Id` 헤더 인증(`TODO(TKT-BE-M4-03)` 주석). TKT-BE-M4-03에서 SEQ-03(JWT·쿠키·블랙리스트)으로 바꾸고 `grep -rn "X-Debug-User-Id" src/` 0줄을 확인한다
 
 ## 프론트엔드에게 전달할 것
+- TKT-BE-M4-02: 로그인은 `application/x-www-form-urlencoded`로 `username`(=아이디)·`password`를 `POST /api/auth/token`에 보낸다. 응답의 `access_token`·`refresh_token`을 `localStorage`에 저장한다. 이후 요청은 `Authorization: Bearer <access_token>`. 401이면 `POST /api/auth/refresh`(JSON `{"refresh_token"}`)로 한 번 재발급. 로그아웃은 `POST /api/auth/logout`에 Bearer 헤더 + JSON `{"refresh_token"}`. 헤더 없이 부르면 401 `{"detail": "Not authenticated"}`(FastAPI 기본 문구). 스키마는 `src/auth/presentation/schemas.py`
 - TKT-BE-M3-04: 요청·응답 스키마는 `src/rooms/presentation/schemas.py`(필드 이름은 `04-interfaces-api.md` §5.2와 같음). 오류 문구는 `src/rooms/domain/exceptions.py`. 상세 조회 410은 해산 신호(SEQ-13). 화면 라우트(PAGE)는 TKT-BE-M5-01
 - TKT-BE-M2-01: 없음 (API 없음)
 
 ## 구현 중 자율 결정
+
+#### TKT-BE-M4-02 인증 의존성을 이 티켓에서 일부 추가
+- 결정: API-AUTH-03·04가 Bearer 인증을 써야 해서, `dependencies.py`에 `oauth2_scheme`·`get_current_user`를 이번 티켓에서 추가했다. rooms가 쓰는 `get_current_user_id` 교체와 X-Debug 삭제는 TKT-BE-M4-03에 남겼다 — HANDOFF TKT-BE-M4-02·03, SEQ-03
+- 선택지: **A. 교안의 `get_current_user`만 먼저 추가 (권장·채택)** / B. 라우터 안에서 `service.authenticate`를 직접 호출하고 M4-03에서 옮김
+- 권장 이유: M4-03에서 다시 옮길 코드를 만들지 않고, 교안 6장과 같은 위치·이름으로 한 번만 쓴다.
+- trade-off: A — M4-02가 M4-03의 산출 파일을 일부 건드린다. B — 같은 인증 코드를 두 번 쓰고 옮겨야 한다.
 
 #### TKT-BE-M4-01 닉네임 중복 확인 값
 - 결정: 닉네임 중복은 `nickname.strip()`으로 확인한다 — SEQ-01, `User.register`(닉네임을 다듬어 저장)
@@ -259,6 +282,13 @@ next_readers: [DB, FE, QA]
 - pytest는 `tests/`가 없어 "No files were found in testpaths" 경고를 낸다. QA가 `tests/`를 만들면 사라진다(정상).
 
 ## 검증 결과
+
+### TKT-BE-M4-02
+- GATE-05: `ruff check src tests` 통과, `ruff format --check src tests` 42 files already formatted
+- GATE-04: 63 passed, 44 skipped(테스트 DB 없음)
+- GATE-02·06·07 0줄. GATE-08은 알려진 오탐(`BaseModel`) 대신 `grep -rnE "infrastructure.models" src/*/application src/*/presentation` 0줄
+- 앱 전체(lifespan 포함, 임시 SQLite + httpx `ASGITransport`, 저장소 밖 스크립트): 시드 42건 로그 / OpenAPI에 auth 경로 5개·summary 5개·OAuth2 password flow / 가입 200(해시 없음)·중복 400·필드 누락 422(문자열 `detail`) / 로그인 실패 401·성공 200(세 키) / `me`: 헤더 없음 401 "Not authenticated", 정상 200, refresh 토큰 401 / 시드 회원 `seed01` 로그인 200 / 재발급 200 / 로그아웃: 잘못된 refresh 400, 성공 200 → 같은 access로 `me` 401, 같은 refresh로 재발급 401 "로그아웃 처리되어…", 다시 로그아웃 401
+- 확인하지 못함: PostgreSQL에서의 동작, 브라우저로 Swagger UI Authorize 버튼 직접 클릭
 
 ### TKT-BE-M4-01
 - GATE-05: `ruff check src tests` 통과, `ruff format --check src tests` 40 files already formatted
