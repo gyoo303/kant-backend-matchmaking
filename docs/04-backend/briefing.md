@@ -1,6 +1,6 @@
 ---
 stage: BE
-tickets: [TKT-BE-M2-01, TKT-BE-M3-01, TKT-BE-M3-02, TKT-BE-M3-03, TKT-BE-M3-04]
+tickets: [TKT-BE-M2-01, TKT-BE-M3-01, TKT-BE-M3-02, TKT-BE-M3-03, TKT-BE-M3-04, TKT-BE-M3-05]
 status: done
 inputs_read: [AR-MAP, AR-HAND, AR-SYS, AR-API, AR-CONV, AR-GATE, AR-ADR, DB-BRIEF, PM-DOMAIN]
 next_readers: [DB, FE, QA]
@@ -22,6 +22,8 @@ next_readers: [DB, FE, QA]
 | | 404·410 분기(D-016) | 충족 | 가짜 레포지토리로 조회 분기 12건 확인 |
 | TKT-BE-M3-04 | Swagger에 API 11개 | 충족 | 라우터를 붙인 시험 앱의 OpenAPI에 API-ROOM-01~11 경로·summary 11개 |
 | | 응답에 입장 순서·해시 없음 | 충족 | 상세 응답 키·참가자 키 확인(`join_order`·`hashed_password` 없음) |
+| TKT-BE-M3-05 | GATE-01(시드 로그 1회) | **미확인 — 사용자 승인으로 건너뜀(2026-10-28)** | 로컬 PostgreSQL·`.env`가 없어 실제 기동·`create_all`·시드를 실행하지 못함. 아래 "설계와 다르게 한 것 / 질문" 참고 |
+| | AC-02-3·06-5 수동 curl 확인 | 부분 충족 | 실제 DB 대신 가짜 서비스로 400(정원 마감·삭제된 방) 응답 형식 확인. 실제 데이터 흐름은 미확인 |
 
 ## 만든 것
 ### TKT-BE-M2-01
@@ -42,6 +44,13 @@ next_readers: [DB, FE, QA]
 - `src/rooms/domain/participation.py`: `TeamSide`(A·B), `Participation`(dataclass) — `is_current`, `change_team(team)`, `end(now)`, 생성 시 `join_order >= 1`·`left_at >= joined_at` 검사
 - `src/rooms/domain/room.py`: `DeleteReason`, `RoomTitle`(`of(raw)`), `Room` — `create`, `rename`, `join`, `change_team`, `leave`, `start_game`, 조회 속성 `is_active`·`current_participants`·`current_count`·`is_full`·`available_seats`·`team_count`·`participation_of`. 거부 검사 순서는 §2.3 주석 순서 그대로(삭제 방 → 권한·참가 여부 → 정원·구성)
 - `src/rooms/application/read_models.py`: `RoomListCondition`, `RoomSummary`, `ParticipantView`, `RoomDetail`, `CurrentRoom`, `HistoryItem`, `MyRecord`, `ArchivedRoom`, `RoomPage`, `HistoryPage`, `LeaveResult`, `GameStartResult` (frozen dataclass, 필드는 §5 응답 스키마와 같은 이름)
+
+### TKT-BE-M3-05
+- `src/main.py`
+  - lifespan(SEQ-12): `engine.begin()`에서 `Base.metadata.create_all` → `AsyncSessionLocal()` 세션으로 `seed_initial_data` → `commit` → 종료 시 `engine.dispose()`. 테이블 등록을 위해 `auth`·`rooms`의 `infrastructure.models`를 import
+  - 전역 예외 핸들러(§6, ADR-004): `DomainRuleError` 400 / `NotFoundError` 404 / `GoneError` 410 / `AuthenticationError` 401 + `WWW-Authenticate: Bearer` / `RequestValidationError` 422 `{"detail": "<loc 마지막>: <msg>; …"}`(최대 3개) / 그 밖의 `Exception` 500 `{"detail": "서버 오류가 발생했습니다"}`(스택은 로그에만)
+  - 라우터 등록: rooms(`/api`). auth 라우터는 TKT-BE-M4-02
+  - `logging.basicConfig(level=INFO)`: 시드 로그(`seed inserted…`/`seed skipped…`)가 콘솔에 보이도록(아래 자율 결정)
 
 ### TKT-BE-M3-04
 - `src/rooms/presentation/schemas.py`: §5.2 요청 3개·응답 11개(`from_attributes=True`, 모든 필드 `Field(description)`, snake_case). 팀 값은 `Literal["A","B"]`
@@ -112,6 +121,18 @@ next_readers: [DB, FE, QA]
 - TKT-BE-M2-01: 없음 (API 없음)
 
 ## 구현 중 자율 결정
+
+#### TKT-BE-M3-05 로깅 설정 시점
+- 결정: `main.py`에서 `logging.basicConfig(level=INFO)`를 한 번 호출한다 — GATE-01("시드 로그 1회"), CONV-07(로그 형식은 TKT-BE-M5-01 미들웨어)
+- 선택지: **A. 지금 최소 설정 추가 (권장·채택)** / B. M5 미들웨어 티켓까지 로깅 설정을 미룸
+- 권장 이유: uvicorn은 자기 로거만 설정해 `seed` 로거의 INFO가 보이지 않으므로, 설정 없이는 GATE-01의 시드 로그를 확인할 수 없다.
+- trade-off: A — M5에서 요청 로그 형식을 정할 때 이 설정과 함께 정리해야 한다. B — M5 전까지 시드 주입 여부를 로그로 확인할 수 없다.
+
+#### TKT-BE-M3-05 422 메시지의 필드 이름
+- 결정: 오류 위치(`loc`)의 마지막 요소를 필드 이름으로 쓰고, 위치가 없으면 "요청"으로 쓴다 — ADR-004
+- 선택지: **A. loc 마지막 요소 (권장·채택)** / B. `body.title`처럼 위치 전체를 점으로 연결
+- 권장 이유: ADR-004가 마지막 요소를 정했고, 화면에 보여 줄 문구가 짧다.
+- trade-off: A — 같은 이름의 필드가 쿼리와 본문에 동시에 있으면 구분되지 않는다(현재 API에는 없음). B — 위치는 정확하지만 문구가 길고 내부 구조가 드러난다.
 
 #### TKT-BE-M3-04 ruff B008과 FastAPI 의존성
 - 결정: `pyproject.toml`에 `extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header", "fastapi.Path"]`를 둔다 — ADR-005(규칙 `B` 사용), RC-12(`Depends(get_db)`)
@@ -192,6 +213,8 @@ next_readers: [DB, FE, QA]
 - trade-off: A — 일부 테스트만 다른 루프 범위가 필요하면 그 테스트에서 따로 지정해야 한다. B — 모듈마다 같은 줄을 반복하고 빠뜨리면 루프 불일치 오류가 난다.
 
 ## 설계와 다르게 한 것 / 질문 / DB 에이전트에게 요청
+- TKT-BE-M3-05: **완료 조건 GATE-01(실제 기동·시드 로그 1회)을 사용자 승인으로 건너뛰었다(2026-10-28).** 로컬 PostgreSQL이 없다(Docker Desktop 설치돼 있으나 꺼져 있음). 남은 확인: PostgreSQL·`.env` 준비 후 `uv run uvicorn main:app --app-dir src` 기동 → 콘솔에 `seed inserted: … total=42` 1회 → 재기동 시 `seed skipped` → `/docs` 200. TKT-QA-M3-01 또는 DB가 준비되는 첫 시점에 확인해야 한다
+- TKT-BE-M3-05: 이제 `main`을 import하면 `database`가 설정을 읽으므로 `.env`(또는 환경변수) 없이는 서버가 기동하지 않는다. TKT-BE-M2-01의 "DB 없이 `/docs` 200"은 더 이상 성립하지 않는다(설계대로의 변화)
 - TKT-BE-M3-04: **GATE-08 명령이 오탐**한다. `grep -rnE "import .*Model|Model,"`가 `src/rooms/presentation/schemas.py`의 `from pydantic import BaseModel, ConfigDict, Field`를 잡는다(ORM 모델 아님). 대신 `grep -rnE "infrastructure.models" src/*/application src/*/presentation`로 확인했고 0줄이다. ARCH에 GATE-08 명령을 이 형태로 바꾸도록 요청한다
 - TKT-BE-M3-04: B008 예외 설정(위 자율 결정)을 `05-structure-conventions.md` 스택 주의(STK)에 추가하도록 ARCH에 제안한다
 - TKT-BE-M3-03: `RoomQueryService` 생성자에서 `list_cache`를 뺐다(위 자율 결정). 상세 조회는 DB 브리핑 TKT-DB-M3-02의 사용자 확인 결과(활성 방만 반환, 서비스가 404/410 판단)를 따랐다
@@ -201,6 +224,11 @@ next_readers: [DB, FE, QA]
 - pytest는 `tests/`가 없어 "No files were found in testpaths" 경고를 낸다. QA가 `tests/`를 만들면 사라진다(정상).
 
 ## 검증 결과
+
+### TKT-BE-M3-05
+- GATE-05: `ruff check src` 통과, `ruff format --check src` 33 files already formatted
+- 전역 예외 핸들러(실제 `main.app`에 가짜 서비스를 주입, lifespan 없이 ASGI 호출, 임시 스크립트): 정원 마감·삭제된 방 → 400 `{"detail": "<문구>"}`, 없는 방 → 404, 해산 방 상세 → 410, 헤더 없음 → 401 + `WWW-Authenticate: Bearer`, 잘못된 쿼리 3개 → 422 문자열 1개("sort: …; page: …; size: …"), 본문 누락 → 422 "title: Field required", 팀 "C" → 422, 예상 못 한 예외 → 500 "서버 오류가 발생했습니다"(예외 메시지는 응답에 없고 로그에만), 없는 경로 → 404 `{"detail": "Not Found"}`
+- GATE-01·lifespan(create_all·시드): **확인하지 못함 — 사용자 승인으로 건너뜀**
 
 ### TKT-BE-M3-04
 - GATE-05: `ruff check src` 통과(B008 예외 설정 후), `ruff format --check src` 33 files already formatted
