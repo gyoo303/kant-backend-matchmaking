@@ -1,8 +1,8 @@
 ---
 stage: BE
-tickets: [TKT-BE-M2-01]
+tickets: [TKT-BE-M2-01, TKT-BE-M3-01]
 status: done
-inputs_read: [AR-MAP, AR-HAND, AR-SYS, AR-API, AR-CONV, AR-GATE, AR-ADR]
+inputs_read: [AR-MAP, AR-HAND, AR-SYS, AR-API, AR-CONV, AR-GATE, AR-ADR, DB-BRIEF, PM-DOMAIN]
 next_readers: [DB, FE, QA]
 ---
 # 백엔드 에이전트 브리핑
@@ -13,6 +13,9 @@ next_readers: [DB, FE, QA]
 | TKT-BE-M2-01 | GATE-01(`/docs` 200, DB 없이) | 충족 | `uv run uvicorn main:app --app-dir src --port 8765` 기동 → `/docs` 200, `/openapi.json` 200, 기동 오류 0 |
 | | GATE-03 | 충족 | `src/` 아래 패키지 폴더 11개 모두 `__init__.py` 있음 |
 | | GATE-05 | 충족 | `ruff check src` 통과, `ruff format --check src` 통과 (`tests/`는 아직 없음) |
+| TKT-BE-M3-01 | GATE-02 | 충족 | 세 grep 명령 모두 0줄 |
+| | GATE-07(domain 항목) | 충족 | `datetime.now`·`random.` in `src/*/domain/` 0줄, `except:` 0줄, 승패 관련 이름 0줄 |
+| | INV-01~12가 메서드에 반영 | 충족 | 임시 검증 스크립트 54건 통과(아래 검증 결과) |
 
 ## 만든 것
 ### TKT-BE-M2-01
@@ -24,9 +27,20 @@ next_readers: [DB, FE, QA]
 - `src/main.py`: 최소 FastAPI 앱(제목·설명·버전). 설정·DB를 읽지 않으므로 `.env` 없이 기동된다
 - `.env.example`: ADR-003의 항목 전부 + 테스트 전용 `TEST_DATABASE_URL`(주석)
 
+### TKT-BE-M3-01
+- `src/auth/domain/exceptions.py`: `InvalidLoginIdError`, `InvalidNicknameError`, `InvalidPasswordError`, `DuplicateLoginIdError`, `DuplicateNicknameError` (모두 `DomainRuleError`, 문구는 `04-interfaces-api.md` §1.2 그대로)
+- `src/auth/domain/user.py`: `User`(dataclass) — `register(login_id, nickname, hashed_password)`(아이디 `[a-z0-9]{4,20}`, 닉네임 strip 후 `[가-힣A-Za-z0-9]{2,12}`), `validate_raw_password(raw)`(8자 미만 거부)
+- `src/auth/domain/token_blacklist.py`: `TokenBlacklist`(frozen) — 빈 `jti` 거부, `is_expired(now)`
+- `src/auth/infrastructure/security.py`: `PasswordHasher.hash(raw)`, `verify(raw, hashed)` (passlib bcrypt). JWT 부분은 TKT-BE-M4-01
+- `src/rooms/domain/exceptions.py`: §1.2의 rooms 예외 11개 (`RoomNotFoundError`→`NotFoundError`, `RoomDissolvedError`→`GoneError`, 나머지 `DomainRuleError`)
+- `src/rooms/domain/participation.py`: `TeamSide`(A·B), `Participation`(dataclass) — `is_current`, `change_team(team)`, `end(now)`, 생성 시 `join_order >= 1`·`left_at >= joined_at` 검사
+- `src/rooms/domain/room.py`: `DeleteReason`, `RoomTitle`(`of(raw)`), `Room` — `create`, `rename`, `join`, `change_team`, `leave`, `start_game`, 조회 속성 `is_active`·`current_participants`·`current_count`·`is_full`·`available_seats`·`team_count`·`participation_of`. 거부 검사 순서는 §2.3 주석 순서 그대로(삭제 방 → 권한·참가 여부 → 정원·구성)
+- `src/rooms/application/read_models.py`: `RoomListCondition`, `RoomSummary`, `ParticipantView`, `RoomDetail`, `CurrentRoom`, `HistoryItem`, `MyRecord`, `ArchivedRoom`, `RoomPage`, `HistoryPage`, `LeaveResult`, `GameStartResult` (frozen dataclass, 필드는 §5 응답 스키마와 같은 이름)
+
 ## 계층 확인 포인트
 - 도메인 코드 없음. `exceptions.py`는 외부 import 없음(GATE-02 대상 grep 0줄)
 - 저장소 모델·트랜잭션: 해당 없음(이후 티켓)
+- TKT-BE-M3-01: 도메인은 표준 라이브러리(`dataclasses`, `datetime`, `enum`, `re`)와 `exceptions`, 같은 기능 도메인만 import. 시각은 모두 `now` 인자로 받음. `read_models.py`는 `rooms.domain`만 참조
 
 ## 보안 확인 포인트
 - 비밀값은 `Settings`로만 읽는다. 코드에 기본값 없음(`jwt_secret_key`, `database_url`, `seed_user_password`는 필수 — 없으면 `ValidationError`로 실패, 확인함)
@@ -40,6 +54,30 @@ next_readers: [DB, FE, QA]
 - 없음 (API 없음)
 
 ## 구현 중 자율 결정
+
+#### TKT-BE-M3-01 `TeamSide` 정의 위치
+- 결정: `TeamSide`를 `participation.py`에 정의하고 `room.py`에서 다시 내보낸다(`from rooms.domain.room import TeamSide` 그대로 동작) — `04-interfaces-api.md` §2.3·§2.4
+- 선택지: **A. participation.py에 정의 + room.py 재수출 (권장·채택)** / B. 설계대로 room.py에 정의
+- 권장 이유: `room.py`가 `Participation`을 import하고 `Participation`이 `TeamSide`를 쓰므로, B는 두 모듈이 서로 import하는 순환 참조가 된다.
+- trade-off: A — 정의 위치가 설계 문서와 한 줄 다르다(쓰는 쪽 import 경로는 같음). B — 순환 참조를 피하려면 지연 import 같은 우회 코드가 필요하다.
+
+#### TKT-BE-M3-01 `RoomTitle` 직접 생성 시 검증
+- 결정: `RoomTitle(value)` 생성자도 "앞뒤 공백 없음 + 1~20자"를 검사하고, `of(raw)`는 strip 후 생성자를 부른다 — INV-12
+- 선택지: **A. 생성자에서도 검사 (권장·채택)** / B. `of()`에서만 검사
+- 권장 이유: 레포지토리가 DB 값으로 `RoomTitle`을 만들 때도 같은 규칙이 지켜져, 잘못된 값이 도메인 안으로 들어오지 않는다.
+- trade-off: A — DB에 규칙 밖의 값이 있으면 조회 시 오류가 난다(CHECK 제약이 있어 생기기 어렵다). B — 생성자로 만든 제목은 규칙을 건너뛸 수 있다.
+
+#### TKT-BE-M3-01 `User` 검증 시점
+- 결정: 아이디·닉네임 형식은 `User.register()`에서만 검사하고, 생성자(레포지토리 복원용)는 검사하지 않는다 — `04-interfaces-api.md` §2.1
+- 선택지: **A. register에서만 검사 (권장·채택)** / B. 생성자에서도 검사
+- 권장 이유: 설계 시그니처가 검증을 `register`에 두었고, 저장된 회원은 가입 때 이미 검사를 통과했다.
+- trade-off: A — 코드에서 생성자로 직접 만든 회원은 검사를 건너뛴다. B — 규칙이 바뀌면 기존 회원 조회가 실패할 수 있다.
+
+#### TKT-BE-M3-01 읽기 모델 `MyRecord` 추가
+- 결정: `ArchivedRoom.my_records`의 항목 타입으로 `MyRecord(joined_at, left_at)`를 둔다 — `04-interfaces-api.md` §5.2 `MyRecordResponse`
+- 선택지: **A. `MyRecord` 읽기 모델 추가 (권장·채택)** / B. `HistoryItem` 재사용
+- 권장 이유: §3의 읽기 모델 목록에는 없지만 §5 응답 스키마 `MyRecordResponse`와 필드가 1:1로 맞는다.
+- trade-off: A — §3 목록에 없는 이름이 하나 생긴다. B — 보관 정보에 필요 없는 필드(방 제목 등)까지 채워야 한다.
 
 #### TKT-BE-M2-01 프로젝트 이름
 - 결정: `pyproject.toml`의 `name = "matchmaking-2vs2"` — 설계 문서에 프로젝트 패키지 이름이 없음
@@ -65,6 +103,15 @@ next_readers: [DB, FE, QA]
 - pytest는 `tests/`가 없어 "No files were found in testpaths" 경고를 낸다. QA가 `tests/`를 만들면 사라진다(정상).
 
 ## 검증 결과
+
+### TKT-BE-M3-01
+- GATE-02: 세 명령 모두 0줄
+- GATE-05: `uv run ruff check src` 통과, `uv run ruff format --check src` 23 files already formatted
+- GATE-07(domain 항목): 0줄
+- 도메인 규칙 수동 검증(임시 스크립트, 저장소에 남기지 않음, 54건 통과): RoomTitle 경계(공백·0자·20자·21자), create(참가 중 거부·A팀·순서 1), join(자동 배정 B→A, 같은 방 재요청 기록 유지, 다른 방 거부, 정원 마감), change_team(팀 정원·같은 팀·비참가자), rename(방장 아님·제목 규칙), start_game(방장 아님·구성 불일치·성공 시 전원 종료와 GAME_STARTED), leave(일반 퇴장·방장 위임 최소 입장 순서·마지막 퇴장 EMPTY), 재입장 새 순서, 삭제 방의 모든 행위 거부, 생성자 검증(INV-07·last_join_order), Participation end·change_team 거부, 예외 계층과 문구, User.register 거부 8건, 비밀번호 7자 거부, TokenBlacklist 만료·빈 jti, PasswordHasher 해시·검증
+- 정식 테스트는 TKT-QA-M3-01(`tests/unit/`)에서 작성
+
+### TKT-BE-M2-01
 - GATE-01: 통과 (`/docs` 200, `/openapi.json` 200)
 - GATE-02: 대상 없음(도메인 파일 없음), 실행 결과 0줄
 - GATE-03: 통과 (출력 0줄)
