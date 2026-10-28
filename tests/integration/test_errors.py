@@ -1,9 +1,6 @@
 """오류 응답 형식 통합 테스트: NFR-02 (TEST_DATABASE_URL 필요)."""
 
-
-def auth_header(user_id: int) -> dict[str, str]:
-    """M3 임시 인증 헤더(TKT-BE-M3-04). TKT-QA-M4-01에서 실제 토큰으로 바꾼다."""
-    return {"X-Debug-User-Id": str(user_id)}
+from conftest import auth_header
 
 
 def assert_string_detail(response) -> None:

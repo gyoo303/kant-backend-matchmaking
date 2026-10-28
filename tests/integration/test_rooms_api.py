@@ -1,16 +1,12 @@
 """rooms API 통합 테스트: AC-01~AC-07 (TEST_DATABASE_URL 필요).
 
-인증은 M3 임시 헤더(X-Debug-User-Id)를 쓴다. TKT-QA-M4-01에서 실제 토큰으로 바꾼다.
+인증은 실제 access 토큰을 쓴다(conftest.auth_header, TKT-QA-M4-01에서 전환).
 """
 
 import httpx
+from conftest import auth_header
 
 from database import Base
-
-
-def auth_header(user_id: int) -> dict[str, str]:
-    """M3 임시 인증 헤더(TKT-BE-M3-04). TKT-QA-M4-01에서 실제 토큰으로 바꾼다."""
-    return {"X-Debug-User-Id": str(user_id)}
 
 
 async def create_room(client: httpx.AsyncClient, user_id: int, title: str = "방") -> int:
