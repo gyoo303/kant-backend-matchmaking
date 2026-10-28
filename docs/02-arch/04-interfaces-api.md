@@ -221,7 +221,7 @@ class Participation:
 
 ## 5. 스키마 명세
 
-모든 스키마는 `src/<기능>/presentation/schemas.py`, `model_config = ConfigDict(from_attributes=True)`. 응답은 도메인 객체·읽기 모델에서 `model_validate`한다(ORM 아님). 요청 스키마는 정의되지 않은 필드를 무시한다(AC-01-4).
+모든 스키마는 `src/<기능>/presentation/schemas.py`, `model_config = ConfigDict(from_attributes=True)`. **요청·응답 JSON 필드 이름은 아래 표 그대로 snake_case**이며 별칭(camelCase alias)을 두지 않는다. 화면 JS도 같은 이름을 쓴다. 응답은 도메인 객체·읽기 모델에서 `model_validate`한다(ORM 아님). 요청 스키마는 정의되지 않은 필드를 무시한다(AC-01-4).
 
 ### 5.1 auth
 | 스키마 | 필드 | 타입 | 필수 | Field 제약 | description |

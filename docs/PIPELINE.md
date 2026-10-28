@@ -29,6 +29,7 @@
    - 티켓마다 파일을 만드는 단계(FE-BRIEF, QA-BRIEF)는 `<TKT>` 자리에 티켓 ID를 넣은 새 파일을 만든다.
 4. **수용기준 번호**: 모든 단계는 PM의 `AC-xx-n`, `NFR-xx`를 그대로 쓴다. 새 번호 체계를 만들지 않는다. UI/UX 명세 항목은 `UX-n`을 쓴다.
 5. **예외 진행**: 점검이 `READY`가 아닌데 사용자가 진행을 승인하면, 막힌 입력이 이 티켓에 정말 필요한지와 대신 읽은 문서를 확인한 뒤 진행한다. 브리핑 머리말에 `exception`(§4)을, 본문에 "절차 예외" 칸(승인자·날짜·막힌 ID·이유)을 남긴다. 승인은 채팅이 아니라 이 기록으로 다음 단계에 전달된다.
+6. **문서 우선순위**: 문서끼리 충돌하면 PM 산출물 → ARCH 산출물 → 스킬 문서 순서로 따른다. 어느 문서에도 정의되지 않은 것은 사용자 확인을 받은 뒤 진행한다. 스킬 문서의 예시·기본값은 프로젝트 사실이 아니다.
 
 ## 3. 산출물 표
 
@@ -92,6 +93,7 @@
 | UX-PLAN-FE | `docs/uiux/review/frontend/README.md` (같은 폴더의 `design-system.md`, `screens.md`, 화면별 시안 `mockups/*.png`를 함께 읽는다) | UX | FE | QA |
 | UX-PLAN-QA | `docs/uiux/review/QA/README.md` (같은 폴더의 `scenarios.md`를 함께 읽는다) | UX | QA | — |
 
+> 이번 프로젝트(매치메이킹)는 UX 단계를 쓰지 않는다(`AGENTS.md` 규칙 8). 아래 UX 행은 다른 프로젝트용으로 남겨 둔다.
 > UX 산출물은 사람 승인 후에 배포된다(UX 스킬 R3). 아직 없으면 `필수`라도 `BLOCKED`로 멈추지 않고, 브리핑의 "확인하지 못한 것"에 `<ID> 미배포`로 적고 진행한다.
 > 승인 전 초안은 같은 폴더에 `<파일명>.draft.md`로 둔다. 다른 단계는 `.draft.md`를 읽지 않는다(UX 스킬 §7).
 > UX-PLAN-FE·UX-PLAN-QA는 FE·QA가 계획을 세울 때 읽는 참고자료 묶음이다. `review/` 아래에 있지만 검수 기록(UX-REVIEW)이 아니다. `review/QA/`의 `YYYY-MM-DD-<대상>.md`는 QA 산출물 검수 기록, `README.md`·`scenarios.md`는 UX-PLAN-QA다.
@@ -102,6 +104,7 @@
 |---|---|
 | 범위·요구사항 결정 (`D-xx`), Architect 자율 결정 (자율 결정은 선택지·권장 이유·trade-off 포함, `pm-agent` §4.3) | `docs/01-pm/decision-log.md` |
 | 기술·아키텍처 결정 (`ADR-xxx`) | `docs/02-arch/adr/` |
+| 구현·검증 단계의 자율 결정 (DB·BE·FE·QA, 같은 형식) | 각 단계 브리핑의 "구현 중 자율 결정"·"QA 자율 결정" 섹션 |
 | UX·디자인 결정 | `docs/uiux/decisions.md` |
 
 ## 4. 브리핑 공통 머리말

@@ -10,7 +10,7 @@
 
 | TKT | 담당 | 마일스톤(일차) | 내용 | 읽을 것 | 산출 | 완료 조건 | 선행 |
 |---|---|---|---|---|---|---|---|
-| TKT-BE-M2-01 | BE | M2 (3) | 프로젝트 골격: 의존성·ruff 설정, 모든 패키지 `__init__.py`, `config.py`(Settings: `database_url`, `jwt_secret_key`, `jwt_expire_minutes=60`, `cors_origins`, `cookie_secure=False`, `db_pool_size=10`, `db_max_overflow=10`, `seed_user_password`), `exceptions.py`, `.env.example`, 최소 `main.py`(FastAPI 앱) | `02-system-architecture.md` §3, ADR-003, ADR-005, `04-interfaces-api.md` §1.1 | `pyproject.toml`, `uv.lock`, `.env.example`, `src/__init__.py`·각 패키지 `__init__.py`, `src/config.py`, `src/exceptions.py`, `src/main.py` | GATE-01(`/docs` 200, DB 없이), GATE-03, GATE-05 | — |
+| TKT-BE-M2-01 | BE | M2 (3) | 프로젝트 골격: 의존성·ruff 설정, 모든 패키지 `__init__.py`, pytest 설정(STK-01·STK-11), `config.py`(Settings: `database_url`, `jwt_secret_key`, `jwt_expire_minutes=60`, `cors_origins`, `cookie_secure=False`, `db_pool_size=10`, `db_max_overflow=10`, `seed_user_password`), `exceptions.py`, `.env.example`, 최소 `main.py`(FastAPI 앱) | `02-system-architecture.md` §3, ADR-003, ADR-005, `04-interfaces-api.md` §1.1 | `pyproject.toml`, `uv.lock`, `.env.example`, `src/__init__.py`·각 패키지 `__init__.py`, `src/config.py`, `src/exceptions.py`, `src/main.py` | GATE-01(`/docs` 200, DB 없이), GATE-03, GATE-05 | — |
 | TKT-DB-M2-01 | DB | M2 (3) | `database.py`: `create_async_engine(settings.database_url, pool_size, max_overflow)`, `AsyncSessionLocal = async_sessionmaker(class_=AsyncSession, expire_on_commit=False)`, `Base(DeclarativeBase)`, `get_db()`(예외 시 rollback) | `04-interfaces-api.md` §8, ADR-003 | `src/database.py`, `docs/03-db/briefing.md` | GATE-05, 세션 생성 확인 | TKT-BE-M2-01 |
 | TKT-BE-M3-01 | BE | M3 (4) | 도메인 클래스·예외: `User`, `TokenBlacklist`, `Room`, `RoomTitle`, `TeamSide`, `DeleteReason`, `Participation`, 기능별 `exceptions.py`. 읽기 모델 `rooms/application/read_models.py`. `auth/infrastructure/security.py`의 `PasswordHasher`(시드에 필요) | `04-interfaces-api.md` §1·§2·§3(읽기 모델), `docs/01-pm/03-domain.md` §4·§6 | `src/auth/domain/*.py`, `src/rooms/domain/*.py`, `src/rooms/application/read_models.py`, `src/auth/infrastructure/security.py`(PasswordHasher만), `docs/04-backend/briefing.md` | GATE-02, GATE-07(domain 항목), INV-01~12가 메서드에 반영 | TKT-BE-M2-01 |
 | TKT-DB-M3-01 | DB | M3 (5) | `UserModel`, `TokenBlacklistModel`, `UserRepository`, `TokenBlacklistRepository` (중복 아이디·닉네임 `IntegrityError` → `Duplicate*Error`) | `03-db-schema.md` §3.1·§3.2·§5 | `src/auth/infrastructure/models.py`, `src/auth/infrastructure/repositories.py`, `docs/03-db/briefing.md` | GATE-02, GATE-08 | TKT-DB-M2-01, TKT-BE-M3-01 |
@@ -26,7 +26,7 @@
 | TKT-BE-M4-03 | BE | M4 (8) | 인증 의존성을 SEQ-03으로 교체(`get_current_user_id`, `get_current_claims`, `get_page_user_id`), `X-Debug-User-Id` 코드 삭제 | `04-interfaces-api.md` §9(SEQ-03), ADR-002 | `src/auth/presentation/dependencies.py`, `docs/04-backend/briefing.md` | `grep -rn "X-Debug-User-Id" src/` 0줄, 로그아웃 토큰 401 | TKT-BE-M4-02 |
 | TKT-QA-M4-01 | QA | M4 (8) | 인증 통합 테스트 AC-08~11, NFR-03, 기존 rooms 테스트를 실제 토큰으로 전환 | `06-acceptance-criteria.md` US-08~11·NFR-03, `docs/04-backend/briefing.md` | `tests/integration/test_auth_api.py`, `tests/conftest.py`, `docs/06-qa/briefing-TKT-QA-M4-01.md` | GATE-04, AC-08~11 통과 | TKT-BE-M4-03 |
 | TKT-BE-M5-01 | BE | M5 (9) | `RequestLoggingMiddleware`(CONV-07), CORS(CONV-10·11), `StaticFiles`·`Jinja2Templates`, 화면 라우터 PAGE-01~06(리다이렉트 규칙 포함) | `04-interfaces-api.md` §7·§9(SEQ-11), CONV-07~12 | `src/logging_middleware.py`, `src/main.py`, `src/auth/presentation/pages.py`, `src/rooms/presentation/pages.py`, `docs/04-backend/briefing.md` | 비로그인 `/` → `/login` 303, 콘솔 로그 형식 일치 | TKT-BE-M4-03 |
-| TKT-FE-M5-01 | FE | M5 (9) | 공통: `base.html`, `partials/*`, `app.css`, `api.js`(401 → `/login?expired=1`), `polling.js`(SEQ-13) | `04-interfaces-api.md` §7·§9(SEQ-13), `docs/01-pm/07-screens.md` §2 | `src/templates/base.html`, `src/templates/partials/*.html`, `src/static/css/app.css`, `src/static/js/api.js`, `src/static/js/polling.js`, `docs/05-frontend/briefing-TKT-FE-M5-01.md` | 탭 숨김 시 요청 0건, 겹침 요청 0건 | TKT-BE-M5-01 |
+| TKT-FE-M5-01 | FE | M5 (9) | 공통: `base.html`, `partials/*`, `app.css`(스타일 토큰 값 정의, `05-structure-conventions.md` §6·D-019), `api.js`(401 → `/login?expired=1`), `polling.js`(SEQ-13) | `04-interfaces-api.md` §7·§9(SEQ-13), `docs/01-pm/07-screens.md` §2 | `src/templates/base.html`, `src/templates/partials/*.html`, `src/static/css/app.css`, `src/static/js/api.js`, `src/static/js/polling.js`, `docs/05-frontend/briefing-TKT-FE-M5-01.md` | 탭 숨김 시 요청 0건, 겹침 요청 0건 | TKT-BE-M5-01 |
 | TKT-FE-M5-02 | FE | M5 (9) | SCR-01 회원가입, SCR-02 로그인 | `07-screens.md` §4, `04-interfaces-api.md` PAGE-01·02, API-AUTH-01·02 | `src/templates/auth/signup.html`, `src/templates/auth/login.html`, `docs/05-frontend/briefing-TKT-FE-M5-02.md` | AC-17-1 | TKT-FE-M5-01 |
 | TKT-FE-M5-03 | FE | M5 (10) | SCR-03 공개 방 목록(메인): 생성 폼, 검색·필터·정렬·페이지, 현재 방 링크, 마감 표시, 1초 폴링, 해산 안내 | `07-screens.md` §3 SCR-03, `04-interfaces-api.md` PAGE-03·API-ROOM-01·02·05·09 | `src/templates/rooms/list.html`, `src/static/js/rooms.js`, `docs/05-frontend/briefing-TKT-FE-M5-03.md` | AC-15-1~7 | TKT-FE-M5-01 |
 | TKT-FE-M5-04 | FE | M5 (10) | SCR-04 방 상세(현황 대시보드): 팀 구성, 팀 이동·나가기·제목 변경·게임 시작, 410/404/401 분기 | `07-screens.md` §3 SCR-04, `04-interfaces-api.md` PAGE-04·API-ROOM-03~08 | `src/templates/rooms/detail.html`, `src/static/js/rooms.js`, `docs/05-frontend/briefing-TKT-FE-M5-04.md` | AC-16-1~7 | TKT-FE-M5-03 |
@@ -65,7 +65,29 @@
 
 `docs/01-pm/08-rubric-traceability.md`의 "Architect로 이관" 행에 설계 증빙(ADR/ENT/API/PAGE/CONV/GATE·파일 경로)을 채웠다. 빈 행 0.
 
-## 4. 남은 리스크
+## 4. 구현 계약 체크리스트 결과 (architect-agent A8-1)
+
+| IC | 항목 | 위치 |
+|---|---|---|
+| IC-01 | 단계별 쓰는 경로, 공통 파일 담당 | `AGENTS.md` 단계 표 |
+| IC-02 | 테스트 작성 담당·위치 | `06-quality-gates.md` §2(테스트 작성 담당), 각 TKT-QA "산출" |
+| IC-03 | 스택·버전, 디렉토리, import 규칙 | `02-system-architecture.md` §3, `05-structure-conventions.md` §1, STK-01 |
+| IC-04 | 의존 방향, 금지 패턴 | `05-structure-conventions.md` §2·§4 |
+| IC-05 | 명명 규칙 | CONV-01, `03-db-schema.md` §3, `06-quality-gates.md` §3 |
+| IC-06 | 에러 모델, 응답 필드 표기 | `04-interfaces-api.md` §1·§5(snake_case)·§6 |
+| IC-07 | 트랜잭션 확정 위치, 세션 수명, 저장소 모델 경계 | `04-interfaces-api.md` §8, `03-db-schema.md` §5, GATE-08 |
+| IC-08 | 스키마 반영 방식, 기존 DB 처리 | `03-db-schema.md` 머리말(create_all), STK-04, TKT-DB-M6-01 |
+| IC-09 | 인증·권한 확인 위치·비밀값·비노출 필드 | ADR-002, ADR-003, `04-interfaces-api.md` §4.3·§6, CONV-07·09 |
+| IC-10 | 화면 기술, 데이터 계약, 스타일 기준, 상태 변경 방식 | `04-interfaces-api.md` §7(PAGE), `05-structure-conventions.md` §6, CONV-09·12, D-019 |
+| IC-11 | 실행·검증 명령, 테스트 DB | `06-quality-gates.md` §1·§2, STK-10~12 |
+| IC-12 | 스택 주의 | `05-structure-conventions.md` §7 (STK-01~12) |
+| IC-13 | 시드 계획 | `03-db-schema.md` §6 |
+| IC-14 | 필수/도전 구분, 임시 코드 | 이 문서 머리말·§1(요청 시), TKT-BE-M3-04 → TKT-BE-M4-03 |
+| IC-15 | 문서 티켓 목차 | 이 문서 §2 |
+
+빈 칸 0.
+
+## 5. 남은 리스크
 
 | RISK | 남은 이유 | 대응 |
 |---|---|---|

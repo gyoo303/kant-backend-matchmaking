@@ -252,6 +252,30 @@ description: 소프트웨어 팩토리의 2단계 Architect 에이전트. PM 에
   - README 티켓(EV-10, RC-18)에 발제 §7 목차를 확정해 둔다: 주제·Use Case 소개, 4계층 디렉토리·컴포넌트 구조도(트리 텍스트), 로컬 실행 방법(git clone → uv sync → PostgreSQL 실행·환경변수 → 실행 명령), 캡처(Jinja2 화면, Swagger UI, 200 정상·400 차단, JWT 블랙리스트 401).
 - 최종 브리핑: 주요 ADR 요약, 남은 리스크(RISK-ID), 마일스톤별 티켓 수. 사용자 승인을 받는다.
 
+### A8-1. 구현 계약 체크리스트 (handoff 전 필수)
+DB·BE·FE·QA 스킬은 스택 지식을 갖지 않고, 프로젝트 사실을 ARCH 산출물에서만 읽는다(각 스킬의 "문서 우선순위와 미정의 처리"). 그래서 아래 항목이 산출물에 없으면 구현 단계는 멈추고 사용자에게 묻는다. handoff 전에 항목마다 위치를 채우고, 빈 칸이 있으면 handoff하지 않는다. 결과 표는 `HANDOFF.md`에 둔다.
+
+| # | 항목 | 쓰는 곳 |
+|---|---|---|
+| IC-01 | 단계별 쓰는 경로(DB·BE·FE·QA), 공통 파일 담당 | `AGENTS.md` 단계 표 |
+| IC-02 | 테스트 작성 담당과 위치(티켓 "산출" 열에 테스트 경로를 적는 규칙 포함) | `06-quality-gates.md`, `HANDOFF.md` |
+| IC-03 | 스택·버전, 디렉토리 트리, import 경로 규칙 | `02-system-architecture.md`, `05-structure-conventions.md` |
+| IC-04 | 계층·기능 간 의존 방향, 금지 패턴 | `05-structure-conventions.md` |
+| IC-05 | 명명 규칙(클래스·파일·테이블·제약·스키마·테스트 이름) | `05-structure-conventions.md`, `03-db-schema.md` |
+| IC-06 | 에러 모델(상태 코드 체계, 본문 형식, 사용자 문구), 응답 필드 표기(snake_case 등) | `04-interfaces-api.md` |
+| IC-07 | 트랜잭션 확정 위치, 세션 수명, 저장소 모델 노출 경계 | `04-interfaces-api.md`, `03-db-schema.md` |
+| IC-08 | 스키마 반영 방식(마이그레이션 도구 / 기동 시 생성)과 기존 DB 처리 | `03-db-schema.md` |
+| IC-09 | 인증 방식과 전달 경로, 권한 확인 위치, 비밀값·설정 읽는 경로, 응답·로그 비노출 필드 | ADR, `04-interfaces-api.md`, `05-structure-conventions.md` |
+| IC-10 | 화면 기술, 화면 데이터 계약, 스타일 기준의 출처(UX 단계가 없으면 토큰 정의 위치), 상태 변경 요청 방식 | `04-interfaces-api.md`, `05-structure-conventions.md` |
+| IC-11 | 실행·검증 명령(기동, 테스트, 린트, 계층·비밀값 검사)과 통과 기준, 테스트 DB·테스트 데이터 방식 | `06-quality-gates.md` |
+| IC-12 | 스택 주의(이 스택에서 구현자가 흔히 틀리는 점: 경로 해석, 버전 호환, 자동 생성이 놓치는 것 등) | `05-structure-conventions.md` "스택 주의" 절 |
+| IC-13 | 시드 계획(건수·값·위치·중복 방지·비밀값 입력) | `03-db-schema.md` |
+| IC-14 | 필수/도전 구분과 "요청 시" 표시, 임시 코드와 제거 티켓 | `HANDOFF.md` |
+| IC-15 | README 등 문서 티켓의 목차 | `HANDOFF.md` |
+
+- 이 표는 스택에 상관없이 쓴다. 스택에 맞는 내용(예: ORM 이름, 템플릿 엔진)은 각 문서에 채운다.
+- PM 산출물과 어긋나는 설계가 있으면 handoff 전에 PM 문서 갱신 또는 사용자 확인을 받는다. 구현 단계는 충돌 시 PM 산출물을 따르기 때문이다.
+
 ---
 
 ## 3. 발제 평가표 — Architect 책임 범위

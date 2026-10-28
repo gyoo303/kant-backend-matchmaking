@@ -107,3 +107,41 @@ presentation ──▶ application ──▶ domain
 
 ## 5. AGENTS.md
 저장소 루트 `AGENTS.md`의 `## 디렉토리 지도`를 이 문서 기준으로 갱신했다.
+
+## 6. 스타일 기준 (UX 단계 미사용, D-019)
+
+- 토큰은 `src/static/css/app.css`의 `:root` CSS 변수로만 정의한다. 템플릿·다른 CSS는 `var(--…)`로만 쓴다(직접 쓴 색·간격·인라인 스타일 금지).
+- 아래는 토큰 **이름과 역할**이다. **값은 FE가 TKT-FE-M5-01에서 정하고** 브리핑 "구현 중 자율 결정"에 기록한다(D-019). 본문 글자와 배경의 대비는 4.5:1 이상으로 한다.
+
+| 토큰 | 역할 |
+|---|---|
+| `--color-bg`, `--color-surface` | 페이지 배경, 카드·표 배경 |
+| `--color-text`, `--color-text-muted` | 본문, 보조 문구(생성 시각 등) |
+| `--color-border` | 표·입력칸 테두리 |
+| `--color-primary`, `--color-on-primary` | 주요 버튼(만들기·참가·게임 시작)과 그 위 글자 |
+| `--color-danger`, `--color-success`, `--color-notice` | 거부·오류 안내, 성공 안내, 일반 안내(해산 등) |
+| `--color-disabled` | 비활성 버튼(정원 마감 등) |
+| `--color-team-a`, `--color-team-b` | A팀·B팀 영역 구분 |
+| `--space-1`~`--space-4` | 간격 4단계(작은 값부터) |
+| `--radius` | 모서리 둥글기 |
+| `--font-body`, `--font-size-sm`, `--font-size-base`, `--font-size-lg` | 글꼴, 글자 크기 3단계 |
+| `--focus-ring` | 키보드 포커스 표시 |
+
+- 토큰을 추가해야 하면 FE가 같은 파일에 추가하고 브리핑에 적는다. 역할이 위 표와 겹치는 토큰은 만들지 않는다.
+
+## 7. 스택 주의 (구현자가 흔히 틀리는 점)
+
+| ID | 대상 | 주의 |
+|---|---|---|
+| STK-01 | import 경로 | 실행이 `--app-dir src`라서 import는 `src.` 없이 쓴다(`from rooms.domain.room import Room`). pytest도 같게 하려고 `pyproject.toml`에 `[tool.pytest.ini_options] pythonpath = ["src"]`를 둔다. |
+| STK-02 | 비동기 lazy loading | AsyncSession에서 관계 속성을 지연 로딩하면 `MissingGreenlet` 오류가 난다. 레포지토리는 참가자를 `selectinload` 또는 별도 `select`로 **명시적으로** 읽고 도메인 객체로 바꾼다. ORM 관계(`relationship`)는 쓰지 않아도 된다. |
+| STK-03 | `FOR UPDATE`와 조인 (도전 A) | PostgreSQL은 outer join의 nullable 쪽에 `FOR UPDATE`를 걸 수 없다. `find_by_id_for_update`는 `select(RoomModel).where(...).with_for_update()`로 방 행만 잠그고, 참가자는 별도 쿼리로 읽는다. |
+| STK-04 | 부분 유니크 인덱스 (도전 A) | `Index("uq_participations_user_current", ParticipationModel.user_id, unique=True, postgresql_where=text("left_at IS NULL"))`. `create_all`은 이미 있는 테이블에 인덱스·제약을 추가하지 않으므로 개발 DB를 지우고 다시 만든다. |
+| STK-05 | 제목 검색 | `RoomModel.title.ilike(pattern, escape="\\")`. 패턴을 만들 때 `\`·`%`·`_` 앞에 `\`를 붙인다. |
+| STK-06 | 시각 | 컬럼은 `DateTime(timezone=True)`이고 읽으면 UTC aware 값이다. 비교·저장하는 값도 `datetime.now(UTC)`(aware)만 쓴다. naive 값과 섞으면 오류가 난다. |
+| STK-07 | bcrypt | passlib 1.7.4는 bcrypt 4.1 이상에서 버전 감지 경고, 5.x에서 오류가 난다. `bcrypt==4.0.1`을 바꾸지 않는다(ADR-002). |
+| STK-08 | 로그인 폼 | `OAuth2PasswordRequestForm`은 `python-multipart`가 필요하다. 필드 이름은 `username`이며 값은 아이디다. |
+| STK-09 | 템플릿 응답 | 최신 Starlette는 `templates.TemplateResponse(request, "rooms/list.html", context)` 순서다(예전 `{"request": request}` 방식은 쓰지 않는다). `.html` 템플릿은 자동 이스케이프가 켜져 있다. |
+| STK-10 | 설정 파일 | pydantic-settings의 `env_file=".env"`는 실행한 작업 디렉토리 기준이다. 서버·테스트는 저장소 루트에서 실행한다. `Settings`는 `extra="ignore"`로 테스트용 변수(`TEST_DATABASE_URL`)를 무시한다. |
+| STK-11 | 비동기 테스트 루프 | 엔진·세션 fixture와 테스트가 같은 이벤트 루프를 써야 한다. `[tool.pytest.ini_options]`에 `asyncio_mode = "auto"`, `asyncio_default_fixture_loop_scope = "session"`을 두고, 테스트 모듈은 `pytestmark = pytest.mark.asyncio(loop_scope="session")`을 쓴다. |
+| STK-12 | 엔진 정리 | lifespan 종료 시 `await engine.dispose()`. 테스트는 앱 엔진 대신 `TEST_DATABASE_URL` 엔진을 `dependency_overrides`로 주입한다. |
