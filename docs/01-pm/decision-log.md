@@ -173,3 +173,9 @@
 - 선택지: **A. API에 `/api` 접두사 (권장·채택)** / B. 화면에 `/web` 접두사 / C. 같은 경로에서 요청 헤더(Accept)로 HTML·JSON 분기
 - 권장 이유: 화면 `/rooms/{id}`와 API `/rooms/{id}`가 겹친다. 사용자가 보는 브라우저 주소는 짧게 두고 API만 구분하는 편이 단순하다.
 - trade-off: A — API 주소가 PM 초안의 `/rooms` 예시와 달라진다. B — 브라우저 주소가 길어진다. C — 라우터가 복잡해지고 Swagger 문서가 헷갈린다.
+
+### D-022 [자율][ARCH] GATE-08 검사 명령을 ORM 모델 이름으로 좁힘
+- 결정: GATE-08 명령을 `Model`로 끝나는 모든 import 대신 ORM 모델 이름 4개(`UserModel`·`TokenBlacklistModel`·`RoomModel`·`ParticipationModel`)와 `infrastructure.models` 경로로 찾게 바꾼다 — `06-quality-gates.md` GATE-08, RISK-02, BE 브리핑(TKT-BE-M3-04)·QA 브리핑(M3~M7)의 오탐 보고
+- 선택지: **A. 모델 이름 + 경로로 좁힘 (권장·채택)** / B. `infrastructure.models` 경로만 검사 / C. 기존 명령 유지, `BaseModel`은 매번 사람이 제외
+- 권장 이유: pydantic `BaseModel` 오탐이 사라져 "출력 0줄" 기준이 실제로 쓸 수 있게 되고, `models.RoomModel`처럼 import 줄에 이름이 없는 사용도 잡는다.
+- trade-off: A — 모델 클래스를 추가하면 명령에도 이름을 넣어야 한다. B — 단순하지만 다른 경로로 들여온 모델 이름은 놓친다. C — 문서 변경은 없지만 매번 실패로 나와 진짜 위반을 놓치기 쉽다.
