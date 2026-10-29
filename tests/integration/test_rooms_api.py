@@ -1,4 +1,4 @@
-"""rooms API 통합 테스트: AC-01~AC-07 (TEST_DATABASE_URL 필요).
+"""rooms API 통합 테스트: AC-01~AC-07, AC-12, NFR-06·07 (TEST_DATABASE_URL 필요).
 
 인증은 실제 access 토큰을 쓴다(conftest.auth_header, TKT-QA-M4-01에서 전환).
 """
@@ -424,3 +424,159 @@ async def test_ac_07_5_unknown_room_detail_is_404(client, make_users):
     (user,) = await make_users(1)
     response = await client.get("/api/rooms/9999", headers=auth_header(user))
     assert response.status_code == 404
+
+
+# --- US-12 공개 방 목록 (TKT-QA-M5-01) ---
+
+
+async def list_rooms(client: httpx.AsyncClient, user_id: int, query: str = "") -> httpx.Response:
+    return await client.get(f"/api/rooms?{query}", headers=auth_header(user_id))
+
+
+async def make_listing(client: httpx.AsyncClient, make_users) -> tuple[list[int], int]:
+    """활성 방 12개(정원 찬 방 2개 포함)·삭제 방 3개. (활성 방 ID 생성순, 조회용 회원) 반환.
+
+    회원 18명: 1~12번이 활성 방 방장, 13~18번이 정원 찬 방(1·2번 방) 참가자.
+    삭제 방은 1~3번이 먼저 만들고 나가서 지운 뒤 활성 방을 만든다.
+    """
+    users = await make_users(18)
+    for user_id in users[:3]:
+        deleted_id = await create_room(client, user_id, "삭제될 방")
+        await leave(client, deleted_id, user_id)
+    active = []
+    for n, user_id in enumerate(users[:12], 1):
+        active.append(await create_room(client, user_id, f"활성 {n}"))
+    for room_id, joiners in ((active[0], users[12:15]), (active[1], users[15:18])):
+        for user_id in joiners:
+            assert (await join(client, room_id, user_id)).status_code == 200
+    return active, users[0]
+
+
+async def test_ac_12_1_default_list_newest_without_deleted(client, make_users):
+    active, viewer = await make_listing(client, make_users)
+    body = (await list_rooms(client, viewer)).json()
+    assert body["total"] == 12
+    assert body["page"] == 1 and body["size"] == 10
+    assert [room["id"] for room in body["items"]] == list(reversed(active))[:10]
+    assert all(room["title"] != "삭제될 방" for room in body["items"])
+
+
+async def test_ac_12_2_available_only_filter(client, make_users):
+    active, viewer = await make_listing(client, make_users)
+    body = (await list_rooms(client, viewer, "available_only=true&size=50")).json()
+    assert body["total"] == 10
+    ids = {room["id"] for room in body["items"]}
+    assert active[0] not in ids and active[1] not in ids
+
+
+async def test_ac_12_3_keyword_trimmed_and_case_insensitive(client, make_users):
+    host, other, viewer = await make_users(3)
+    fun_id = await create_room(client, host, "Fun Room")
+    await create_room(client, other, "진지한 방")
+    body = (await list_rooms(client, viewer, "keyword=%20%20fun%20")).json()
+    assert [room["id"] for room in body["items"]] == [fun_id]
+
+
+async def test_ac_12_4_keyword_percent_is_literal(client, make_users):
+    host, other, viewer = await make_users(3)
+    percent_id = await create_room(client, host, "100%")
+    await create_room(client, other, "100점")
+    body = (await list_rooms(client, viewer, "keyword=%25")).json()
+    assert [room["id"] for room in body["items"]] == [percent_id]
+
+
+async def test_ac_12_5_oldest_sort_breaks_ties_by_id(client, make_users, session_factory):
+    from sqlalchemy import text
+
+    first, second, third, viewer = await make_users(4)
+    a = await create_room(client, first, "a")
+    b = await create_room(client, second, "b")
+    c = await create_room(client, third, "c")
+    # 같은 생성 시각을 만들어 식별자 오름차순 보조 정렬을 확인한다
+    async with session_factory() as session:
+        await session.execute(
+            text(
+                "UPDATE rooms SET created_at = "
+                "(SELECT created_at FROM rooms WHERE id = :a) WHERE id = :c"
+            ),
+            {"a": a, "c": c},
+        )
+        await session.commit()
+    body = (await list_rooms(client, viewer, "sort=oldest")).json()
+    assert [room["id"] for room in body["items"]] == [a, c, b]
+
+
+async def test_ac_12_6_page_size_limits(client, make_users):
+    active, viewer = await make_listing(client, make_users)
+    body = (await list_rooms(client, viewer, "size=50")).json()
+    assert len(body["items"]) == 12 and body["size"] == 50
+    for query in ("size=51", "size=0", "page=0", "sort=popular"):
+        response = await list_rooms(client, viewer, query)
+        assert response.status_code == 422, query
+        assert isinstance(response.json()["detail"], str)
+
+
+async def test_ac_12_7_page_beyond_last_is_empty_with_total(client, make_users):
+    active, viewer = await make_listing(client, make_users)
+    response = await list_rooms(client, viewer, "page=3")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["items"] == [] and body["total"] == 12
+
+
+async def test_ac_12_8_full_room_marked(client, make_users):
+    active, viewer = await make_listing(client, make_users)
+    body = (await list_rooms(client, viewer, "size=50")).json()
+    items = {room["id"]: room for room in body["items"]}
+    assert items[active[0]]["is_full"] is True and items[active[0]]["current_count"] == 4
+    assert items[active[2]]["is_full"] is False
+
+
+async def test_nfr_07_room_list_default_10_max_50_newest(client, make_users):
+    active, viewer = await make_listing(client, make_users)
+    body = (await list_rooms(client, viewer)).json()
+    assert len(body["items"]) == 10
+    assert body["items"][0]["id"] == active[-1]
+    assert (await list_rooms(client, viewer, "size=51")).status_code == 422
+
+
+# --- NFR-06 시드 ---
+
+
+async def count_seed_rows(session) -> dict[str, int]:
+    from sqlalchemy import text
+
+    counts = {}
+    for table in ("users", "rooms", "participations"):
+        counts[table] = (await session.execute(text(f"SELECT COUNT(*) FROM {table}"))).scalar_one()
+    return counts
+
+
+async def test_nfr_06_seed_twenty_rows_and_idempotent(session_factory):
+    from sqlalchemy import text
+
+    from config import get_settings
+    from seed import seed_initial_data
+
+    async with session_factory() as session:
+        await seed_initial_data(session, get_settings())
+        await session.commit()
+        first = await count_seed_rows(session)
+        # 시연용 4인 2vs2 활성 방 1개 이상
+        four_player_rooms = (
+            await session.execute(
+                text(
+                    "SELECT COUNT(*) FROM rooms r WHERE r.deleted_at IS NULL AND "
+                    "(SELECT COUNT(*) FROM participations p "
+                    "WHERE p.room_id = r.id AND p.left_at IS NULL) = 4"
+                )
+            )
+        ).scalar_one()
+    assert sum(first.values()) >= 20
+    assert first["rooms"] > 0 and four_player_rooms >= 1
+
+    for _ in range(2):  # 재시작 2회
+        async with session_factory() as session:
+            await seed_initial_data(session, get_settings())
+            await session.commit()
+            assert await count_seed_rows(session) == first
