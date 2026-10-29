@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{# SCR-05 내 기록(목록) (07-screens.md §3, PAGE-05, API-ROOM-10). 서버는 page만 넘기고, 행은 아래 스크립트가 API로 채운다. #}
+{% block title %}내 이용 기록 · 2vs2 매치메이킹{% endblock %}
+
+{% block content %}
+<section class="card" id="history" data-page="{{ page }}" aria-labelledby="history-title">
+  <h1 id="history-title">내 이용 기록</h1>
+  <p class="muted" id="history-total"></p>
+  <p id="history-empty" hidden>아직 이용 기록이 없습니다</p>
+  <div class="table-wrap" id="history-table" hidden>
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">방 제목</th>
+          <th scope="col" class="nowrap">입장 시각</th>
+          <th scope="col" class="nowrap">퇴장 시각</th>
+          <th scope="col"><span class="muted">보관 정보</span></th>
+        </tr>
+      </thead>
+      <tbody id="history-rows"></tbody>
+    </table>
+  </div>
+  {% include "partials/pagination.html" %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // 입장 시각 최신순(서버 정렬), 한 페이지 10건(API 기본 size). 검색·필터·정렬은 없다(REQ-055).
+  function renderHistoryRows(items) {
+    const tbody = document.getElementById("history-rows");
+    tbody.textContent = "";
+    items.forEach(function (item) {
+      const row = document.createElement("tr");
+
+      const title = document.createElement("td");
+      title.className = "cell-title";
+      title.textContent = item.room_title;
+
+      const joined = document.createElement("td");
+      joined.className = "nowrap";
+      joined.textContent = formatTime(item.joined_at);
+
+      const left = document.createElement("td");
+      left.className = "nowrap";
+      left.textContent = item.is_current ? "참가 중" : formatTime(item.left_at);
+
+      // 삭제된 방만 보관 정보로 갈 수 있다(AC-17-4)
+      const archived = document.createElement("td");
+      if (item.room_deleted) {
+        const link = document.createElement("a");
+        link.href = "/me/history/" + item.room_id;
+        link.textContent = "보관 정보";
+        archived.append(link);
+      }
+
+      row.append(title, joined, left, archived);
+      tbody.append(row);
+    });
+  }
+
+  async function loadHistory() {
+    if (!getAccessToken()) {
+      return;
+    }
+    const page = Number(document.getElementById("history").dataset.page) || 1;
+    const result = await apiRequest("GET", "/api/me/room-history?page=" + page);
+    if (!result.ok) {
+      showNotice(errorMessage(result), "error");
+      return;
+    }
+    const data = result.data;
+    document.getElementById("history-total").textContent = "전체 " + data.total + "건";
+    document.getElementById("history-empty").hidden = data.total > 0;
+    document.getElementById("history-table").hidden = data.items.length === 0;
+    renderHistoryRows(data.items);
+    if (data.total > 0) {
+      renderPagination(document.getElementById("pagination"), data.page, data.size, data.total, function (p) {
+        return "/me/history?page=" + p;
+      });
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", loadHistory);
+</script>
+{% endblock %}

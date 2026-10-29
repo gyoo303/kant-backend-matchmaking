@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{# SCR-06 보관 정보 (07-screens.md §4, PAGE-06, API-ROOM-11). 읽기 전용: 참가·복구 버튼 없음(AC-14-3). #}
+{% block title %}보관 정보 · 2vs2 매치메이킹{% endblock %}
+
+{% block content %}
+<section class="card" id="archived" data-room-id="{{ room_id }}" aria-labelledby="archived-title" hidden>
+  <h1 id="archived-title"></h1>
+  <div class="table-wrap">
+    <table>
+      <tbody>
+        <tr>
+          <th scope="row" class="nowrap">정원</th>
+          <td id="archived-capacity"></td>
+        </tr>
+        <tr>
+          <th scope="row" class="nowrap">생성 시각</th>
+          <td id="archived-created"></td>
+        </tr>
+        <tr>
+          <th scope="row" class="nowrap">삭제 시각</th>
+          <td id="archived-deleted"></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>본인 입장·퇴장 기록</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col" class="nowrap">입장 시각</th>
+          <th scope="col" class="nowrap">퇴장 시각</th>
+        </tr>
+      </thead>
+      <tbody id="archived-records"></tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function renderArchived(data) {
+    document.getElementById("archived-title").textContent = data.title;
+    document.getElementById("archived-capacity").textContent = data.capacity + "명";
+    document.getElementById("archived-created").textContent = formatTime(data.created_at);
+    document.getElementById("archived-deleted").textContent = formatTime(data.deleted_at);
+
+    const tbody = document.getElementById("archived-records");
+    tbody.textContent = "";
+    data.my_records.forEach(function (record) {
+      const row = document.createElement("tr");
+      const joined = document.createElement("td");
+      joined.className = "nowrap";
+      joined.textContent = formatTime(record.joined_at);
+      const left = document.createElement("td");
+      left.className = "nowrap";
+      left.textContent = formatTime(record.left_at);
+      row.append(joined, left);
+      tbody.append(row);
+    });
+    document.getElementById("archived").hidden = false;
+  }
+
+  async function loadArchived() {
+    if (!getAccessToken()) {
+      return;
+    }
+    const roomId = document.getElementById("archived").dataset.roomId;
+    const result = await apiRequest("GET", "/api/me/room-history/" + roomId);
+    if (result.ok) {
+      renderArchived(result.data);
+    } else if (result.status === 404) {
+      // 없는 방·참가한 적 없는 방·아직 삭제되지 않은 방은 같은 문구(07-screens.md §4, PAGE-06)
+      showNotice("찾을 수 없습니다", "error");
+    } else {
+      showNotice(errorMessage(result), "error");
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", loadArchived);
+</script>
+{% endblock %}
