@@ -79,13 +79,15 @@ def join(self, user_id: int, current_participation: Participation | None, now: d
         raise AlreadyParticipatingError()       # 다른 방에 참가 중
     if self.is_full:
         raise RoomFullError()                   # 정원 4명 마감
+    team = self._team_to_join()                 # A팀에 자리가 있으면 A, 없으면 B (D-024)
     self.last_join_order += 1
     participation = Participation(
         id=None, room_id=self.id, user_id=user_id,
         join_order=self.last_join_order,
-        team=self._team_with_fewer_members(),   # 인원이 적은 팀, 같으면 A팀
+        team=team.side,
         joined_at=now,
     )
+    team.add(participation)                     # 팀 정원 2명은 Team이 검사
     self.participations.append(participation)
     return participation
 ```
@@ -151,7 +153,7 @@ flowchart LR
 요구사항에는 **안 적힌 것**이 많아요. 액터(비로그인·회원·방장·동시 사용자) × 관점(기능·데이터·상태·보안 …) 표를 만들어 빈칸을 찾고, 모호한 것은 질문으로 만들어요.
 
 - `ASM-01` 게임 시작은 **누가** 누를 수 있나? → 질문 `Q-01` → 답: 현재 방장만
-- `ASM-03` 처음 들어온 사람은 **어느 팀**? → 질문 `Q-03` → 답: 인원이 적은 팀, 같으면 A팀
+- `ASM-03` 처음 들어온 사람은 **어느 팀**? → 질문 `Q-03` → 답: A팀에 자리가 있으면 A팀, 없으면 B팀(D-024로 변경)
 
 답은 결정 기록(`docs/01-pm/decision-log.md`, `D-xxx`)에 남겨요. **코드에서 "왜 A팀이지?"라는 질문이 생기면 여기서 답을 찾을 수 있어요.**
 
@@ -180,7 +182,7 @@ flowchart LR
 
 | 행위 | 거부 규칙 | 결과 |
 |---|---|---|
-| `Room.join(...)` | 삭제된 방 / 정원 4명 마감 / 다른 방에 참가 중 | 새 참가(다음 입장 순서, 인원이 적은 팀) |
+| `Room.join(...)` | 삭제된 방 / 정원 4명 마감 / 다른 방에 참가 중 | 새 참가(다음 입장 순서, A팀 우선) |
 | `Room.start_game(...)` | 삭제된 방 / 방장이 아님 / A·B팀이 각각 2명이 아님 | 소프트 삭제(`GAME_STARTED`), 전원 퇴장 |
 
 기능을 "API 목록"이 아니라 **"도메인 객체가 하는 행동(메서드)"** 으로 정리한 점이 도메인 중심 기획의 특징이에요.
@@ -206,7 +208,7 @@ flowchart LR
 
 ```
 US-02: 회원으로서, 게임에 함께하기 위해, 빈자리가 있는 방에 참가하고 싶다.
-- 정상 흐름: 다음 입장 순서로 참가 기록이 생기고, 인원이 적은 팀에 배정된다 …
+- 정상 흐름: 다음 입장 순서로 참가 기록이 생기고, A팀에 자리가 있으면 A팀, 없으면 B팀에 배정된다 …
 - 거부 시나리오: REJ-09 정원 4명 마감 → 거부 (REQ-035)
 - 관련 INV: INV-02, INV-03, INV-04, INV-06, INV-11
 ```
@@ -255,12 +257,20 @@ classDiagram
         last_join_order
         deleted_at
         delete_reason: DeleteReason
+        teams: A·B Team
         create()
         join()
         rename()
         change_team()
         leave()
         start_game()
+    }
+    class Team {
+        id
+        side: TeamSide
+        members
+        add()
+        remove()
     }
     class Participation {
         id
@@ -316,11 +326,11 @@ class RoomTitle:
 
 ### 4.3 애그리거트: 왜 `Room`이 `Participation`을 묶을까?
 
-"팀당 2명까지"(INV-03)를 판단하려면 **그 방의 현재 참가자 전체**를 봐야 해요. `Participation` 하나만 봐서는 알 수 없죠. 그래서:
+"팀당 2명까지"(INV-03)를 판단하려면 **그 팀의 현재 팀원**을 봐야 해요. `Participation` 하나만 봐서는 알 수 없죠. 그래서 팀 정원은 `Team`(현재 팀원 목록)이 검사하고(D-023·ADR-010), `Team`과 참가 기록은 `Room` 안에 묶어요:
 
-- `Room`이 **루트**, `Participation`은 그 안의 구성원이에요.
+- `Room`이 **루트**, `Team`(A·B 두 개)과 `Participation`은 그 안의 구성원이에요.
 - 참가·팀 변경·나가기는 모두 `room.join()`, `room.change_team()`, `room.leave()`처럼 **루트를 통해서만** 해요.
-- 저장도 `RoomRepository.save(room)` 한 번으로 방과 참가 기록을 함께 저장해요.
+- 저장도 `RoomRepository.save(room)` 한 번으로 방·팀·참가 기록을 함께 저장해요.
 
 반대로 **다른 애그리거트는 id로만 참조**해요. `Participation`은 `User` 객체를 갖지 않고 `user_id: int`만 가져요(ADR-001). 그래야 방을 불러올 때 회원 정보까지 줄줄이 불러오지 않아요.
 
@@ -334,13 +344,12 @@ def start_game(self, requester_id: int, now: datetime) -> None:
     self._ensure_active()                        # 1. 삭제된 방?
     if requester_id != self.host_user_id:
         raise NotHostError()                     # 2. 방장이 아님?
-    if (
-        self.team_count(TeamSide.A) != self.TEAM_CAPACITY
-        or self.team_count(TeamSide.B) != self.TEAM_CAPACITY
-    ):
+    if not all(team.is_full for team in self.teams.values()):
         raise InvalidTeamCompositionError()      # 3. A·B 각 2명이 아님?
     for participation in self.current_participants:
         participation.end(now)                   # 전원 퇴장
+    for team in self.teams.values():
+        team.members.clear()
     self._soft_delete(DeleteReason.GAME_STARTED, now)
 ```
 
@@ -494,7 +503,7 @@ def _to_domain(cls, model: RoomModel) -> Room:
 | 폴더 | 다루는 말 | 도메인 |
 |---|---|---|
 | `src/auth/` | 회원, 아이디, 비밀번호, 토큰, 로그아웃 | `User`, `TokenBlacklist` |
-| `src/rooms/` | 방, 방장, 팀, 참가, 게임 시작 | `Room`, `Participation`, `RoomTitle`, `TeamSide`, `DeleteReason` |
+| `src/rooms/` | 방, 방장, 팀, 참가, 게임 시작 | `Room`, `Team`, `Participation`, `RoomTitle`, `TeamSide`, `DeleteReason` |
 
 - 각 폴더 안에 4계층이 다시 있어요(`auth/domain/`, `rooms/domain/` …).
 - 참조 방향은 **`rooms → auth` 하나뿐**이에요. 방에는 "현재 회원 ID"가 필요하지만, 인증은 방을 몰라도 돼요. 반대 방향 import는 GATE-02가 막아요.
@@ -523,7 +532,7 @@ def _to_domain(cls, model: RoomModel) -> Room:
 # rooms/application/service.py
 async def change_team(self, room_id, user_id, team):
     room = await self._get_room(room_id)
-    if room.team_count(team) >= 2:
+    if room.team(team).count >= 2:
         raise TeamFullError()
     ...
 ```
@@ -531,7 +540,7 @@ async def change_team(self, room_id, user_id, team):
 <details>
 <summary>정답 보기</summary>
 
-"팀 정원 2명" 판단이 **서비스**에 있어요. 이 판단은 `Room.change_team()` 안에 있어야 해요(실제 코드도 그렇게 되어 있어요). 서비스에 규칙이 생기면 빈약한 도메인 모델로 돌아가는 첫걸음이에요(금지 패턴 4번: "서비스·라우터에 비즈니스 규칙 if-else").
+"팀 정원 2명" 판단이 **서비스**에 있어요. 이 판단은 도메인 안에 있어야 해요(실제 코드는 `Room.change_team()`이 `Team.add()`를 불러 검사해요). 서비스에 규칙이 생기면 빈약한 도메인 모델로 돌아가는 첫걸음이에요(금지 패턴 4번: "서비스·라우터에 비즈니스 규칙 if-else").
 
 </details>
 

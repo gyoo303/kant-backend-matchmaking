@@ -1,7 +1,7 @@
 # 2vs2 매치메이킹 API 명세서 v1 (M4 인증 · 방 도메인)
 
 - 문서 버전: `0.1.0`
-- 근거: API 명세 회의 메모, DB 스키마(`docs/02-arch/03-db-schema.md`)
+- 근거: API 명세 회의 메모, DB 스키마(`docs/02-arch/03-db-schema.md`), 팀 엔티티 분리·A팀 우선 배정(D-023·D-024, ADR-010)
 - 범위: 회의에서 다룬 API 9개
   - 인증 4개: 회원가입, 토큰 발급, 토큰 만료, 로그인 확인
   - 방 5개: 방 생성, 방 참가, 방 제목 변경, 팀 변경, 방 나가기
@@ -378,7 +378,7 @@ Body
 | `participants` | array | 현재 참가자. A팀 먼저, 같은 팀 안에서는 입장 순서 | `participations` + `users.nickname` |
 | `participants[].user_id` | integer | 회원 ID | `participations.user_id` |
 | `participants[].nickname` | string | 닉네임 | `users.nickname` |
-| `participants[].team` | string | `"A"` 또는 `"B"` | `participations.team` |
+| `participants[].team` | string | `"A"` 또는 `"B"` | `participations.team_id` → `teams.side` |
 | `participants[].is_host` | boolean | 방장 여부 | `user_id == rooms.host_user_id` |
 | `my_team` | string \| null | 요청한 회원의 팀, 참가자가 아니면 `null` | |
 | `am_i_host` | boolean | 요청한 회원이 방장인지 | |
@@ -427,13 +427,14 @@ Body
 | `rooms` | `host_user_id` | 토큰의 회원 ID |
 | `rooms` | `last_join_order` | `1` |
 | `rooms` | `created_at` | 서버 현재 시각 |
+| `teams` | `room_id`, `side` | 방금 만든 `rooms.id`, `"A"`·`"B"` 두 행 |
 | `participations` | `room_id` | 방금 만든 `rooms.id` |
 | `participations` | `user_id` | 토큰의 회원 ID |
 | `participations` | `join_order` | `1` |
-| `participations` | `team` | `"A"` |
+| `participations` | `team_id` | 이 방의 A팀 `teams.id` |
 | `participations` | `joined_at` | 서버 현재 시각 |
 
-두 행은 **한 트랜잭션**으로 저장한다. `rooms` 행을 먼저 넣어 `id`를 받고, 그 값을 `participations.room_id`에 쓴다.
+네 행(방 1, 팀 2, 참가 1)은 **한 트랜잭션**으로 저장한다. `rooms` 행을 먼저 넣어 `id`를 받고, 그 값을 `teams.room_id`·`participations.room_id`에 쓴다.
 
 **응답 상세 — 성공 `200`**
 
@@ -507,7 +508,7 @@ Body
 |---|---|---|
 | `rooms` | `last_join_order` | 기존 값 + 1 |
 | `participations` | `join_order` | 새 `last_join_order` |
-| `participations` | `team` | 인원이 적은 팀, 같으면 `"A"` |
+| `participations` | `team_id` | A팀에 자리가 있으면 A팀, 없으면 B팀 (D-024) |
 | `participations` | `joined_at` | 서버 현재 시각 |
 
 **응답 상세 — 성공 `200`**
@@ -532,7 +533,7 @@ Body: `RoomDetail`. 배정된 팀은 `my_team`에 들어 있다.
 | `422` | `room_id` 누락 또는 숫자가 아님 | `{"detail": "room_id: Field required"}` |
 
 > 회의 메모 반영
-> - **"이 시점에서 team 정보를 못 받는 게 맞는지?"** 맞다. 참가할 때는 서버가 팀을 정한다. 이후 회원이 팀을 옮기면 API-ROOM-04가 `participations.team`을 바꾼다. 참가 응답에는 배정 결과와 방 전체 팀 구성이 들어 있다.
+> - **"이 시점에서 team 정보를 못 받는 게 맞는지?"** 맞다. 참가할 때는 서버가 팀을 정한다. 이후 회원이 팀을 옮기면 API-ROOM-04가 `participations.team_id`를 같은 방의 다른 팀으로 바꾼다. 참가 응답에는 배정 결과와 방 전체 팀 구성이 들어 있다.
 > - **"room_id를 못 넘겨받는 경우가 가능한가?"** 가능하다. 두 경우를 나눠 처리한다.
 >   - Body에서 빠졌거나 숫자가 아니면 FastAPI가 `422`를 낸다.
 >   - 숫자지만 없는 방이면 `404`를 낸다.
@@ -667,7 +668,7 @@ Body
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | `room_id` | integer | 방 ID |
-| `team` | string | 바뀐 내 팀 (`participations.team`). 이미 그 팀이면 그대로 돌려준다 |
+| `team` | string | 바뀐 내 팀 (`participations.team_id` → `teams.side`). 이미 그 팀이면 그대로 돌려준다 |
 
 **응답 상세 — 오류**
 
@@ -681,7 +682,7 @@ Body
 
 > 회의 메모 반영
 > - 전송 데이터의 `user_id`는 토큰으로 대신했다.
-> - `participations.team`은 요청 필드 `team`(옮길 팀)으로 바꿨다.
+> - 회의 메모의 `participations.team`은 요청 필드 `team`(옮길 팀, `"A"`·`"B"`)으로 바꿨다. 서버가 같은 방의 그 팀으로 `team_id`를 바꾼다.
 
 ---
 

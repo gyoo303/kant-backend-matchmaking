@@ -50,7 +50,7 @@ kant-ubuntu-books-claude1/
 │   │   ├── application/    service.py
 │   │   └── presentation/   schemas.py, router.py, dependencies.py, pages.py
 │   ├── rooms/
-│   │   ├── domain/         room.py, participation.py, exceptions.py
+│   │   ├── domain/         room.py, team.py, participation.py, exceptions.py
 │   │   ├── infrastructure/ models.py, repositories.py
 │   │   ├── application/    service.py, queries.py, read_models.py
 │   │   └── presentation/   schemas.py, router.py, pages.py
@@ -64,7 +64,7 @@ kant-ubuntu-books-claude1/
 │       └── js/             api.js, polling.js, rooms.js
 ├── tests/
 │   ├── conftest.py
-│   ├── unit/               test_room.py, test_participation.py, test_user.py      # DB 없음
+│   ├── unit/               test_room.py, test_team.py, test_participation.py, test_user.py      # DB 없음
 │   └── integration/        test_auth_api.py, test_rooms_api.py, test_history_api.py, test_errors.py
 └── docs/                   # 기획(01-pm)·설계(02-arch)·단계별 브리핑·이미지(images)
 ```

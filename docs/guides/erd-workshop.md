@@ -128,7 +128,7 @@ ERD의 가장 중요한 근거예요.
 
 - 테이블: **회원, 방, 참가, 토큰 블랙리스트**
 - 방장 → 방의 **속성**(누가 방장인지)
-- 팀 → 참가의 **속성**(A 또는 B)
+- 팀 → 참가의 **속성**(A 또는 B) — 처음 설계 기준. 이 저장소는 튜터 피드백 뒤 팀을 별도 테이블로 바꿨어요(§9, D-023·ADR-010). 둘 다 가능한 답이에요
 - 입장 순서 → 참가의 **속성**
 - 삭제 사유 → 방의 **속성**
 - 게임·게임 결과 → **없음** (REQ-001, INV-09)
@@ -505,7 +505,7 @@ ERD 위에서 행이 어떻게 바뀌는지 손으로 따라가요.
 
 ## 8. 자주 하는 실수 체크
 
-- [ ] 방장·팀을 별도 테이블로 만들었다
+- [ ] 방장을 별도 테이블로 만들었다 (팀은 테이블로 뺄 수도 있어요 — §9, ADR-010)
 - [ ] 게임·결과 테이블을 만들었다 (INV-09)
 - [ ] 현재 인원 컬럼을 저장해서 숫자가 어긋날 위험
 - [ ] 나가기 때 참가 행을 **지움** (INV-10 위반)
@@ -548,12 +548,18 @@ Table rooms {
   delete_reason varchar(20) [null, note: 'GAME_STARTED / EMPTY']
 }
 
+Table teams {
+  id integer [pk, increment]
+  room_id integer [not null, ref: > rooms.id]
+  side varchar(1) [not null, note: 'A / B, 방마다 두 행']
+}
+
 Table participations {
   id integer [pk, increment]
   room_id integer [not null, ref: > rooms.id]
   user_id integer [not null, ref: > users.id]
   join_order integer [not null, note: '방 안 입장 순서']
-  team varchar(1) [not null, note: 'A / B']
+  team_id integer [not null, ref: > teams.id, note: '같은 방의 팀']
   joined_at timestamptz [not null]
   left_at timestamptz [null, note: '비면 참가 중']
 }
@@ -582,8 +588,13 @@ Table token_blacklist {
 - **`capacity` 컬럼** — 정원은 늘 4지만
   REQ-032·053이 "고정 정원 저장"을 요구해서 둠.
 - **현재 인원은 컬럼 없음** — 참가 중 행을 셈.
+- **팀 테이블(튜터 피드백, D-023·ADR-010)** — 처음에는
+  참가의 `team` 값(A/B)이었지만, 팀을 엔티티로 보고
+  `teams`로 뺐어요. 팀 정원 2명은 컬럼이 아니라
+  도메인 `Team.CAPACITY`. 참가는 `room_id`도 유지해요
+  (이력·현재 방 조회가 단순).
 - **블랙리스트는 회원과 FK 없음** — 토큰 문자열로만 확인.
-- **CHECK 제약은 두지 않음** — 제목 길이·팀 값·
+- **CHECK 제약은 두지 않음** — 제목 길이·팀 편 값·
   삭제 상태는 도메인 클래스가 검사(D-020).
 - **한 회원 한 방 DB 보장** — 부분 유니크 인덱스는
   도전 A에서 추가(D-018).
