@@ -15,14 +15,15 @@
 - AC-01-5: Given 같은 제목의 활성 방이 있음, When 같은 제목으로 생성, Then 200, 서로 다른 방 식별자
 
 ### US-02 방 참가
-- AC-02-1: Given 참가자 1명(A팀)인 활성 방, When 다른 회원이 참가, Then 200, 참가자 2명, 새 참가자 B팀, 입장 순서 2
-- AC-02-2: Given A팀 2명·B팀 1명, When 참가, Then 200, B팀 배정
+- AC-02-1: Given 참가자 1명(A팀)인 활성 방, When 다른 회원이 참가, Then 200, 참가자 2명, 새 참가자 A팀, 입장 순서 2
+- AC-02-2: Given A팀 2명·B팀 1명, When 참가, Then 200, B팀 배정 (A팀에 자리가 없음)
 - AC-02-3: Given 참가자 4명, When 참가, Then 400, 참가자 4명 유지
 - AC-02-4: Given 다른 방에 참가 중인 회원, When 참가, Then 400
 - AC-02-5: Given 삭제된 방, When 참가, Then 400
 - AC-02-6: Given 없는 방 식별자, When 참가, Then 404
 - AC-02-7: Given 이미 이 방에 참가 중, When 같은 방에 참가 요청, Then 200, 이용 기록 수 변화 없음
 - AC-02-8: Given 이 방에서 나갔던 회원, When 다시 참가, Then 200, 새 이용 기록 1건, 이전 기록보다 큰 입장 순서
+- AC-02-9: Given A팀 1명·B팀 2명(팀 이동으로 A팀에 빈자리), When 참가, Then 200, A팀 배정 (D-024)
 
 ### US-03 제목 변경
 - AC-03-1: Given 방장, When 제목 "새 제목"으로 변경, Then 200, 제목 변경

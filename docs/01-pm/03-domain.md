@@ -29,7 +29,8 @@
 | 방 제목 | `RoomTitle` (값 객체) | 앞뒤 공백 제거 후 1~20자 | REQ-025 |
 | 활성 방 | `Room.is_active` | 소프트 삭제되지 않은 방 | REQ-018 |
 | 방장 | `Room.host_user_id` | 방의 현재 참가자 중 한 명 | REQ-029, REQ-043 |
-| 팀 | `TeamSide` (`A`, `B`) | 방 안의 두 팀. 팀당 정원 2명 | REQ-036, D-010 |
+| 팀 | `Team` | 방 안의 한 편. 편(`TeamSide`: `A`, `B`)과 현재 팀원을 갖고 팀 정원 2명을 스스로 검사한다. 방마다 A·B 두 팀 | REQ-036, D-010, D-023 |
+| 팀 편 | `TeamSide` (`A`, `B`) | 팀을 구분하는 값. 참가 기록은 소속 팀의 편을 기록한다 | REQ-036 |
 | 참가(이용 기록) | `Participation` | 한 회원이 한 방에 한 번 입장한 기록. 퇴장 시각이 없으면 '참가 중' | REQ-040, REQ-054 |
 | 입장 순서 | `Participation.join_order` | 그 방에 들어온 순서. 위임 기준, 화면 비공개 | REQ-045 |
 | 소프트 삭제 | `Room.soft_delete()` (내부) | 행을 남기고 삭제 시각·사유를 기록 | REQ-066 |
@@ -64,18 +65,29 @@
 
 | 행위 메서드 후보 | 거부 규칙 | 결과 | 근거 |
 |---|---|---|---|
-| `Room.create(title, creator, current_participation, now)` | 제목 규칙 위반 / 생성자가 이미 어떤 방에 참가 중 | 활성 방, 생성자 = 방장, 생성자 참가(입장 순서 1, A팀) | REQ-024~029, REQ-033, Q-03 |
+| `Room.create(title, creator, current_participation, now)` | 제목 규칙 위반 / 생성자가 이미 어떤 방에 참가 중 | 활성 방, A·B 두 팀 생성, 생성자 = 방장, 생성자 참가(입장 순서 1, A팀) | REQ-024~029, REQ-033, Q-03 |
 | `Room.rename(requester_id, title)` | 삭제된 방 / 요청자가 현재 방장이 아님 / 제목 규칙 위반 | 제목 변경 | REQ-030, REQ-031 |
-| `Room.join(user, current_participation, now)` | 삭제된 방 / 정원(4명) 마감 / 다른 방에 참가 중. 같은 방에 이미 참가 중이면 거부하지 않고 기존 참가 반환 | 새 참가(다음 입장 순서, 인원이 적은 팀, 같으면 A팀) | REQ-031, REQ-033~035, D-006, Q-03 |
-| `Room.change_team(user_id, target)` | 삭제된 방 / 요청자가 현재 참가자가 아님 / 대상 팀 2명 마감. 이미 그 팀이면 변경 없음 | 본인 팀 변경 | REQ-031, REQ-036, Q-02 |
+| `Room.join(user, current_participation, now)` | 삭제된 방 / 정원(4명) 마감 / 다른 방에 참가 중. 같은 방에 이미 참가 중이면 거부하지 않고 기존 참가 반환 | 새 참가(다음 입장 순서, A팀에 자리가 있으면 A팀, 없으면 B팀) | REQ-031, REQ-033~035, D-006, Q-03, D-024 |
+| `Room.change_team(user_id, target)` | 삭제된 방 / 요청자가 현재 참가자가 아님 / 대상 팀 2명 마감(`Team.add`가 거부). 이미 그 팀이면 변경 없음 | 원래 팀에서 빠지고 대상 팀에 들어감 | REQ-031, REQ-036, Q-02 |
 | `Room.leave(user_id, now)` | 요청자가 이 방의 현재 참가자가 아님 | 퇴장 시각 기록. 방장이면 남은 참가자 중 입장 순서가 가장 빠른 사람에게 위임. 마지막이면 소프트 삭제(`EMPTY`) | REQ-041~044 |
 | `Room.start_game(requester_id, now)` | 삭제된 방(반복 요청 포함) / 요청자가 현재 방장이 아님 / A팀·B팀이 각각 정확히 2명이 아님 | 소프트 삭제(`GAME_STARTED`), 전원 퇴장 시각 기록. 승패·결과 데이터는 만들지 않음 | REQ-048~052, Q-01, REQ-001 |
 | `Room.is_full`, `Room.available_seats` | — | 목록 '정원 마감'·빈자리 필터 판단 | REQ-081, REQ-087 |
 
 - 한 회원 한 방 제한(REQ-033)은 다른 방의 상태가 필요하므로, 응용 서비스가 회원의 현재 참가를 조회해 `current_participation`으로 넘기고 **판단은 도메인이** 한다. 동시 요청에서의 보장(DB 잠금·제약)은 도전 A에서 추가한다(D-018, REQ-107).
-- 정원(4)과 팀당 정원(2)은 생성 입력이 아니라 도메인 상수다(REQ-024, REQ-028).
+- 정원(4)과 팀당 정원(2)은 생성 입력이 아니라 도메인 상수다(`Room.CAPACITY`, `Team.CAPACITY`, REQ-024, REQ-028).
 
-### 4.4 `Participation`
+### 4.4 `Team` (D-023)
+
+| 행위 메서드 후보 | 거부 규칙 | 결과 | 근거 |
+|---|---|---|---|
+| 생성자 | 편(`A`·`B`)이 있어야 한다 | 팀원 0명 | REQ-036 |
+| `Team.add(participation)` | 팀원이 이미 2명 / 종료된 참가 기록 | 팀원에 추가, 참가 기록의 편을 이 팀으로 | REQ-036, INV-03 |
+| `Team.remove(participation)` | — | 팀원에서 뺌(나가기·팀 이동·게임 시작) | REQ-036, REQ-041 |
+| `Team.is_full`, `Team.count` | — | 배정·이동·게임 시작 조건 판단 | INV-03, INV-08 |
+
+- 팀은 방을 떠나 따로 존재하지 않는다. 방 생성 때 A·B 두 팀이 함께 생기고, 방이 삭제돼도 남는다(보관).
+
+### 4.5 `Participation`
 
 | 행위 메서드 후보 | 거부 규칙 | 결과 | 근거 |
 |---|---|---|---|
