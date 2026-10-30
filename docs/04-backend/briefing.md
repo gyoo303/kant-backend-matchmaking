@@ -1,8 +1,8 @@
 ---
 stage: BE
-tickets: [TKT-BE-M2-01, TKT-BE-M3-01, TKT-BE-M3-02, TKT-BE-M3-03, TKT-BE-M3-04, TKT-BE-M3-05, TKT-BE-M4-01, TKT-BE-M4-02, TKT-BE-M4-03, TKT-BE-M5-01]
+tickets: [TKT-BE-M2-01, TKT-BE-M3-01, TKT-BE-M3-02, TKT-BE-M3-03, TKT-BE-M3-04, TKT-BE-M3-05, TKT-BE-M4-01, TKT-BE-M4-02, TKT-BE-M4-03, TKT-BE-M5-01, TKT-BE-M8-01]
 status: done
-inputs_read: [AR-MAP, AR-HAND, AR-SYS, AR-API, AR-CONV, AR-GATE, AR-ADR, DB-BRIEF, PM-DOMAIN, PM-AC]
+inputs_read: [AR-MAP, AR-HAND, AR-SYS, AR-API, AR-CONV, AR-GATE, AR-ADR, DB-BRIEF, PM-DOMAIN, PM-AC, PM-DEC]
 next_readers: [DB, FE, QA]
 ---
 # 백엔드 에이전트 브리핑
@@ -39,8 +39,15 @@ next_readers: [DB, FE, QA]
 | TKT-BE-M4-03 | `grep -rn "X-Debug-User-Id" src/` 0줄 | 충족 | 명령 출력 0줄 |
 | | 로그아웃한 access 토큰 401 | 충족(가짜 레포지토리) | 블랙리스트에 넣은 access 토큰으로 `GET /api/rooms` → 401. 실제 DB 위 확인은 못 함 |
 | | AC-02-3·06-5 수동 curl 확인 | 부분 충족 | 실제 DB 대신 가짜 서비스로 400(정원 마감·삭제된 방) 응답 형식 확인. 실제 데이터 흐름은 미확인 |
+| TKT-BE-M8-01 | GATE-02·05·07 | 충족 | 명령 그대로 실행, 출력 0줄 / `ruff check src` 통과, `ruff format --check src` 40 files |
+| | 팀 정원을 `Team.add`가 거부 | 충족 | 임시 스크립트: 4명 방에서 A팀 이동 → `TeamFullError`, 참가 순서별 팀 A·A·B·B, 나가기·이동 후 팀 인원 갱신 |
 
 ## 만든 것
+### TKT-BE-M8-01 (D-023·D-024, ADR-010)
+- `src/rooms/domain/team.py`(신규): `Team(id, side, members)`, `CAPACITY = 2`, 속성 `count`·`is_full`, `add(participation)`(2명이면 `TeamFullError`, 참가 기록의 편을 이 팀으로), `remove(participation)`
+- `src/rooms/domain/room.py`: 생성자에 `teams: list[Team]` 추가(A·B 하나씩 아니면 `ValueError`, 팀원 목록을 현재 참가로 다시 채움), `self.teams = {side: Team}`, `team(side)`. `create`가 팀 2개를 만든다. `join`은 `_team_to_join()`(A팀에 자리가 있으면 A, 없으면 B)으로 배정, `change_team`은 대상 팀 `add` → 원래 팀 `remove`, `leave`는 소속 팀 `remove`, `start_game`은 두 팀 `is_full`일 때만 시작하고 팀원을 비운다. `TEAM_CAPACITY`·`team_count`·`_team_with_fewer_members`는 없앴다(`Team.CAPACITY`·`team(side).count`)
+- `application/`·`presentation/`은 바뀌지 않았다(API·응답 그대로)
+
 ### TKT-BE-M5-01
 - `src/logging_middleware.py`: 교안 4장 방식의 함수 미들웨어 `log_requests(request, call_next)`. 로그 한 줄 `method=… path=… status=… duration_ms=…`(로거 이름 `request`), 응답 헤더 `X-Process-Time`. 쿼리 문자열·본문·토큰은 남기지 않는다(CONV-07)
 - `src/main.py`: `app.middleware("http")(log_requests)` 다음 `CORSMiddleware`(`settings.cors_origins`, GET·POST·PATCH·DELETE, `Authorization`·`Content-Type`, CONV-10·11) / auth·rooms 화면 라우터 등록 / `app.mount("/static", StaticFiles(directory=src/static, check_dir=False))`
@@ -166,11 +173,13 @@ next_readers: [DB, FE, QA]
 - 필요한 환경변수: `.env.example` 참고
 
 ## 임시 코드
+- TKT-BE-M8-01: 없음
 - TKT-BE-M4-03 기준: **남은 임시 코드 없음.** `X-Debug-User-Id`는 `src/`에서 지웠다(grep 0줄). 테스트(`tests/integration/*`)에는 아직 남아 있어 TKT-QA-M4-01에서 실제 토큰으로 바꿔야 한다
 - TKT-BE-M4-02 기준 현황(지난 기록): rooms API는 아직 `X-Debug-User-Id` 헤더로 회원을 받는다. auth API(`/me`·`/logout`)만 실제 Bearer 토큰을 쓴다. TKT-BE-M4-03에서 `get_current_user_id`를 `get_current_user` 기반으로 바꾸고 헤더 코드를 지운다
 - TKT-BE-M3-04: `src/auth/presentation/dependencies.py`의 `X-Debug-User-Id` 헤더 인증(`TODO(TKT-BE-M4-03)` 주석). TKT-BE-M4-03에서 SEQ-03(JWT·쿠키·블랙리스트)으로 바꾸고 `grep -rn "X-Debug-User-Id" src/` 0줄을 확인한다
 
 ## 프론트엔드에게 전달할 것
+- TKT-BE-M8-01: 없음. 응답의 `team`·`my_team`은 그대로 `"A"`·`"B"`다. 두 번째 참가자가 이제 A팀이다(D-024)
 - TKT-BE-M5-01: **템플릿 6개를 이 경로·이름으로 만든다**: `src/templates/auth/signup.html`, `auth/login.html`, `rooms/list.html`, `rooms/detail.html`, `rooms/history.html`, `rooms/archived.html`. 서버가 넘기는 값: login → `notice`(문자열 또는 None) / list → `cond`(dict: `keyword` 문자열, `available_only` bool, `sort` 문자열, `page` int), `notice`(문자열 또는 None) / detail·archived → `room_id`(int) / history → `page`(int) / signup → 없음. 정적 파일은 `src/static/` 아래에 두고 템플릿에서 `url_for('static', path='css/app.css')` 또는 `/static/css/app.css`로 부른다. `src/static/` 폴더가 생기기 전에는 `/static/…` 요청이 500이다
 - TKT-BE-M4-03: rooms API도 모두 `Authorization: Bearer <access_token>`으로 부른다(TKT-BE-M4-02 안내와 같음)
 - TKT-BE-M4-02: 로그인은 `application/x-www-form-urlencoded`로 `username`(=아이디)·`password`를 `POST /api/auth/token`에 보낸다. 응답의 `access_token`·`refresh_token`을 `localStorage`에 저장한다. 이후 요청은 `Authorization: Bearer <access_token>`. 401이면 `POST /api/auth/refresh`(JSON `{"refresh_token"}`)로 한 번 재발급. 로그아웃은 `POST /api/auth/logout`에 Bearer 헤더 + JSON `{"refresh_token"}`. 헤더 없이 부르면 401 `{"detail": "Not authenticated"}`(FastAPI 기본 문구). 스키마는 `src/auth/presentation/schemas.py`
@@ -178,6 +187,18 @@ next_readers: [DB, FE, QA]
 - TKT-BE-M2-01: 없음 (API 없음)
 
 ## 구현 중 자율 결정
+
+#### TKT-BE-M8-01 팀원 목록을 `Room` 생성자가 다시 채움
+- 결정: 레포지토리는 팀을 `Team(id, side)`로만 넘기고, `Room.__init__`이 현재 참가 기록 중 그 편인 것으로 `members`를 채운다 — ADR-010, RISK-13
+- 선택지: **A. `Room` 생성자가 채움 (권장·채택)** / B. 레포지토리가 팀원까지 만들어 넘김
+- 권장 이유: 팀원 목록과 참가 기록의 편이 어긋날 수 있는 곳이 생성자 한 곳으로 줄고, 레포지토리는 ORM ↔ 도메인 변환만 한다.
+- trade-off: A — 생성자에 넘긴 `Team.members`는 무시된다(덮어씀). B — 레포지토리마다 같은 분류 코드를 두고 어긋날 위험이 있다.
+
+#### TKT-BE-M8-01 `TeamSide` 위치 유지
+- 결정: `TeamSide`를 `participation.py`에 그대로 두고 `team.py`·`room.py`가 다시 내보낸다 — ADR-010 [레이어]
+- 선택지: **A. 그대로 둠 (권장·채택)** / B. `team.py`로 옮김
+- 권장 이유: `team.py`가 `Participation`을 import하므로, `TeamSide`를 옮기면 `participation.py` ↔ `team.py`가 서로 import하게 된다.
+- trade-off: A — 팀 편 열거가 팀 파일이 아닌 곳에 있다. B — 순환 import를 피하려면 교안 밖 문법(`TYPE_CHECKING`)이 필요하다.
 
 #### TKT-BE-M5-01 로깅 미들웨어 형태
 - 결정: 클래스(`RequestLoggingMiddleware`) 대신 함수 `log_requests`를 `app.middleware("http")`로 등록한다 — CONV-07·11, `05-structure-conventions.md` §8(교안 4장 `@app.middleware("http")`)
@@ -306,6 +327,7 @@ next_readers: [DB, FE, QA]
 - trade-off: A — 일부 테스트만 다른 루프 범위가 필요하면 그 테스트에서 따로 지정해야 한다. B — 모듈마다 같은 줄을 반복하고 빠뜨리면 루프 불일치 오류가 난다.
 
 ## 설계와 다르게 한 것 / 질문 / DB 에이전트에게 요청
+- TKT-BE-M8-01: DB 에이전트에게 요청 — `RoomRepository._to_domain`이 `Room(…, teams=[Team(id, side) …], participations=…)`로 만들어야 한다(TKT-DB-M8-01). 그 전까지 레포지토리를 쓰는 통합 테스트·시드는 실패한다
 - TKT-BE-M5-01: CONV-07의 `user_id=5` 필드는 넣지 않았다. 이 값을 채울 `request.state.user_id`를 정하는 곳이 설계에 없다(인증 의존성은 `request`를 받지 않음). 로그에 회원 ID가 필요하면 ARCH가 설정 위치를 정해 주세요
 - TKT-BE-M5-01: 로깅 미들웨어를 함수로 만들었다(위 자율 결정). ARCH에 CONV-07·11의 `RequestLoggingMiddleware` 표기를 `log_requests`로 갱신 요청
 - TKT-BE-M5-01: 완료 조건 "화면 6개 200"은 실제 템플릿이 FE 티켓에서 생겨야 끝까지 확인된다. 지금은 임시 템플릿으로 라우트·컨텍스트만 확인했다
@@ -324,6 +346,11 @@ next_readers: [DB, FE, QA]
 - pytest는 `tests/`가 없어 "No files were found in testpaths" 경고를 낸다. QA가 `tests/`를 만들면 사라진다(정상).
 
 ## 검증 결과
+
+### TKT-BE-M8-01
+- GATE-02·07: 명령 그대로 0줄 / GATE-05: `ruff check src` 통과, `ruff format --check src` 40 files already formatted
+- 임시 스크립트(도메인만): 생성 후 3명 참가 → 팀 A·A·B·B, 팀 정원 2명 → `TeamFullError`, 나가기 후 A1·B2, 이동 후 팀원 목록 갱신, 2:2에서 게임 시작 → 두 팀 팀원 0명
+- 확인하지 못함: 레포지토리·통합 테스트(TKT-DB-M8-01·TKT-QA-M8-01 뒤)
 
 ### TKT-BE-M5-01
 - GATE-05: `ruff check src` 통과, `ruff format --check src` 39 files already formatted / GATE-02·03·06·07 0줄 / GATE-04: 63 passed, 63 skipped

@@ -10,11 +10,11 @@ from rooms.domain.exceptions import (
     NotParticipantError,
     RoomDeletedError,
     RoomFullError,
-    TeamFullError,
 )
 from rooms.domain.participation import Participation, TeamSide
+from rooms.domain.team import Team
 
-__all__ = ["DeleteReason", "Room", "RoomTitle", "TeamSide"]
+__all__ = ["DeleteReason", "Room", "RoomTitle", "Team", "TeamSide"]
 
 MAX_TITLE_LENGTH = 20
 
@@ -40,10 +40,9 @@ class RoomTitle:
 
 
 class Room:
-    """2vs2 공개 방. 참가 기록을 묶는 집합의 루트 (INV-01~09)."""
+    """2vs2 공개 방. A·B 두 팀과 참가 기록을 묶는 집합의 루트 (INV-01~09, ADR-010)."""
 
     CAPACITY = 4
-    TEAM_CAPACITY = 2
 
     def __init__(
         self,
@@ -54,12 +53,15 @@ class Room:
         created_at: datetime,
         deleted_at: datetime | None,
         delete_reason: DeleteReason | None,
+        teams: list[Team],
         participations: list[Participation],
     ) -> None:
         if last_join_order < 0:
             raise ValueError("마지막 입장 순서는 0 이상이어야 합니다")
         if (deleted_at is None) != (delete_reason is None):
             raise ValueError("삭제 시각과 삭제 사유는 함께 있거나 함께 없어야 합니다")
+        if sorted(team.side for team in teams) != [TeamSide.A, TeamSide.B]:
+            raise ValueError("방에는 A팀과 B팀이 하나씩 있어야 합니다")
         self.id = id
         self.title = title
         self.host_user_id = host_user_id
@@ -67,7 +69,11 @@ class Room:
         self.created_at = created_at
         self.deleted_at = deleted_at
         self.delete_reason = delete_reason
+        self.teams = {team.side: team for team in teams}
         self.participations = participations
+        # 팀원 목록은 현재 참가 기록으로 다시 채워 둘이 어긋나지 않게 한다 (RISK-13)
+        for team in teams:
+            team.members = [p for p in self.current_participants if p.team == team.side]
 
     @classmethod
     def create(
@@ -96,6 +102,7 @@ class Room:
             created_at=now,
             deleted_at=None,
             delete_reason=None,
+            teams=[Team(id=None, side=TeamSide.A), Team(id=None, side=TeamSide.B)],
             participations=[creator],
         )
 
@@ -119,8 +126,8 @@ class Room:
     def available_seats(self) -> int:
         return max(self.CAPACITY - self.current_count, 0)
 
-    def team_count(self, team: TeamSide) -> int:
-        return sum(1 for p in self.current_participants if p.team == team)
+    def team(self, side: TeamSide) -> Team:
+        return self.teams[side]
 
     def participation_of(self, user_id: int) -> Participation | None:
         return next((p for p in self.current_participants if p.user_id == user_id), None)
@@ -144,15 +151,17 @@ class Room:
             raise AlreadyParticipatingError()
         if self.is_full:
             raise RoomFullError()
+        team = self._team_to_join()
         self.last_join_order += 1
         participation = Participation(
             id=None,
             room_id=self.id,
             user_id=user_id,
             join_order=self.last_join_order,
-            team=self._team_with_fewer_members(),
+            team=team.side,
             joined_at=now,
         )
+        team.add(participation)
         self.participations.append(participation)
         return participation
 
@@ -163,9 +172,9 @@ class Room:
             raise NotParticipantError()
         if participation.team == target:
             return
-        if self.team_count(target) >= self.TEAM_CAPACITY:
-            raise TeamFullError()
-        participation.change_team(target)
+        current_team = self.team(participation.team)
+        self.team(target).add(participation)
+        current_team.remove(participation)
 
     def leave(self, user_id: int, now: datetime) -> None:
         self._ensure_active()
@@ -173,6 +182,7 @@ class Room:
         if participation is None:
             raise NotParticipantError()
         participation.end(now)
+        self.team(participation.team).remove(participation)
         remaining = self.current_participants
         if not remaining:
             self._soft_delete(DeleteReason.EMPTY, now)
@@ -183,20 +193,20 @@ class Room:
         self._ensure_active()
         if requester_id != self.host_user_id:
             raise NotHostError()
-        if (
-            self.team_count(TeamSide.A) != self.TEAM_CAPACITY
-            or self.team_count(TeamSide.B) != self.TEAM_CAPACITY
-        ):
+        if not all(team.is_full for team in self.teams.values()):
             raise InvalidTeamCompositionError()
         for participation in self.current_participants:
             participation.end(now)
+        for team in self.teams.values():
+            team.members.clear()
         self._soft_delete(DeleteReason.GAME_STARTED, now)
 
-    def _team_with_fewer_members(self) -> TeamSide:
-        """인원이 적은 팀, 같으면 A팀 (Q-03)."""
-        if self.team_count(TeamSide.A) <= self.team_count(TeamSide.B):
-            return TeamSide.A
-        return TeamSide.B
+    def _team_to_join(self) -> Team:
+        """A팀에 자리가 있으면 A팀, 없으면 B팀 (Q-03, D-024)."""
+        team_a = self.team(TeamSide.A)
+        if not team_a.is_full:
+            return team_a
+        return self.team(TeamSide.B)
 
     def _ensure_active(self) -> None:
         if not self.is_active:
