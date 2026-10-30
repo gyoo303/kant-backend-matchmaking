@@ -52,7 +52,7 @@ tests/
 ## 실행
 
 ```bash
-uv sync
+uv sync --frozen
 cp .env.example .env   # 값 채우기
 uv run uvicorn main:app --app-dir src --reload
 ```
