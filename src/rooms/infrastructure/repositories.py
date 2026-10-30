@@ -14,7 +14,8 @@ from rooms.application.read_models import (
 )
 from rooms.domain.participation import Participation, TeamSide
 from rooms.domain.room import DeleteReason, Room, RoomTitle
-from rooms.infrastructure.models import ParticipationModel, RoomModel
+from rooms.domain.team import Team
+from rooms.infrastructure.models import ParticipationModel, RoomModel, TeamModel
 
 
 def _current(room_model: RoomModel) -> list[ParticipationModel]:
@@ -24,7 +25,10 @@ def _current(room_model: RoomModel) -> list[ParticipationModel]:
 
 
 class RoomRepository:
-    """rooms·participations ↔ Room·Participation. flush만 하고 commit은 응용 서비스가 한다."""
+    """rooms·teams·participations ↔ Room·Team·Participation.
+
+    flush만 하고 commit은 응용 서비스가 한다.
+    """
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -37,6 +41,7 @@ class RoomRepository:
         result = await self.session.execute(
             select(ParticipationModel)
             .where(ParticipationModel.user_id == user_id, ParticipationModel.left_at.is_(None))
+            .options(selectinload(ParticipationModel.team))
             .order_by(ParticipationModel.joined_at.desc(), ParticipationModel.id.desc())
         )
         model = result.scalars().first()
@@ -44,7 +49,8 @@ class RoomRepository:
 
     async def save(self, room: Room) -> Room:
         if room.id is None:
-            model = RoomModel(participations=[])
+            teams = [TeamModel(side=team.side.value) for team in room.teams.values()]
+            model = RoomModel(participations=[], teams=teams)
             self.session.add(model)
         else:
             model = await self._find_model(room.id)
@@ -58,6 +64,8 @@ class RoomRepository:
         model.deleted_at = room.deleted_at
         model.delete_reason = room.delete_reason.value if room.delete_reason else None
 
+        # 참가 기록의 팀은 같은 방의 TeamModel로만 연결한다 (RISK-13)
+        team_models = {TeamSide(t.side): t for t in model.teams}
         saved = {p.id: p for p in model.participations}
         for participation in room.participations:
             if participation.id is None:
@@ -65,14 +73,14 @@ class RoomRepository:
                     ParticipationModel(
                         user_id=participation.user_id,
                         join_order=participation.join_order,
-                        team=participation.team.value,
+                        team=team_models[participation.team],
                         joined_at=participation.joined_at,
                         left_at=participation.left_at,
                     )
                 )
             else:
                 participation_model = saved[participation.id]
-                participation_model.team = participation.team.value
+                participation_model.team = team_models[participation.team]
                 participation_model.left_at = participation.left_at
         await self.session.flush()
         return self._to_domain(model)
@@ -81,7 +89,10 @@ class RoomRepository:
         result = await self.session.execute(
             select(RoomModel)
             .where(RoomModel.id == room_id)
-            .options(selectinload(RoomModel.participations))
+            .options(
+                selectinload(RoomModel.teams),
+                selectinload(RoomModel.participations).selectinload(ParticipationModel.team),
+            )
         )
         return result.scalar_one_or_none()
 
@@ -95,6 +106,7 @@ class RoomRepository:
             created_at=model.created_at,
             deleted_at=model.deleted_at,
             delete_reason=DeleteReason(model.delete_reason) if model.delete_reason else None,
+            teams=[Team(id=t.id, side=TeamSide(t.side)) for t in model.teams],
             participations=[cls._participation_to_domain(p) for p in _current(model)],
         )
 
@@ -105,7 +117,7 @@ class RoomRepository:
             room_id=model.room_id,
             user_id=model.user_id,
             join_order=model.join_order,
-            team=TeamSide(model.team),
+            team=TeamSide(model.team.side),
             joined_at=model.joined_at,
             left_at=model.left_at,
         )
@@ -161,19 +173,19 @@ class RoomQueryRepository:
         result = await self.session.execute(
             select(RoomModel)
             .where(RoomModel.id == room_id)
-            .options(selectinload(RoomModel.participations))
+            .options(selectinload(RoomModel.participations).selectinload(ParticipationModel.team))
         )
         room = result.scalar_one_or_none()
         if room is None or room.deleted_at is not None:
             return None
         participants = []
-        for p in sorted(_current(room), key=lambda p: (p.team, p.join_order)):
+        for p in sorted(_current(room), key=lambda p: (p.team.side, p.join_order)):
             user = await self.session.get(UserModel, p.user_id)
             participants.append(
                 ParticipantView(
                     user_id=p.user_id,
                     nickname=user.nickname,
-                    team=TeamSide(p.team),
+                    team=TeamSide(p.team.side),
                     is_host=p.user_id == room.host_user_id,
                 )
             )

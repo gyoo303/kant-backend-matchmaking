@@ -1,6 +1,6 @@
 ---
 stage: DB
-tickets: [TKT-DB-M2-01, TKT-DB-M3-01, TKT-DB-M3-02, TKT-DB-M3-03]
+tickets: [TKT-DB-M2-01, TKT-DB-M3-01, TKT-DB-M3-02, TKT-DB-M3-03, TKT-DB-M8-01]
 status: done
 inputs_read: [AR-MAP, AR-HAND, AR-DB, AR-API, AR-CONV, AR-GATE, AR-ADR, BE-BRIEF]
 next_readers: [BE, QA]
@@ -29,8 +29,20 @@ next_readers: [BE, QA]
 | | 제약 이름이 문서와 같음 | 충족 (DDL 컴파일 결과 대조, 아래 검증 결과) |
 | TKT-DB-M3-03 | 합계 42건 | 충족 (가짜 저장소로 실행해 회원 14·방 8·참가 20 확인) |
 | | 재실행 시 0건 추가(NFR-06) | 충족 (`seed01`이 있으면 건너뜀 확인). 실제 DB 재기동 확인은 못 함 |
+| TKT-DB-M8-01 | GATE-01 | 충족 (새 DB `matchmaking_m8`에서 기동 2회: `/docs` 200, 1회차 `seed inserted: … teams=16 … total=58`, 2회차 `seed skipped`) |
+| | GATE-02·08 | 충족 (명령 그대로 0줄, GATE-08은 `TeamModel` 포함 정규식) |
+| | 시드 `teams=16`, 참가의 팀 = 같은 방의 팀 | 충족 (SQL: `teams` 16행, 방이 어긋난 참가 0건, R3 "Fun Room" A2·B0) |
 
 ## 만든 것
+### TKT-DB-M8-01 (ADR-010)
+- `src/rooms/infrastructure/models.py`: `TeamModel`(`teams`: `id`, `room_id` FK, `side` `String(1)`, 관계 `room`·`participations`). `RoomModel.teams` 관계 추가. `ParticipationModel.team`(문자열) → `team_id` FK(`teams.id`) + 관계 `team`
+- `src/rooms/infrastructure/repositories.py`:
+  - `RoomRepository.save`: 새 방이면 `TeamModel` A·B를 함께 만든다. 참가의 `TeamSide` → 같은 방의 `TeamModel`(`team_models[side]`)로 `team`을 연결한다(새 참가·팀 이동 모두)
+  - `_find_model`: `selectinload(RoomModel.teams)`, `selectinload(RoomModel.participations).selectinload(ParticipationModel.team)`
+  - `_to_domain`: `teams=[Team(id, TeamSide(side))]` 추가, `_participation_to_domain`: `TeamSide(model.team.side)`. `find_current_participation`에 `selectinload(ParticipationModel.team)`
+  - `RoomQueryRepository.get_room_detail`: 참가의 팀을 함께 읽고 정렬 키 `(p.team.side, join_order)`
+- `src/seed.py`: 코드 흐름은 그대로(도메인 → `RoomRepository.save`라 팀이 자동 생성). 로그에 `teams=` 추가, 합계 = 회원 + 방×3 + 참가
+
 
 ### TKT-DB-M3-03
 - `src/seed.py`: `async def seed_initial_data(session: AsyncSession, settings: Settings) -> None`
@@ -108,6 +120,15 @@ next_readers: [BE, QA]
 - 스키마 반영: 이 티켓에는 테이블이 없다. 테이블 생성은 lifespan의 `create_all`(TKT-BE-M3-05)
 
 ## 다음 단계(BE)가 쓸 것
+### TKT-DB-M8-01
+- `Room`은 레포지토리에서 팀 2개(`Team(id, side)`)를 받아 만들어진다. API·읽기 모델은 그대로 `TeamSide`를 쓴다
+- **기존 DB 재생성 필요**: `create_all`은 이미 있는 테이블에 `teams`·`team_id`를 만들지 않는다. 기존 개발 DB(`matchmaking` 등)는 지우고 다시 만들어야 한다. 테스트 DB는 conftest의 `drop_all`·`create_all`로 자동이다
+
+```bash
+docker exec matchmaking-pg dropdb -U postgres matchmaking
+docker exec matchmaking-pg createdb -U postgres matchmaking
+```
+
 
 ### TKT-DB-M3-03
 - lifespan(TKT-BE-M3-05): `create_all` 뒤 `async with AsyncSessionLocal() as s: await seed_initial_data(s, get_settings()); await s.commit()`
@@ -135,6 +156,12 @@ next_readers: [BE, QA]
 - 모델 등록: `create_all` 전에 모든 `models.py`가 import되어 있어야 `Base.metadata`에 테이블이 잡힌다
 
 ## 구현 중 자율 결정
+
+#### TKT-DB-M8-01 참가의 팀 연결을 관계 객체로
+- 결정: `ParticipationModel(team=team_models[side])`처럼 `team` 관계에 같은 방의 `TeamModel` 객체를 넣는다. `team_id` 숫자를 직접 넣지 않는다 — ADR-010, RISK-13, 교안 5장 `relationship`
+- 선택지: **A. 관계 객체 (권장·채택)** / B. `flush`로 팀 id를 먼저 받아 `team_id`에 넣음
+- 권장 이유: 새 방은 팀·참가가 한 번의 `flush`로 저장되고(SQLAlchemy가 순서를 정함), 같은 방의 팀 목록에서만 고르므로 다른 방의 팀을 가리킬 수 없다.
+- trade-off: A — 참가를 읽을 때 팀을 함께 로드해야 한다(`selectinload`). B — `flush`가 한 번 더 필요하고 숫자를 잘못 넣을 여지가 있다.
 
 #### TKT-DB-M2-01 설정을 읽는 시점
 - 결정: `database.py` 모듈 로드 시 `get_settings()`로 엔진을 만든다 — `04-interfaces-api.md` §8, HANDOFF TKT-DB-M2-01("`create_async_engine(settings.database_url, …)`")
@@ -183,6 +210,12 @@ next_readers: [BE, QA]
 - TKT-DB-M3-02: `rooms.host_user_id`의 인덱스는 문서에 "INDEX"로만 적혀 있어 SQLAlchemy 기본 이름 `ix_rooms_host_user_id`를 썼다. ARCH 문서에 이름을 적어 달라고 요청한다
 
 ## 검증 결과
+
+### TKT-DB-M8-01
+- GATE-05: `ruff check src` 통과, `ruff format --check src` 40 files / GATE-02·08: 0줄
+- GATE-01: 새 DB `matchmaking_m8`(`DATABASE_URL` 덮어씀)에서 기동 2회 — 시드 1회(58건), 재기동 `seed skipped`
+- SQL: 활성 방 팀 구성 `2vs2 시연 방 A:1,A:2,B:3,B:4` / `한 자리 남음 A:5,A:6,B:7` / `Fun Room A:8,A:9`, `teams` 16행, 방이 어긋난 참가 0건
+- 기존 개발 DB(`matchmaking`)는 사용자 데이터라 지우지 않았다(재생성은 사용자 몫, 위 명령)
 
 ### TKT-DB-M3-03
 - GATE-05: `ruff check src` 통과, `ruff format --check src` 28 files already formatted / GATE-06: 비밀값 하드코딩 grep 0줄

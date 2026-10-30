@@ -83,11 +83,12 @@ async def seed_initial_data(session: AsyncSession, settings: Settings) -> None:
 
     await session.flush()
     logger.info(
-        "seed inserted: users=%d rooms=%d participations=%d total=%d",
+        "seed inserted: users=%d rooms=%d teams=%d participations=%d total=%d",
         len(user_ids),
         room_count,
+        room_count * 2,
         participation_count,
-        len(user_ids) + room_count + participation_count,
+        len(user_ids) + room_count * 3 + participation_count,
     )
 
 

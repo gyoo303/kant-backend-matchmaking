@@ -22,6 +22,23 @@ class RoomModel(Base):
 
     # 1:N — 방의 이용 기록 전체(현재 참가 + 종료 기록)
     participations: Mapped[list["ParticipationModel"]] = relationship(back_populates="room")
+    # 1:N — A·B 두 팀 (ADR-010)
+    teams: Mapped[list["TeamModel"]] = relationship(back_populates="room")
+
+
+class TeamModel(Base):
+    """ENT-05 teams (03-db-schema.md §3.5)."""
+
+    __tablename__ = "teams"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"), nullable=False)
+    side: Mapped[str] = mapped_column(String(1), nullable=False)
+
+    # N:1 — 소속 방
+    room: Mapped["RoomModel"] = relationship(back_populates="teams")
+    # 1:N — 이 팀에 속한(속했던) 참가 기록
+    participations: Mapped[list["ParticipationModel"]] = relationship(back_populates="team")
 
 
 class ParticipationModel(Base):
@@ -37,9 +54,11 @@ class ParticipationModel(Base):
     room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"), nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     join_order: Mapped[int] = mapped_column(Integer, nullable=False)
-    team: Mapped[str] = mapped_column(String(1), nullable=False)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"), nullable=False)
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     left_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # N:1 — 소속 방
     room: Mapped["RoomModel"] = relationship(back_populates="participations")
+    # N:1 — 소속 팀 (종료 기록은 마지막 팀)
+    team: Mapped["TeamModel"] = relationship(back_populates="participations")
