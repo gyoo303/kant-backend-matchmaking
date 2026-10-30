@@ -34,6 +34,31 @@ uv sync --frozen
 > - Python은 **3.13 이상**이 필요합니다. 없으면 `uv python install 3.13`으로 설치하면 됩니다.
 > - 이 저장소에는 `.python-version` 파일이 없습니다.
 
+**4. 작업 브랜치 만들기**
+
+각 팀원은 `dev` 브랜치를 기준으로 새 브랜치를 만들어 작업합니다. `dev`에 직접 커밋하지 않습니다. 위 1~2단계로 `dev`를 최신으로 받은 뒤 만듭니다.
+
+```bash
+git checkout -b <브랜치명>
+```
+
+### 브랜치 이름 규칙
+
+`<종류>/<작업 내용>` 형식으로 짓습니다.
+
+| 종류 | 언제 | 예 |
+|---|---|---|
+| `feat` | 새 기능 구현 | `feat/auth-signup`, `feat/room-join` |
+| `fix` | 버그 수정 | `fix/room-team-full-check` |
+| `refactor` | 동작은 그대로 두고 코드 구조 정리 | `refactor/room-repository` |
+| `test` | 테스트 추가·수정 | `test/team-domain` |
+| `docs` | 문서 수정 | `docs/readme-branch-rule` |
+| `chore` | 설정·의존성 등 그 밖의 작업 | `chore/ruff-config` |
+
+- 영어 소문자를 쓰고, 단어 사이는 `-`(하이픈)으로 잇습니다. 공백·한글·대문자는 쓰지 않습니다.
+- 작업 내용은 짧게, 무엇을 하는지 알 수 있게 씁니다. 예: `feat/login` 보다 `feat/auth-login-token`
+- 한 브랜치에는 한 가지 작업만 담습니다. 작업이 끝나면 `dev`로 PR을 엽니다.
+
 ## 구조
 
 ```
