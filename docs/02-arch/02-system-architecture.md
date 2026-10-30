@@ -23,7 +23,7 @@ flowchart LR
         subgraph ROOMS["rooms"]
             RP["presentation: api_router·page_router·schemas"]
             RA["application: RoomApplicationService, RoomQueryService"]
-            RD["domain: Room, Participation, RoomTitle, TeamSide, DeleteReason"]
+            RD["domain: Room, Team, Participation, RoomTitle, TeamSide, DeleteReason"]
             RI["infrastructure: RoomModel, ParticipationModel, Repositories"]
         end
     end
@@ -49,7 +49,7 @@ flowchart LR
 | 모듈 | 책임 | 도메인 | PM 근거 |
 |---|---|---|---|
 | `auth` | 회원가입, OAuth2 로그인(access·refresh JWT 발급), 재발급, 로그아웃(블랙리스트), 현재 회원 의존성 | `User`, `TokenBlacklist` | US-08~11 |
-| `rooms` | 방 생성·참가·제목·팀 변경·나가기·게임 시작, 목록·상세·이력·보관 정보 조회, 화면 라우트 | `Room`, `Participation`, `RoomTitle`, `TeamSide`, `DeleteReason` | US-01~07, US-12~20 |
+| `rooms` | 방 생성·참가·제목·팀 변경·나가기·게임 시작, 목록·상세·이력·보관 정보 조회, 화면 라우트 | `Room`, `Team`, `Participation`, `RoomTitle`, `TeamSide`, `DeleteReason` | US-01~07, US-12~20 |
 
 ## 3. 기술 스택
 

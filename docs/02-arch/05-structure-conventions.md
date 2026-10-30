@@ -29,7 +29,7 @@ kant-ubuntu-books-claude1/
 │   │   └── presentation/  __init__.py, schemas.py, router.py, dependencies.py, pages.py
 │   ├── rooms/
 │   │   ├── __init__.py
-│   │   ├── domain/        __init__.py, room.py, participation.py, exceptions.py
+│   │   ├── domain/        __init__.py, room.py, team.py, participation.py, exceptions.py
 │   │   ├── infrastructure/ __init__.py, models.py, repositories.py
 │   │   ├── application/   __init__.py, service.py, queries.py, read_models.py, list_cache.py(CH-C)
 │   │   └── presentation/  __init__.py, schemas.py, router.py, pages.py
@@ -43,7 +43,7 @@ kant-ubuntu-books-claude1/
 │       └── js/            api.js, polling.js, rooms.js
 ├── tests/
 │   ├── conftest.py
-│   ├── unit/              test_room.py, test_participation.py, test_user.py        # DB 없음
+│   ├── unit/              test_room.py, test_team.py, test_participation.py, test_user.py        # DB 없음
 │   ├── integration/       test_auth_api.py, test_rooms_api.py, test_history_api.py, test_errors.py
 │   └── concurrency/       test_room_concurrency.py                                 # CH-A
 └── docs/

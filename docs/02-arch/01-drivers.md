@@ -54,3 +54,4 @@
 | RISK-10 | `localStorage` 토큰의 XSS 노출 | 낮음 | 중 | ADR-002(헤더 전용, 쿠키 없음 → CSRF 없음), 템플릿 자동 이스케이프 유지(CONV-12) |
 | RISK-11 | 폴링에서 해산과 접근 불가를 구분 못 해 잘못 안내 | 중 | 중 | API-ROOM-03 응답 계약(410 Gone) |
 | RISK-12 | 시드가 재시작마다 중복 주입 | 중 | 낮음 | `03-db-schema.md` §시드 중복 방지 조건 |
+| RISK-13 | 참가 기록의 방(`room_id`)과 소속 팀의 방(`teams.room_id`)이 어긋나거나, 도메인 `Team`의 팀원 목록과 참가 기록의 편이 어긋남 | 낮음 | 중 | ADR-010: `RoomRepository.save`만 같은 방의 `TeamModel`로 `team_id`를 정함, `Room` 생성자가 팀원 목록을 현재 참가로 다시 채움, TKT-QA-M8-01 통합 테스트 |

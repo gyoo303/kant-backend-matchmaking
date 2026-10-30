@@ -1,6 +1,6 @@
 # HANDOFF — 하위 에이전트 티켓 (A8)
 
-- 입력: `01-drivers.md`~`06-quality-gates.md`, ADR-001~005·007~009(Accepted, ADR-006은 ADR-009로 대체), `docs/01-pm/04-scope.md` 마일스톤(D-001)
+- 입력: `01-drivers.md`~`06-quality-gates.md`, ADR-001~005·007~010(Accepted, ADR-006은 ADR-009로 대체), `docs/01-pm/04-scope.md` 마일스톤(D-001)
 - **진행 원칙(D-018)**: DB·BE·FE·QA는 필수 티켓(M2~M5, M7)만 차례로 진행한다. M6 도전 티켓("요청 시" 표시)은 필수 완료 뒤 **사용자가 티켓 ID를 지정해 요청할 때만** 착수한다. 선행 점검이 READY여도 요청 없이 시작하지 않는다.
 - 모든 티켓 공통으로 먼저 읽는다: `AGENTS.md`, `docs/02-arch/05-structure-conventions.md`(CONV·금지 패턴, **§8 교안 수준 규칙**), `docs/02-arch/06-quality-gates.md`
 - **교안 수준 규칙(D-020)**: 모든 DB·BE·FE 티켓은 교안 1~6장 수준으로 구현한다. 인증·보안은 교안 6장 1강(ADR-002, D-021). 완료된 M2·M3 티켓 코드는 2026-10-28에 이 규칙으로 고쳤다(아래 표의 완료 티켓 설명은 작성 당시 기준이며, 현재 기준은 `03-db-schema.md`·`04-interfaces-api.md`).
@@ -41,10 +41,14 @@
 | TKT-QA-M6-02 | QA | M6 (11, Could, 요청 시) | 도전 B·C 검증 AC-19·20 | `06-acceptance-criteria.md` US-19·20 | `tests/integration/test_challenges.py`, `docs/06-qa/briefing-TKT-QA-M6-02.md` | AC-19·20 통과 | TKT-BE-M6-02 |
 | TKT-FE-M7-01 | FE | M7 (12) | README (§2 목차) | `05-structure-conventions.md` §1, `02-system-architecture.md` §4, ADR-008, `07-screens.md` §5 | `README.md`, `docs/05-frontend/briefing-TKT-FE-M7-01.md` | 목차 항목 전부, 캡처 5종 | TKT-QA-M5-01 |
 | TKT-QA-M7-01 | QA | M7 (12~13) | 최종 통합 점검: GATE 전체, 시연 흐름(`07-screens.md` §5) 리허설 체크, 시드 재기동 확인 | `06-quality-gates.md`, `docs/01-pm/07-screens.md` §5 | `docs/06-qa/briefing-TKT-QA-M7-01.md` | GATE-01~08, 시연 7단계 통과 | TKT-FE-M7-01 |
+| TKT-BE-M8-01 | BE | M8 (14, 튜터 피드백) | 도메인 `Team`(`team.py`: `CAPACITY`, `members`, `add`, `remove`), `Room`이 팀 2개를 갖도록(`__init__(…, teams, participations)`, `team(side)`, `create`가 팀 2개 생성), 참가 배정 A팀 우선(D-024), `change_team`·`leave`·`start_game`이 `Team`을 통해 검사. `application/`·`presentation/`은 바뀌지 않음 | ADR-010, `04-interfaces-api.md` §2.3~§2.5, D-023·D-024, AC-02-1·2·9 | `src/rooms/domain/team.py`, `src/rooms/domain/room.py`, `docs/04-backend/briefing.md` | GATE-02·05·07, 도메인이 `Team.add`로 팀 정원 거부 | TKT-QA-M7-01 |
+| TKT-DB-M8-01 | DB | M8 (14, 튜터 피드백) | `TeamModel`(`teams`), `ParticipationModel.team` → `team_id` FK·`team` 관계, `RoomModel.teams`. `RoomRepository`(새 방이면 팀 2행, `TeamSide` ↔ `TeamModel` 연결, `selectinload`에 팀 추가), `RoomQueryRepository` 상세 정렬. 시드 결과(팀 16행) 확인. 기존 개발 DB 재생성 방법을 브리핑에 적는다 | ADR-010, `03-db-schema.md` §1·§2·§3.4·§3.5·§5·§6 | `src/rooms/infrastructure/models.py`, `src/rooms/infrastructure/repositories.py`, `src/seed.py`, `docs/03-db/briefing.md` | GATE-01·02·08, 시드 `teams=16` | TKT-BE-M8-01 |
+| TKT-QA-M8-01 | QA | M8 (14, 튜터 피드백) | 팀 엔티티·A팀 우선 배정 검증: 단위 테스트(`Team`, `Room` 배정·이동·시작), 통합 테스트 기대값 갱신(AC-02-1·9, 테이블 목록, 시드 건수), 팀 연결 통합 테스트(RISK-13), GATE 전체·시연 리허설 | ADR-010, `06-acceptance-criteria.md` US-02, `06-quality-gates.md` | `tests/unit/test_team.py`, `tests/unit/test_room.py`, `tests/integration/test_rooms_api.py`, `tests/conftest.py`, `docs/06-qa/briefing-TKT-QA-M8-01.md` | GATE-01~08, AC-02-1~9 통과 | TKT-DB-M8-01 |
 
 - M6 티켓은 사용자가 요청할 때만 착수하고, 11일차가 끝나면 남은 것을 중단한다(D-002, D-018). 요청 순서 기준: 도전 A(TKT-DB-M6-01 → TKT-BE-M6-00 → TKT-QA-M6-01) → 도전 B(TKT-BE-M6-01) → 도전 C(TKT-BE-M6-02) → TKT-QA-M6-02. 사용자가 일부만 요청하면 그 티켓과 선행만 진행한다.
 - M7 티켓(TKT-FE-M7-01, TKT-QA-M7-01)은 M6 진행 여부와 상관없이 필수 완료(TKT-QA-M5-01) 뒤에 진행한다.
-- 마일스톤별 티켓 수: M2 2 · M3 9 · M4 4 · M5 7 · M6 6(요청 시) · M7 2 = 30
+- M8 티켓(TKT-BE-M8-01 → TKT-DB-M8-01 → TKT-QA-M8-01)은 튜터 피드백 반영(D-023·D-024, ADR-010)이다. 도메인 `Team`이 레포지토리보다 먼저 필요하므로 BE가 먼저다. 기존 DB(`matchmaking` 등)는 지우고 다시 만든다.
+- 마일스톤별 티켓 수: M2 2 · M3 9 · M4 4 · M5 7 · M6 6(요청 시) · M7 2 · M8 3 = 33
 
 ### 공통 "하지 말 것"
 - 사용자 요청 없이 M6 도전 티켓을 착수하거나, 필수 티켓에 도전 범위(잠금·부분 유니크 인덱스·캐시·CSV·백그라운드 로그)를 미리 넣지 않는다(D-018).

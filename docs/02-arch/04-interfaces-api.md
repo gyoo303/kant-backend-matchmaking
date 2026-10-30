@@ -75,7 +75,7 @@ class TokenBlacklist:
 
 ### 2.3 `src/rooms/domain/room.py`
 ```
-class TeamSide(StrEnum): A = "A"; B = "B"
+# TeamSide는 participation.py에 있고 room.py·team.py가 다시 내보낸다
 class DeleteReason(StrEnum): GAME_STARTED = "GAME_STARTED"; EMPTY = "EMPTY"
 
 @dataclass(frozen=True)
@@ -86,18 +86,20 @@ class RoomTitle:
 
 class Room:
     CAPACITY = 4
-    TEAM_CAPACITY = 2
 
     def __init__(self, id: int | None, title: RoomTitle, host_user_id: int, last_join_order: int,
                  created_at: datetime, deleted_at: datetime | None, delete_reason: DeleteReason | None,
-                 participations: list[Participation]) -> None
+                 teams: list[Team], participations: list[Participation]) -> None
         # 검증: last_join_order >= 0, (deleted_at, delete_reason) 둘 다 None 또는 둘 다 값 (INV-07)
+        # teams는 A·B 하나씩이어야 한다(아니면 ValueError). self.teams = {side: Team}
+        # 각 팀의 members를 현재 참가(left_at is None) 중 그 편인 것으로 다시 채운다(팀원 목록과 참가 기록 일치)
 
     @classmethod
     def create(cls, title: str, creator_id: int, current_participation: Participation | None,
                now: datetime) -> "Room"
         # current_participation 있음 → AlreadyParticipatingError (INV-04)
-        # 생성자 참가: join_order 1, TeamSide.A, joined_at now. host = creator
+        # 팀 2개 Team(None, A)·Team(None, B) 생성
+        # 생성자 참가: join_order 1, A팀, joined_at now. host = creator
 
     # 조회 속성
     is_active: bool                         # deleted_at is None
@@ -105,7 +107,7 @@ class Room:
     current_count: int
     is_full: bool                           # current_count >= CAPACITY
     available_seats: int
-    def team_count(self, team: TeamSide) -> int
+    def team(self, side: TeamSide) -> Team
     def participation_of(self, user_id: int) -> Participation | None   # 현재 참가만
 
     # 행위 메서드 (모두 삭제된 방이면 RoomDeletedError 먼저)
@@ -115,31 +117,50 @@ class Room:
         # current_participation.room_id == self.id → 그 기록 반환(변화 없음, D-006)
         # current_participation 다른 방 → AlreadyParticipatingError
         # is_full → RoomFullError
-        # last_join_order += 1, 팀 = 인원이 적은 팀(같으면 A) (Q-03)
+        # last_join_order += 1, 팀 = A팀에 자리가 있으면 A, 없으면 B (Q-03, D-024) → 그 팀.add(참가)
     def change_team(self, user_id: int, target: TeamSide) -> None
-        # 참가자 아님 → NotParticipantError, 같은 팀 → 변화 없음, team_count(target) >= 2 → TeamFullError
+        # 참가자 아님 → NotParticipantError, 같은 팀 → 변화 없음
+        # team(target).add(참가) (2명 → TeamFullError) → 원래 팀.remove(참가)
     def leave(self, user_id: int, now: datetime) -> None
-        # 참가자 아님 → NotParticipantError. 기록 end(now)
+        # 참가자 아님 → NotParticipantError. 기록 end(now), 소속 팀.remove(참가)
         # 남은 사람 0 → _soft_delete(EMPTY, now)
         # 나간 사람이 방장 → host = 남은 참가자 중 join_order 최소
     def start_game(self, requester_id: int, now: datetime) -> None
         # requester != host → NotHostError
-        # team_count(A) != 2 or team_count(B) != 2 → InvalidTeamCompositionError
-        # 전원 end(now) → _soft_delete(GAME_STARTED, now). 결과 데이터 없음 (INV-09)
+        # A팀·B팀 중 is_full이 아닌 팀이 있으면 → InvalidTeamCompositionError
+        # 전원 end(now), 두 팀 members 비움 → _soft_delete(GAME_STARTED, now). 결과 데이터 없음 (INV-09)
     def _soft_delete(self, reason: DeleteReason, now: datetime) -> None
 ```
 - `participations`에는 레포지토리가 읽은 현재 참가 기록과, 이번 요청에서 새로 생기거나 종료된 기록이 들어 있다. 레포지토리 `save`는 이 목록 전체를 저장한다.
 - 거부 검사 순서는 위 주석 순서와 같다(테스트 기대값 고정).
 
-### 2.4 `src/rooms/domain/participation.py`
+### 2.4 `src/rooms/domain/team.py` (ADR-010)
 ```
+@dataclass
+class Team:
+    CAPACITY: ClassVar[int] = 2
+    id: int | None                      # 새 방 생성 시 None, save 후 채워짐
+    side: TeamSide
+    members: list[Participation] = []   # 현재 팀원. Room 생성자가 채운다
+    count: int                          # 속성: len(members)
+    is_full: bool                       # 속성: count >= CAPACITY
+    def add(self, participation: Participation) -> None
+        # is_full → TeamFullError, participation.change_team(side)(종료 기록 → ParticipationAlreadyEndedError), members에 추가
+    def remove(self, participation: Participation) -> None   # members에서 뺌
+```
+- `Team`은 `Room`을 통해서만 바뀐다. 서비스·레포지토리가 `add`/`remove`를 직접 부르지 않는다.
+
+### 2.5 `src/rooms/domain/participation.py`
+```
+class TeamSide(StrEnum): A = "A"; B = "B"
+
 @dataclass
 class Participation:
     id: int | None
     room_id: int | None     # 새 방 생성 시 None, save 후 채워짐
     user_id: int
     join_order: int         # >= 1 아니면 ValueError
-    team: TeamSide
+    team: TeamSide          # 소속 팀의 편(종료 기록은 마지막 팀). Team.add가 바꾼다
     joined_at: datetime
     left_at: datetime | None = None
     is_current: bool        # 속성: left_at is None
@@ -322,7 +343,7 @@ router: `token = Depends(oauth2_scheme)`, `Depends(get_current_user)`(유효한 
 `refresh(refresh_token)`: 블랙리스트에 있음 → `AuthenticationError("로그아웃 처리되어 사용할 수 없는 토큰입니다")` → `decode_token` 실패 → `AuthenticationError("리프레시 토큰이 만료되었습니다. 다시 로그인하세요")` → `token_type != "refresh"` → 같은 401 → `create_access_token({"sub": sub})` → `AccessTokenResponse`.
 
 ### SEQ-05 방 생성 (API-ROOM-02)
-`create_room` → `RoomRepository.find_current_participation(user_id)` → `Room.create(title, user_id, current, now)` → `RoomRepository.save(room)` (방 insert → 참가 insert. 도전 A 적용 후에는 `uq_participations_user_current` 위반 → `AlreadyParticipatingError`) → commit → 캐시 clear(CH-C) → router가 `RoomQueryService.get_room_detail(room.id, user_id)`로 응답.
+`create_room` → `RoomRepository.find_current_participation(user_id)` → `Room.create(title, user_id, current, now)` → `RoomRepository.save(room)` (방 insert → 팀 A·B insert → 참가 insert(`team_id` = A팀). 도전 A 적용 후에는 `uq_participations_user_current` 위반 → `AlreadyParticipatingError`) → commit → 캐시 clear(CH-C) → router가 `RoomQueryService.get_room_detail(room.id, user_id)`로 응답.
 
 ### SEQ-06 방 참가 (API-ROOM-05)
 `join_room` → `find_current_participation(user_id)` → `find_by_id(room_id)` (없음 → `RoomNotFoundError`) → `room.join(user_id, current, now)` → `save` → commit → 캐시 clear → 상세 응답.
@@ -362,10 +383,10 @@ page_router → `templates.TemplateResponse(request, "rooms/list.html", {"cond":
 
 | 현재 상태 | 이벤트(도메인 메서드) | 다음 상태 | 실행 주체 | 권한 | 부수 효과 |
 |---|---|---|---|---|---|
-| — | `Room.create` | 활성 | 회원 | 참가 중 아님 | 참가 1건(A, 순서 1), host = 생성자 |
-| 활성 | `Room.join` | 활성 | 회원 | 참가 중 아님(같은 방이면 변화 없음) | 참가 1건, `last_join_order`+1 |
+| — | `Room.create` | 활성 | 회원 | 참가 중 아님 | 팀 2개(A·B), 참가 1건(A, 순서 1), host = 생성자 |
+| 활성 | `Room.join` | 활성 | 회원 | 참가 중 아님(같은 방이면 변화 없음) | 참가 1건(A팀 우선, 없으면 B), `last_join_order`+1 |
 | 활성 | `Room.rename` | 활성 | 방장 | 방장 | 제목 변경 |
-| 활성 | `Room.change_team` | 활성 | 참가자 | 본인 | 팀 변경 |
+| 활성 | `Room.change_team` | 활성 | 참가자 | 본인 | 원래 팀에서 빠지고 대상 팀에 들어감 |
 | 활성 | `Room.leave` (남은 사람 있음) | 활성 | 참가자 | 본인 | `left_at`, 방장이면 위임 |
 | 활성 | `Room.leave` (마지막) | 삭제됨(EMPTY) | 참가자 | 본인 | `left_at`, `deleted_at` |
 | 활성 (A2·B2) | `Room.start_game` | 삭제됨(GAME_STARTED) | 방장 | 방장 | 전원 `left_at`, `deleted_at` |

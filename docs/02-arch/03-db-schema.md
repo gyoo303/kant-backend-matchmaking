@@ -1,6 +1,6 @@
 # 03. 도메인 모델 & DB 스키마 (A3)
 
-- 입력: `docs/01-pm/03-domain.md` §3·§4·§6, ADR-001, ADR-002, ADR-009
+- 입력: `docs/01-pm/03-domain.md` §3·§4·§6, ADR-001, ADR-002, ADR-009, ADR-010
 - DB: PostgreSQL 15+. 테이블은 lifespan의 `Base.metadata.create_all`로 만든다(마이그레이션 없음).
 - 현재 참가와 이용 이력은 **한 테이블** `participations`에 둔다. `left_at IS NULL`이 현재 참가다(ARCH-Q-03).
 - 시각 컬럼은 모두 `timestamptz`(UTC 저장).
@@ -12,8 +12,9 @@
 |---|---|---|---|---|
 | ENT-01 | `User` | `src/auth/domain/user.py` | `users` | `UserModel` |
 | ENT-02 | `TokenBlacklist` | `src/auth/domain/token_blacklist.py` | `token_blacklist` | `TokenBlacklistModel` |
-| ENT-03 | `Room` (+ 값 객체 `RoomTitle`, 열거 `TeamSide`, `DeleteReason`) | `src/rooms/domain/room.py` | `rooms` | `RoomModel` |
-| ENT-04 | `Participation` | `src/rooms/domain/participation.py` | `participations` | `ParticipationModel` |
+| ENT-03 | `Room` (+ 값 객체 `RoomTitle`, 열거 `DeleteReason`) | `src/rooms/domain/room.py` | `rooms` | `RoomModel` |
+| ENT-04 | `Participation` (+ 열거 `TeamSide`) | `src/rooms/domain/participation.py` | `participations` | `ParticipationModel` |
+| ENT-05 | `Team` (ADR-010) | `src/rooms/domain/team.py` | `teams` | `TeamModel` |
 
 ## 2. ERD
 
@@ -21,7 +22,9 @@
 erDiagram
     users ||--o{ participations : "참가"
     users ||--o{ rooms : "방장"
+    rooms ||--|{ teams : "A·B 두 팀"
     rooms ||--o{ participations : "이용 기록"
+    teams ||--o{ participations : "소속 팀"
     users {
         int id PK
         string login_id UK
@@ -44,12 +47,17 @@ erDiagram
         timestamptz deleted_at
         string delete_reason
     }
+    teams {
+        int id PK
+        int room_id FK
+        string side
+    }
     participations {
         int id PK
         int room_id FK
         int user_id FK
         int join_order
-        string team
+        int team_id FK
         timestamptz joined_at
         timestamptz left_at
     }
@@ -88,7 +96,7 @@ erDiagram
 | `deleted_at` | `DateTime(timezone=True)` | Y | NULL | — | 소프트 삭제 시각 |
 | `delete_reason` | `String(20)` | Y | NULL | — | `GAME_STARTED`·`EMPTY` (INV-07, `Room`이 검사) |
 
-- 관계: `participations: Mapped[list["ParticipationModel"]] = relationship(back_populates="room")` (1:N, 교안 5장 1강 6.1)
+- 관계: `participations: Mapped[list["ParticipationModel"]] = relationship(back_populates="room")`, `teams: Mapped[list["TeamModel"]] = relationship(back_populates="room")` (1:N, 교안 5장 1강 6.1)
 - `updated_at`은 두지 않는다(변경 시각을 쓰는 요구가 없음).
 
 ### 3.4 `participations` (ENT-04)
@@ -99,12 +107,23 @@ erDiagram
 | `room_id` | `Integer` | N | — | `ForeignKey("rooms.id")` | |
 | `user_id` | `Integer` | N | — | `ForeignKey("users.id")` | |
 | `join_order` | `Integer` | N | — | — | 방 안 입장 순서 (INV-11, `Room`이 부여) |
-| `team` | `String(1)` | N | — | — | 현재(종료 기록은 마지막) 팀 `A`·`B` (`TeamSide`) |
+| `team_id` | `Integer` | N | — | `ForeignKey("teams.id")` | 현재(종료 기록은 마지막) 소속 팀. 같은 방의 팀만 가리킨다(`RoomRepository.save`가 정함, RISK-13) |
 | `joined_at` | `DateTime(timezone=True)` | N | — | — | 입장 시각 |
 | `left_at` | `DateTime(timezone=True)` | Y | NULL | — | 퇴장 시각. NULL = 참가 중 (INV-10, `Participation.end`가 검사) |
 
-- 관계: `room: Mapped["RoomModel"] = relationship(back_populates="participations")` (N:1)
+- 관계: `room: Mapped["RoomModel"] = relationship(back_populates="participations")` (N:1), `team: Mapped["TeamModel"] = relationship(back_populates="participations")` (N:1)
 - 부분 UNIQUE 인덱스 `uq_participations_user_current`: `(user_id) WHERE left_at IS NULL` — INV-04. **도전 A에서 추가**(ADR-009, TKT-DB-M6-01). 필수 범위의 모델에는 두지 않는다
+
+### 3.5 `teams` (ENT-05, ADR-010)
+
+| 컬럼 | 타입 | null | 기본값 | 제약 | 설명 |
+|---|---|---|---|---|---|
+| `id` | `Mapped[int]` | N | 자동 증가 | `primary_key=True` | 팀 ID |
+| `room_id` | `Integer` | N | — | `ForeignKey("rooms.id")` | 소속 방. 방마다 A·B 두 행(방 생성 때 함께 저장) |
+| `side` | `String(1)` | N | — | — | 편 `A`·`B` (`TeamSide`) |
+
+- 관계: `room: Mapped["RoomModel"] = relationship(back_populates="teams")` (N:1), `participations: Mapped[list["ParticipationModel"]] = relationship(back_populates="team")` (1:N)
+- 팀 정원(2명)은 컬럼이 아니라 도메인 상수 `Team.CAPACITY`다. 방이 삭제돼도 팀 행은 남는다(보관).
 
 ## 4. INV → 제약 대응
 
@@ -112,8 +131,8 @@ erDiagram
 
 | INV | DB | 도메인 검사 |
 |---|---|---|
-| INV-01 | — | `Room` 상수 `CAPACITY=4`, `TEAM_CAPACITY=2` |
-| INV-02·03 | — | `Room.join()`, `Room.change_team()`. 동시 요청은 도전 A의 방 행 잠금(ADR-009) |
+| INV-01 | — | `Room.CAPACITY=4`, `Team.CAPACITY=2` |
+| INV-02·03 | — | `Room.join()`(정원), `Team.add()`(팀 정원, `Room.join`·`Room.change_team`이 호출). 동시 요청은 도전 A의 방 행 잠금(ADR-009) |
 | INV-04 | (도전 A) `uq_participations_user_current` | `Room.create()`, `Room.join()`의 `current_participation` 검사 |
 | INV-05 | `host_user_id` NOT NULL FK | `Room.leave()` 위임 |
 | INV-06·08 | — | 삭제 방 행위 메서드 거부, `start_game()`·`leave()`가 전원 종료 |
@@ -134,7 +153,7 @@ erDiagram
 |---|---|---|---|---|
 | `UserModel` | `User` | `UserRepository` | `_to_domain(model) -> User`, `_to_model(user) -> UserModel` | `find_by_id(user_id: int) -> User \| None` · `find_by_login_id(login_id: str) -> User \| None` · `exists_login_id(login_id: str) -> bool` · `exists_nickname(nickname: str) -> bool` · `save(user: User) -> User` (`flush` 후 `refresh`로 id·`created_at`을 읽음) |
 | `TokenBlacklistModel` | `TokenBlacklist` | `TokenBlacklistRepository` | — | `exists(token: str) -> bool` · `save(entry: TokenBlacklist) -> None` |
-| `RoomModel` + `ParticipationModel` | `Room`(현재 참가자 포함), `Participation` | `RoomRepository` | `_to_domain(room_model) -> Room`(현재 참가만), `_participation_to_domain(model) -> Participation` | `find_by_id(room_id: int) -> Room \| None` (`select(RoomModel).options(selectinload(RoomModel.participations))`) · (도전 A) `find_by_id_for_update(room_id: int) -> Room \| None` (`with_for_update()`) · `find_current_participation(user_id: int) -> Participation \| None` · `save(room: Room) -> Room` (방 행 insert/update, id 없는 참가는 `room_model.participations.append(...)`, 있는 참가는 `team`·`left_at` 갱신, `flush` 후 id가 채워진 `Room` 반환) |
+| `RoomModel` + `TeamModel` + `ParticipationModel` | `Room`(팀 2개·현재 참가자 포함), `Team`, `Participation` | `RoomRepository` | `_to_domain(room_model) -> Room`(팀은 `Team(id, side)`로, 팀원은 `Room` 생성자가 현재 참가로 채움), `_participation_to_domain(model) -> Participation`(`team = TeamSide(model.team.side)`) | `find_by_id(room_id: int) -> Room \| None` (`select(RoomModel).options(selectinload(RoomModel.teams), selectinload(RoomModel.participations).selectinload(ParticipationModel.team))`) · (도전 A) `find_by_id_for_update(room_id: int) -> Room \| None` (`with_for_update()`) · `find_current_participation(user_id: int) -> Participation \| None` · `save(room: Room) -> Room` (방 행 insert/update, 새 방이면 `TeamModel` A·B 두 행을 함께 만듦, 참가의 `TeamSide` → 같은 방의 `TeamModel`로 `team` 연결, id 없는 참가는 `room_model.participations.append(...)`, 있는 참가는 `team`·`left_at` 갱신, `flush` 후 id가 채워진 `Room` 반환) |
 | 조회 전용 | `RoomSummary`, `RoomDetail`, `HistoryItem`, `ArchivedRoom` (`src/rooms/application/read_models.py`) | `RoomQueryRepository` | ORM 객체 → frozen dataclass | `list_active_rooms(cond: RoomListCondition) -> tuple[list[RoomSummary], int]` · `get_room_detail(room_id: int) -> RoomDetail \| None` · `list_history(user_id: int, page: int, size: int) -> tuple[list[HistoryItem], int]` · `get_archived_room(room_id: int, user_id: int) -> ArchivedRoom \| None` |
 
 - 조회 방식(교안 수준, D-020): `select(...).where(...).options(selectinload(...)).order_by(...)`로 읽고, 현재 인원 계산·제목 검색(`keyword.lower() in title.lower()`)·`available_only`·전체 건수(`len`)·페이지 자르기(`items[skip:skip+size]`)는 파이썬에서 한다(교안 2·3장 목록 필터 방식). 집계 서브쿼리·`ILIKE ESCAPE`는 쓰지 않는다.
@@ -152,9 +171,10 @@ erDiagram
 | 엔티티 | 건수 | 내용 |
 |---|---|---|
 | `users` | 14 | `seed01`~`seed14`, 닉네임 `시드유저01`~`시드유저14` |
-| 활성 `rooms` | 5 | R1 "2vs2 시연 방"(seed01~04, A·B 각 2명 — 게임 시작 시연, D-014) / R2 "한 자리 남음"(seed05~07, A2·B1) / R3 "Fun Room"(seed08~09, A1·B1) / R4 "100% 즐겜"(seed10) / R5 "초보 환영"(seed11). 방장은 각 방의 입장 순서 1 |
+| 활성 `rooms` | 5 | R1 "2vs2 시연 방"(seed01~04, A·B 각 2명 — 게임 시작 시연, D-014) / R2 "한 자리 남음"(seed05~07, A2·B1) / R3 "Fun Room"(seed08~09, A2·B0 — A팀 우선 배정, D-024) / R4 "100% 즐겜"(seed10) / R5 "초보 환영"(seed11). 방장은 각 방의 입장 순서 1 |
 | 삭제 `rooms` | 3 | D1 "어제 한 판"(GAME_STARTED, seed01~04 과거 기록) / D2 "아무도 없음"(EMPTY, seed12 과거 기록) / D3 "저녁 매치"(GAME_STARTED, seed05~08 과거 기록) |
+| `teams` | 16 | 방 8개 × A·B (방 생성 때 함께 저장) |
 | `participations` | 20 | 현재 11건(R1~R5) + 과거 9건(D1 4, D2 1, D3 4) |
-| 합계 | 42 | 20건 이상 |
+| 합계 | 58 | 20건 이상 |
 
 - seed12~14는 참가 중이 아닌 회원이다(시연 중 참가·생성용). R2는 정원 마감 직전, R1은 정원 마감 + 게임 시작 가능 상태다.
