@@ -1,4 +1,7 @@
-"""Room 도메인 단위 테스트: INV-01~09·11·12, 상태 머신 (04-interfaces-api.md §2.3·§10)."""
+"""Room 도메인 단위 테스트: INV-01~09·11·12, 상태 머신, 팀 배정(D-024).
+
+근거: 04-interfaces-api.md §2.3·§10
+"""
 
 from datetime import UTC, datetime, timedelta
 
@@ -15,7 +18,7 @@ from rooms.domain.exceptions import (
     TeamFullError,
 )
 from rooms.domain.participation import Participation
-from rooms.domain.room import DeleteReason, Room, RoomTitle, TeamSide
+from rooms.domain.room import DeleteReason, Room, RoomTitle, Team, TeamSide
 
 T0 = datetime(2026, 10, 28, tzinfo=UTC)
 
@@ -25,7 +28,7 @@ def at(minutes: int) -> datetime:
 
 
 def make_room(member_ids: list[int], room_id: int = 10) -> Room:
-    """첫 회원이 만들고 나머지가 차례로 참가한 방. 팀은 자동 배정(A, B, A, B)."""
+    """첫 회원이 만들고 나머지가 차례로 참가한 방. 팀은 자동 배정(A, A, B, B)."""
     room = Room.create("방", member_ids[0], None, T0)
     room.id = room_id
     for participation in room.participations:
@@ -37,6 +40,10 @@ def make_room(member_ids: list[int], room_id: int = 10) -> Room:
 
 def other_room_participation(user_id: int) -> Participation:
     return Participation(1, 99, user_id, 1, TeamSide.A, T0)
+
+
+def two_teams() -> list[Team]:
+    return [Team(1, TeamSide.A), Team(2, TeamSide.B)]
 
 
 # --- RoomTitle (INV-12) ---
@@ -66,7 +73,13 @@ def test_inv_12_title_constructor_rejects_untrimmed_value():
 
 def test_inv_01_capacity_is_fixed():
     assert Room.CAPACITY == 4
-    assert Room.TEAM_CAPACITY == 2
+    assert Team.CAPACITY == 2
+
+
+def test_create_makes_team_a_and_b():
+    room = Room.create("방", 1, None, T0)
+    assert sorted(room.teams) == [TeamSide.A, TeamSide.B]
+    assert (room.team(TeamSide.A).count, room.team(TeamSide.B).count) == (1, 0)
 
 
 def test_create_makes_creator_host_and_first_participant():
@@ -86,10 +99,25 @@ def test_inv_04_create_rejected_when_already_participating():
 # --- 참가 (INV-02·03·04·11, Q-03, D-006) ---
 
 
-def test_join_assigns_team_with_fewer_members_then_a_on_tie():
+def test_d_024_join_fills_team_a_first():
     room = make_room([1, 2, 3, 4])
     teams = [p.team for p in room.current_participants]
-    assert teams == [TeamSide.A, TeamSide.B, TeamSide.A, TeamSide.B]
+    assert teams == [TeamSide.A, TeamSide.A, TeamSide.B, TeamSide.B]
+
+
+def test_d_024_join_goes_to_b_when_a_is_full():
+    room = make_room([1, 2])
+    participation = room.join(3, None, at(10))
+    assert participation.team == TeamSide.B
+
+
+def test_d_024_join_goes_to_a_when_a_has_space_after_move():
+    """A1·B2(팀 이동으로 A팀에 빈자리) → 새 참가자는 A팀 (AC-02-9)."""
+    room = make_room([1, 2, 3])
+    room.change_team(2, TeamSide.B)
+    participation = room.join(4, None, at(10))
+    assert participation.team == TeamSide.A
+    assert (room.team(TeamSide.A).count, room.team(TeamSide.B).count) == (2, 2)
 
 
 def test_inv_02_join_rejected_when_full():
@@ -133,7 +161,8 @@ def test_inv_03_change_team_rejected_when_target_full():
 def test_change_team_moves_own_team():
     room = make_room([1, 2])
     room.change_team(1, TeamSide.B)
-    assert room.team_count(TeamSide.B) == 2
+    assert room.participation_of(1).team == TeamSide.B
+    assert (room.team(TeamSide.A).count, room.team(TeamSide.B).count) == (1, 1)
 
 
 def test_change_team_same_team_is_noop():
@@ -223,8 +252,9 @@ def test_inv_03_three_to_one_composition_cannot_be_built():
     """AC-06-4의 'A팀 3명·B팀 1명'은 팀당 정원 2명(INV-03) 때문에 만들 수 없다."""
     room = make_room([1, 2, 3, 4])
     with pytest.raises(TeamFullError):
-        room.change_team(2, TeamSide.A)
-    assert (room.team_count(TeamSide.A), room.team_count(TeamSide.B)) == (2, 2)
+        room.change_team(3, TeamSide.A)
+    assert room.participation_of(3).team == TeamSide.B
+    assert (room.team(TeamSide.A).count, room.team(TeamSide.B).count) == (2, 2)
 
 
 # --- 삭제된 방 (INV-06) ---
@@ -252,9 +282,27 @@ def test_inv_06_deleted_room_rejects_every_action(action):
 
 def test_inv_07_constructor_requires_both_or_neither_delete_fields():
     with pytest.raises(ValueError):
-        Room(1, RoomTitle("방"), 1, 0, T0, T0, None, [])
+        Room(1, RoomTitle("방"), 1, 0, T0, T0, None, two_teams(), [])
 
 
 def test_constructor_rejects_negative_last_join_order():
     with pytest.raises(ValueError):
-        Room(1, RoomTitle("방"), 1, -1, T0, None, None, [])
+        Room(1, RoomTitle("방"), 1, -1, T0, None, None, two_teams(), [])
+
+
+@pytest.mark.parametrize(
+    "teams",
+    [[], [Team(1, TeamSide.A)], [Team(1, TeamSide.A), Team(2, TeamSide.A)]],
+)
+def test_constructor_requires_team_a_and_b(teams):
+    with pytest.raises(ValueError):
+        Room(1, RoomTitle("방"), 1, 0, T0, None, None, teams, [])
+
+
+def test_constructor_fills_team_members_from_current_participations():
+    """레포지토리가 팀원 없이 넘겨도 현재 참가 기록으로 팀원이 채워진다 (RISK-13)."""
+    current = Participation(1, 1, 7, 1, TeamSide.B, T0)
+    ended = Participation(2, 1, 8, 2, TeamSide.A, T0, left_at=at(5))
+    room = Room(1, RoomTitle("방"), 7, 2, T0, None, None, two_teams(), [current, ended])
+    assert room.team(TeamSide.B).members == [current]
+    assert room.team(TeamSide.A).members == []

@@ -20,7 +20,7 @@ async def join(client: httpx.AsyncClient, room_id: int, user_id: int) -> httpx.R
 
 
 async def full_room(client: httpx.AsyncClient, user_ids: list[int]) -> int:
-    """user_ids[0]이 만들고 나머지가 참가한 방(A, B, A, B)."""
+    """user_ids[0]이 만들고 나머지가 참가한 방(A, A, B, B — D-024)."""
     room_id = await create_room(client, user_ids[0])
     for user_id in user_ids[1:]:
         assert (await join(client, room_id, user_id)).status_code == 200
@@ -88,25 +88,74 @@ async def test_ac_01_5_duplicate_titles_allowed(client, make_users):
 # --- US-02 방 참가 ---
 
 
-async def test_ac_02_1_join_assigns_team_b_and_order(client, make_users):
+async def test_ac_02_1_join_assigns_team_a_first_and_order(client, make_users):
     host, guest = await make_users(2)
     room_id = await create_room(client, host)
     response = await join(client, room_id, guest)
     body = response.json()
     assert response.status_code == 200
     assert body["current_count"] == 2
-    assert body["my_team"] == "B"
+    assert body["my_team"] == "A"
 
 
-async def test_ac_02_2_join_assigns_team_with_fewer_members(client, make_users):
+async def test_ac_02_2_join_assigns_team_b_when_a_is_full(client, make_users):
+    users = await make_users(4)
+    room_id = await full_room(client, users[:3])
+    # 지금 A2·B1 → 새 참가자는 B
+    response = await join(client, room_id, users[3])
+    assert response.status_code == 200
+    assert response.json()["my_team"] == "B"
+
+
+async def test_ac_02_9_join_assigns_team_a_when_a_has_space(client, make_users):
     users = await make_users(4)
     room_id = await full_room(client, users[:3])
     await client.patch(
-        f"/api/rooms/{room_id}/participants/me", json={"team": "B"}, headers=auth_header(users[2])
+        f"/api/rooms/{room_id}/participants/me", json={"team": "B"}, headers=auth_header(users[1])
     )
     # 지금 A1·B2 → 새 참가자는 A
     response = await join(client, room_id, users[3])
+    assert response.status_code == 200
     assert response.json()["my_team"] == "A"
+
+
+async def test_risk_13_participation_team_belongs_to_same_room(client, make_users, session_factory):
+    """참가 기록의 team_id는 같은 방의 팀을 가리키고, 방마다 팀은 A·B 두 개다 (ADR-010)."""
+    from sqlalchemy import text
+
+    users = await make_users(4)
+    room_id = await full_room(client, users[:3])
+    await client.patch(
+        f"/api/rooms/{room_id}/participants/me", json={"team": "B"}, headers=auth_header(users[1])
+    )
+    await join(client, room_id, users[3])
+    async with session_factory() as session:
+        sides = (
+            (
+                await session.execute(
+                    text("SELECT side FROM teams WHERE room_id = :r ORDER BY side"), {"r": room_id}
+                )
+            )
+            .scalars()
+            .all()
+        )
+        rows = (
+            await session.execute(
+                text(
+                    "SELECT p.user_id, t.side, t.room_id FROM participations p "
+                    "JOIN teams t ON t.id = p.team_id WHERE p.room_id = :r ORDER BY p.join_order"
+                ),
+                {"r": room_id},
+            )
+        ).all()
+    assert sides == ["A", "B"]
+    assert all(row.room_id == room_id for row in rows)
+    assert [(row.user_id, row.side) for row in rows] == [
+        (users[0], "A"),
+        (users[1], "B"),
+        (users[2], "B"),
+        (users[3], "A"),
+    ]
 
 
 async def test_ac_02_3_join_full_room_rejected(client, make_users):
@@ -333,7 +382,13 @@ async def test_ac_06_1_start_game_dissolves_room_without_results(client, make_us
     for user_id in users:
         assert all(r["left_at"] is not None for r in await history(client, user_id))
     # 승패·결과 테이블 없음 (INV-09)
-    assert set(Base.metadata.tables) == {"users", "token_blacklist", "rooms", "participations"}
+    assert set(Base.metadata.tables) == {
+        "users",
+        "token_blacklist",
+        "rooms",
+        "teams",
+        "participations",
+    }
 
 
 async def test_ac_06_2_member_can_create_room_after_dissolve(client, make_users):
@@ -547,7 +602,7 @@ async def count_seed_rows(session) -> dict[str, int]:
     from sqlalchemy import text
 
     counts = {}
-    for table in ("users", "rooms", "participations"):
+    for table in ("users", "rooms", "teams", "participations"):
         counts[table] = (await session.execute(text(f"SELECT COUNT(*) FROM {table}"))).scalar_one()
     return counts
 
@@ -574,6 +629,7 @@ async def test_nfr_06_seed_twenty_rows_and_idempotent(session_factory):
         ).scalar_one()
     assert sum(first.values()) >= 20
     assert first["rooms"] > 0 and four_player_rooms >= 1
+    assert first["teams"] == first["rooms"] * 2  # 방마다 A·B (ADR-010)
 
     for _ in range(2):  # 재시작 2회
         async with session_factory() as session:
