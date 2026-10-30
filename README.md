@@ -4,6 +4,7 @@
 
 각 파일에는 만들어야 할 클래스·함수 이름만 주석으로 적혀 있습니다.
 참고 구현은 `reference/agent-pipeline-blueprint` 브랜치에 있습니다.
+5명 작업 분담은 [`docs/work-assignment.md`](docs/work-assignment.md)를 봅니다.
 
 ## 시작하기 — 팀원 개발 환경 맞추기
 
