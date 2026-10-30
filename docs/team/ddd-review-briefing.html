@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>아카이브 서비스 DDD 리뷰</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { background: #0E131A; }
+  body { padding: 24px 0; }
+  .frame { width: 1920px; height: 1080px; margin: 0 auto 24px; transform-origin: top left; }
+  section { position: relative; width: 1920px; height: 1080px; overflow: hidden; }
+  ul, ol { padding-left: 1.2em; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 0.35em 0.6em; text-align: left; vertical-align: top; border-bottom: 1px solid #D6D3CA; }
+  th { font-weight: 700; }
+  aside { display: none; }
+  x-shape { display: block; flex: none; }
+  x-shape[kind="arrow-right"] { clip-path: polygon(0 30%, 60% 30%, 60% 0, 100% 50%, 60% 100%, 60% 70%, 0 70%); }
+  x-shape[kind="arrow-left"]  { clip-path: polygon(100% 30%, 40% 30%, 40% 0, 0 50%, 40% 100%, 40% 70%, 100% 70%); }
+  @page { size: 1920px 1080px; margin: 0; }
+  @media print {
+    html, body { background: none; padding: 0; }
+    .frame { margin: 0 !important; transform: none !important; height: 1080px !important; break-after: page; }
+    .frame:last-child { break-after: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="frame">
+<section id="cover" data-transition="fade" style="background:#1B2430;color:#F3F1EB;font-family:'Noto Sans KR', Arial, sans-serif;padding:128px;display:flex;flex-direction:column;justify-content:flex-end;gap:40px">
+<p style="font-size:30px;font-weight:700;color:#F08A4B;letter-spacing:2px">코드 리뷰 브리핑</p>
+<h1 style="font-size:96px;font-weight:700;line-height:1.15;color:#F3F1EB">멀티미디어 아카이브 서비스<br>DDD 관점 리뷰</h1>
+<p style="font-size:30px;color:#B9C0CA;line-height:1.5">main.py · domain/archive.py · schemas/archive.py</p>
+<aside>오늘은 멀티미디어 아카이브 예제 코드를 DDD 관점에서 본 결과를 공유합니다. 출발점은 "main.py에 핵심 규칙 판단이 너무 많이 들어가 있는 것 같다"는 의문이었고, 결론부터 말하면 그 의문이 맞습니다.</aside>
+</section>
+</div>
+<div class="frame">
+<section id="verdict" data-transition="fade" style="background:#C4561F;color:#FBF6F1;font-family:'Noto Sans KR', Arial, sans-serif;padding:128px;display:flex;flex-direction:column;justify-content:center;gap:48px">
+<p style="font-size:30px;font-weight:700;letter-spacing:2px;color:#FBE3D3">한 줄 결론</p>
+<h1 style="font-size:96px;font-weight:700;line-height:1.2;color:#FBF6F1">지금은 DDD라기보다<br>“똑똑한 DTO + 두꺼운 컨트롤러”</h1>
+<p style="font-size:30px;line-height:1.5;color:#FBF6F1">엔티티에 상태 전이를 넣은 출발점은 좋지만, 규칙은 main.py에 흩어져 있고 불변식은 우회할 수 있습니다.</p>
+<aside>엔티티가 상태 전이 메서드를 가진 건 좋은 출발입니다. 하지만 세 가지 문제가 있습니다. 첫째, 파일명·MIME·ID·저장 경로 규칙이 main.py에 흩어져 있습니다. 둘째, 변환 파이프라인 같은 유스케이스 흐름을 라우터 파일이 쥐고 있습니다. 셋째, 엔티티 불변식을 생성자와 public 속성으로 우회할 수 있습니다.</aside>
+</section>
+</div>
+<div class="frame">
+<section id="scope" data-section="main.py와 엔티티에서 발견한 설계 문제" data-transition="fade" style="background:#F6F5F1;color:#1B2430;font-family:'Noto Sans KR', Arial, sans-serif;padding:128px;display:flex;flex-direction:column;gap:56px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:24px;font-weight:700;color:#C4561F;letter-spacing:2px">MAIN.PY 들여다보기</p>
+<h2 style="font-size:64px;font-weight:700;line-height:1.2;color:#1B2430">main.py의 코드가 전부 문제는 아닙니다</h2>
+</div>
+<div style="display:flex;gap:40px;flex:1">
+<div style="flex:1;display:flex;flex-direction:column;gap:24px;background:#EAE8E1;padding:48px;border-radius:16px">
+<h3 style="font-size:40px;font-weight:700;color:#1B2430">여기 있어도 되는 것</h3>
+<p style="font-size:24px;color:#4A5160">표현 계층의 관심사</p>
+<ul style="font-size:30px;line-height:1.6;color:#1B2430">
+<li>HTTP 상태 코드 매핑</li>
+<li>Content-Disposition 등 응답 헤더</li>
+<li>StreamingResponse 스트리밍</li>
+<li>요청 파싱(UploadFile)</li>
+</ul>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:24px;background:#FFFFFF;padding:48px;border-radius:16px;border:3px solid #C4561F">
+<h3 style="font-size:40px;font-weight:700;color:#C4561F">옮겨야 하는 것</h3>
+<p style="font-size:24px;color:#4A5160">도메인 규칙과 유스케이스 흐름</p>
+<ul style="font-size:30px;line-height:1.6;color:#1B2430">
+<li>파일명 정제, MIME 기본값</li>
+<li>ID 발급과 저장 경로 규칙</li>
+<li>변환 파이프라인 상태 조율</li>
+<li>실패 처리(로그 한 줄로 덮음)</li>
+</ul>
+</div>
+</div>
+<aside>main.py가 두꺼운 것 자체가 문제는 아닙니다. HTTP 상태 코드, 헤더, 스트리밍은 원래 API 계층에 있어야 합니다. 문제는 그 사이에 도메인 규칙과 애플리케이션 흐름이 섞여 있다는 점입니다.</aside>
+</section>
+</div>
+<div class="frame">
+<section id="rules" data-transition="fade" style="background:#F6F5F1;color:#1B2430;font-family:'Noto Sans KR', Arial, sans-serif;padding:128px;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:24px;font-weight:700;color:#C4561F;letter-spacing:2px">흩어진 규칙</p>
+<h2 style="font-size:64px;font-weight:700;line-height:1.2;color:#1B2430">main.py에 숨어 있는 판단 7가지</h2>
+</div>
+<table style="font-family:'Noto Sans KR', Arial, sans-serif;font-size:26px;color:#1B2430">
+<tr style="background:#1B2430"><th style="width:38%;color:#F3F1EB">main.py의 코드</th><th style="width:34%;color:#F3F1EB">성격</th><th style="width:28%;color:#F3F1EB">가야 할 곳</th></tr>
+<tr><td>f"seq_{id}_{filename}"</td><td>저장 규칙 (두 곳에 중복)</td><td>인프라 FileStorage</td></tr>
+<tr style="background:#EAE8E1"><td>os.path.basename(...)</td><td>파일명 정제 규칙</td><td>값 객체 FileName</td></tr>
+<tr><td>content_type or "octet-stream"</td><td>MIME 기본값 정책</td><td>값 객체 ContentType</td></tr>
+<tr style="background:#EAE8E1"><td>asset_id_sequence 전역 변수</td><td>ID 발급</td><td>Repository.next_id()</td></tr>
+<tr><td>asset_repository: Dict</td><td>영속화</td><td>도메인 포트 + 인프라 구현</td></tr>
+<tr style="background:#EAE8E1"><td>execute_media_transcoding_…</td><td>상태 전이 조율</td><td>애플리케이션 서비스</td></tr>
+<tr><td>except ValueError → 로그만</td><td>실패 처리 누락</td><td>mark_as_failed()</td></tr>
+</table>
+<aside>표의 마지막 줄이 가장 중요합니다. 실패 처리를 main.py가 로그 한 줄로 덮고 있어서, 도메인 모델이 "실패"라는 상태를 아예 모릅니다. 또 저장 경로 규칙 seq_id_filename이 업로드와 다운로드 두 곳에 똑같이 적혀 있어서, 한쪽만 바뀌면 다운로드가 깨집니다.</aside>
+</section>
+</div>
+<div class="frame">
+<section id="failed" data-transition="fade" style="background:#F6F5F1;color:#1B2430;font-family:'Noto Sans KR', Arial, sans-serif;padding:128px;display:flex;flex-direction:column;gap:64px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:24px;font-weight:700;color:#C4561F;letter-spacing:2px">빠진 상태 전이</p>
+<h2 style="font-size:64px;font-weight:700;line-height:1.2;color:#1B2430">변환이 실패하면 자산은 영원히 PROCESSING에 멈춥니다</h2>
+</div>
+<div style="display:flex;align-items:center;gap:32px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:32px;font-weight:600;background:#EAE8E1;color:#1B2430;padding:28px 40px;border-radius:12px">PENDING</p>
+<x-shape kind="arrow-right" style="width:96px;height:48px;background:#8A8F98"></x-shape>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:32px;font-weight:600;background:#1B2430;color:#F3F1EB;padding:28px 40px;border-radius:12px">PROCESSING</p>
+<x-shape kind="arrow-right" style="width:96px;height:48px;background:#8A8F98"></x-shape>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:32px;font-weight:600;background:#EAE8E1;color:#1B2430;padding:28px 40px;border-radius:12px">COMPLETED</p>
+</div>
+<div style="display:flex;gap:40px">
+<div style="flex:1;display:flex;flex-direction:column;gap:16px;background:#FFFFFF;padding:40px;border-radius:16px;border:3px dashed #C4561F">
+<h3 style="font-size:36px;font-weight:700;color:#C4561F">지금: FAILED 상태가 없음</h3>
+<p style="font-size:28px;line-height:1.5;color:#4A5160">except ValueError가 로그만 남기고 끝나서, 클라이언트는 PROCESSING만 계속 보게 됩니다.</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:16px;background:#EAE8E1;padding:40px;border-radius:16px">
+<h3 style="font-size:36px;font-weight:700;color:#1B2430">바꿀 방향: mark_as_failed()</h3>
+<p style="font-size:28px;line-height:1.5;color:#4A5160">“변환은 끝나거나 실패한다”는 규칙을 엔티티가 직접 표현하게 합니다.</p>
+</div>
+</div>
+<aside>실패한 자산의 상태가 갱신되지 않는 건 단순한 누락이 아니라 도메인 규칙이 모델에 없다는 신호입니다. "변환은 언젠가 끝나거나 실패한다"는 규칙을 엔티티가 FAILED 상태와 mark_as_failed 메서드로 표현해야 합니다. 그래야 클라이언트도 실패를 알 수 있습니다.</aside>
+</section>
+</div>
+<div class="frame">
+<section id="entity" data-transition="fade" style="background:#EAE8E1;color:#1B2430;font-family:'Noto Sans KR', Arial, sans-serif;padding:128px;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:24px;font-weight:700;color:#C4561F;letter-spacing:2px">MULTIMEDIAASSET</p>
+<h2 style="font-size:64px;font-weight:700;line-height:1.2;color:#1B2430">엔티티의 불변식을 우회하는 길이 열려 있습니다</h2>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:28px">
+<div style="display:flex;flex-direction:column;gap:12px;background:#FBFAF7;padding:36px;border-radius:16px">
+<h3 style="font-size:30px;font-weight:700;color:#1B2430">생성자로 status를 받음</h3>
+<p style="font-size:24px;line-height:1.5;color:#4A5160">status="COMPLETED"로 만들면 전이 규칙을 건너뜁니다. 새 자산은 항상 PENDING이어야 합니다.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;background:#FBFAF7;padding:36px;border-radius:16px">
+<h3 style="font-size:30px;font-weight:700;color:#1B2430">속성이 전부 public</h3>
+<p style="font-size:24px;line-height:1.5;color:#4A5160">asset.status = "아무거나"가 막히지 않습니다. 상태가 문자열이라 오타도 못 잡습니다.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;background:#FBFAF7;padding:36px;border-radius:16px">
+<h3 style="font-size:30px;font-weight:700;color:#1B2430">to_dict()가 도메인에</h3>
+<p style="font-size:24px;line-height:1.5;color:#4A5160">직렬화는 표현 계층의 일입니다. 스키마의 from_attributes로 변환하면 됩니다.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;background:#FBFAF7;padding:36px;border-radius:16px">
+<h3 style="font-size:30px;font-weight:700;color:#1B2430">datetime.now() 직접 호출</h3>
+<p style="font-size:24px;line-height:1.5;color:#4A5160">타임존이 없고 테스트하기 어렵습니다. UTC를 쓰거나 시각을 주입받습니다.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;background:#FBFAF7;padding:36px;border-radius:16px">
+<h3 style="font-size:30px;font-weight:700;color:#1B2430">예외가 전부 ValueError</h3>
+<p style="font-size:24px;line-height:1.5;color:#4A5160">API가 “잘못된 입력”과 “서버 오류”를 구분하지 못합니다.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;background:#1B2430;padding:36px;border-radius:16px">
+<h3 style="font-size:30px;font-weight:700;color:#F08A4B">해결 방향</h3>
+<p style="font-size:24px;line-height:1.5;color:#E4E7EC">AssetStatus Enum, 읽기 전용 프로퍼티, 복원용 팩토리, 도메인 전용 예외</p>
+</div>
+</div>
+<aside>엔티티가 상태 전이 메서드를 갖고 있어도, 생성자에서 status를 받거나 속성이 public이면 그 규칙은 강제되지 않습니다. 저장소에서 복원할 때는 reconstitute 같은 별도 팩토리를 쓰고, 상태는 Enum과 읽기 전용 프로퍼티로 바꿉니다. 예외도 InvalidAssetError, InvalidStateTransitionError처럼 도메인 전용으로 나눠야 API 계층이 400과 500을 구분할 수 있습니다.</aside>
+</section>
+</div>
+<div class="frame">
+<section id="bugs" data-section="구조 때문에 생긴 실제 버그" data-transition="fade" style="background:#F6F5F1;color:#1B2430;font-family:'Noto Sans KR', Arial, sans-serif;padding:128px;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:24px;font-weight:700;color:#C4561F;letter-spacing:2px">실제 버그</p>
+<h2 style="font-size:64px;font-weight:700;line-height:1.2;color:#1B2430">구조 문제는 이미 버그로 나타나고 있습니다</h2>
+</div>
+<table style="font-family:'Noto Sans KR', Arial, sans-serif;font-size:26px;color:#1B2430">
+<tr style="background:#1B2430"><th style="width:24%;color:#F3F1EB">상황</th><th style="width:46%;color:#F3F1EB">무슨 일이 생기나</th><th style="width:30%;color:#F3F1EB">고칠 방향</th></tr>
+<tr><td><b>동시 업로드</b></td><td>await 사이에 시퀀스가 안 올라가 같은 ID·같은 파일 경로를 받아 덮어씀</td><td>저장소가 ID를 맨 먼저 발급</td></tr>
+<tr style="background:#EAE8E1"><td><b>0바이트 파일</b></td><td>도메인 ValueError가 except Exception에 잡혀 500 응답</td><td>도메인 예외 → 400/422</td></tr>
+<tr><td><b>filename 없음</b></td><td>os.path.basename(None)에서 TypeError → 500 응답</td><td>FileName 값 객체에서 검증</td></tr>
+<tr style="background:#EAE8E1"><td><b>없는 ID 조회</b></td><td>410 Gone을 반환 (존재한 적 없는 ID)</td><td>404 Not Found</td></tr>
+<tr><td><b>변환 중 다운로드</b></td><td>PROCESSING 상태에서도 다운로드 가능</td><td>정책 결정 후 엔티티가 판단</td></tr>
+</table>
+<aside>가장 심각한 건 첫 줄의 ID 경쟁 상태입니다. 시퀀스를 읽는 시점과 올리는 시점 사이에 await가 여러 번 있어서, 동시에 들어온 업로드가 같은 ID와 같은 파일 경로를 받아 서로 덮어쓸 수 있습니다. 마지막 줄은 버그라기보다 정해지지 않은 정책입니다. COMPLETED일 때만 받을 수 있다는 게 규칙이라면 엔티티의 ensure_downloadable 같은 메서드가 판단해야 합니다.</aside>
+</section>
+</div>
+<div class="frame">
+<section id="layers" data-section="권장 구조와 우선순위" data-transition="fade" style="background:#F6F5F1;color:#1B2430;font-family:'Noto Sans KR', Arial, sans-serif;padding:128px;display:flex;flex-direction:column;gap:56px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:24px;font-weight:700;color:#C4561F;letter-spacing:2px">권장 구조</p>
+<h2 style="font-size:64px;font-weight:700;line-height:1.2;color:#1B2430">의존성은 모두 도메인을 향합니다</h2>
+</div>
+<div style="display:flex;align-items:stretch;gap:20px">
+<div style="flex:1;display:flex;flex-direction:column;gap:16px;background:#EAE8E1;padding:32px;border-radius:16px">
+<h3 style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:26px;font-weight:600;color:#1B2430">api/</h3>
+<p style="font-size:24px;line-height:1.5;color:#4A5160">요청 파싱, 스키마 변환, 예외 → HTTP 상태 매핑</p>
+</div>
+<div style="display:flex;align-items:center"><x-shape kind="arrow-right" style="width:64px;height:32px;background:#8A8F98"></x-shape></div>
+<div style="flex:1;display:flex;flex-direction:column;gap:16px;background:#EAE8E1;padding:32px;border-radius:16px">
+<h3 style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:26px;font-weight:600;color:#1B2430">application/</h3>
+<p style="font-size:24px;line-height:1.5;color:#4A5160">유스케이스: 업로드 등록, 변환 실행, 조회, 다운로드</p>
+</div>
+<div style="display:flex;align-items:center"><x-shape kind="arrow-right" style="width:64px;height:32px;background:#8A8F98"></x-shape></div>
+<div style="flex:1;display:flex;flex-direction:column;gap:16px;background:#1B2430;padding:32px;border-radius:16px">
+<h3 style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:26px;font-weight:600;color:#F08A4B">domain/</h3>
+<p style="font-size:24px;line-height:1.5;color:#E4E7EC">엔티티, 값 객체, 상태 Enum, 도메인 예외, 저장소 포트</p>
+</div>
+<div style="display:flex;align-items:center"><x-shape kind="arrow-left" style="width:64px;height:32px;background:#8A8F98"></x-shape></div>
+<div style="flex:1;display:flex;flex-direction:column;gap:16px;background:#EAE8E1;padding:32px;border-radius:16px">
+<h3 style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:26px;font-weight:600;color:#1B2430">infrastructure/</h3>
+<p style="font-size:24px;line-height:1.5;color:#4A5160">메모리 저장소(락 + next_id), 로컬 파일 저장소</p>
+</div>
+</div>
+<p style="font-size:30px;line-height:1.5;color:#1B2430">저장 경로 규칙 <span style="color:#C4561F">seq_{id}_{name}</span>은 infrastructure 한 곳에만 둡니다. 업로드 핸들러는 다섯 줄 남짓으로 줄어듭니다.</p>
+<aside>api는 application을 부르고, application은 domain을 씁니다. infrastructure는 domain이 정의한 포트(AssetRepository, FileStorage)를 구현합니다. 그래서 화살표가 전부 domain을 향합니다. 이렇게 나누면 도메인 규칙을 FastAPI 없이 단위 테스트할 수 있고, 메모리 저장소를 DB로 바꿀 때도 도메인 코드는 그대로입니다.</aside>
+</section>
+</div>
+<div class="frame">
+<section id="sketch" data-transition="fade" style="background:#1B2430;color:#F3F1EB;font-family:'Noto Sans KR', Arial, sans-serif;padding:128px;display:grid;grid-template-columns:560px 1fr;gap:64px;align-items:start">
+<div style="display:flex;flex-direction:column;gap:32px">
+<p style="font-size:24px;font-weight:700;color:#F08A4B;letter-spacing:2px">엔티티 스케치</p>
+<h2 style="font-size:64px;font-weight:700;line-height:1.2;color:#F3F1EB">상태는 엔티티만 바꿀 수 있게</h2>
+<ul style="font-size:28px;line-height:1.7;color:#B9C0CA">
+<li>새 자산은 항상 PENDING</li>
+<li>status는 읽기 전용</li>
+<li>전이는 _transition 한 곳에서 검증</li>
+<li>FAILED로 실패를 표현</li>
+</ul>
+</div>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;line-height:1.55;color:#E4E7EC;background:#111821;padding:40px;border-radius:16px"><span style="color:#F08A4B">class</span> AssetStatus(str, Enum):<br>&#160;&#160;&#160;&#160;PENDING / PROCESSING / COMPLETED / FAILED<br><br><span style="color:#F08A4B">class</span> MultimediaAsset:<br>&#160;&#160;&#160;&#160;<span style="color:#F08A4B">def</span> __init__(self, asset_id, filename: FileName, ...):<br>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;self._status = AssetStatus.PENDING<br>&#160;&#160;&#160;&#160;<span style="color:#8FB8E8">@property</span><br>&#160;&#160;&#160;&#160;<span style="color:#F08A4B">def</span> status(self): <span style="color:#F08A4B">return</span> self._status<br>&#160;&#160;&#160;&#160;<span style="color:#F08A4B">def</span> mark_as_failed(self, reason):<br>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;<span style="color:#F08A4B">if</span> self._status <span style="color:#F08A4B">is</span> AssetStatus.COMPLETED:<br>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;<span style="color:#F08A4B">raise</span> InvalidStateTransitionError(...)<br>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;self._status = AssetStatus.FAILED<br>&#160;&#160;&#160;&#160;<span style="color:#F08A4B">def</span> _transition(self, expected, to):<br>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;<span style="color:#F08A4B">if</span> self._status <span style="color:#F08A4B">is not</span> expected:<br>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;<span style="color:#F08A4B">raise</span> InvalidStateTransitionError(...)<br>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;self._status = to</p>
+<aside>핵심은 상태를 바꾸는 길을 엔티티 메서드 하나로 좁히는 것입니다. 생성자는 status를 받지 않고 항상 PENDING으로 시작합니다. 외부에서는 status를 읽기만 할 수 있고, 모든 전이는 _transition에서 검증합니다. mark_as_processing과 mark_as_completed는 _transition을 한 줄로 부르면 됩니다.</aside>
+</section>
+</div>
+<div class="frame">
+<section id="next" data-transition="fade" style="background:#F6F5F1;color:#1B2430;font-family:'Noto Sans KR', Arial, sans-serif;padding:128px;display:flex;flex-direction:column;gap:64px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:24px;font-weight:700;color:#C4561F;letter-spacing:2px">우선순위</p>
+<h2 style="font-size:64px;font-weight:700;line-height:1.2;color:#1B2430">먼저 손볼 세 가지: 모두 실제 버그와 이어집니다</h2>
+</div>
+<div style="display:flex;gap:40px">
+<div style="flex:1;display:flex;flex-direction:column;gap:20px;border-top:6px solid #C4561F;padding:32px 0 0 0">
+<p style="font-size:120px;font-weight:700;line-height:1;color:#C4561F">1</p>
+<h3 style="font-size:40px;font-weight:700;color:#1B2430">FAILED 상태 추가</h3>
+<p style="font-size:28px;line-height:1.5;color:#4A5160">변환 실패 시 PROCESSING에 멈추는 문제를 막습니다.</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:20px;border-top:6px solid #C4561F;padding:32px 0 0 0">
+<p style="font-size:120px;font-weight:700;line-height:1;color:#C4561F">2</p>
+<h3 style="font-size:40px;font-weight:700;color:#1B2430">저장 경로 규칙 한 곳으로</h3>
+<p style="font-size:28px;line-height:1.5;color:#4A5160">업로드와 다운로드에 중복된 규칙을 FileStorage로 모읍니다.</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:20px;border-top:6px solid #C4561F;padding:32px 0 0 0">
+<p style="font-size:120px;font-weight:700;line-height:1;color:#C4561F">3</p>
+<h3 style="font-size:40px;font-weight:700;color:#1B2430">ID 경쟁 상태 해결</h3>
+<p style="font-size:28px;line-height:1.5;color:#4A5160">저장소가 ID를 처음에 발급해 동시 업로드 덮어쓰기를 막습니다.</p>
+</div>
+</div>
+<aside>전체 구조 개편은 시간이 걸리니, 실제 버그와 바로 이어지는 세 가지부터 시작하길 제안합니다. 이 세 가지를 하다 보면 자연스럽게 엔티티, 저장소 포트, 파일 저장소가 분리되기 시작합니다. 다운로드 가능 상태 정책은 팀에서 따로 정해야 할 질문으로 남겨 둡니다.</aside>
+</section>
+</div>
+<script>
+  // 화면 폭에 맞춰 1920×1080 슬라이드를 축소해 보여준다 (인쇄 시에는 원래 크기)
+  function fit() {
+    var s = Math.min(1, (window.innerWidth - 32) / 1920);
+    document.querySelectorAll('.frame').forEach(function (f) {
+      f.style.transform = 'scale(' + s + ')';
+      f.style.height = (1080 * s) + 'px';
+      f.style.marginLeft = Math.max(16, (window.innerWidth - 1920 * s) / 2) + 'px';
+    });
+  }
+  window.addEventListener('resize', fit);
+  window.addEventListener('beforeprint', function () {
+    document.querySelectorAll('.frame').forEach(function (f) { f.style.transform = 'none'; f.style.height = '1080px'; f.style.marginLeft = '0'; });
+  });
+  window.addEventListener('afterprint', fit);
+  if (!window.matchMedia('print').matches) fit();
+</script>
+</body>
+</html>
