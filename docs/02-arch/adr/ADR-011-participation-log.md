@@ -5,7 +5,7 @@
 - 일부 대체: ADR-009의 "한 회원 한 방 부분 유니크 인덱스" → 이 ADR의 `participations.user_id` `unique=True`
 
 ## 맥락
-지금까지 `participations`는 자체 `id`를 PK로 두고 현재 참가와 끝난 이용 기록을 한 테이블에 담았다(`left_at IS NULL` = 현재 참가). 사용자가 PK를 `(room_id, user_id)` 복합키로 바꾸고, 같은 방 재입장 이력은 로그 테이블에 남기기로 했다(D-025). 복합 PK에서는 한 방에 같은 회원 행이 하나뿐이므로, 나간 뒤의 행을 어떻게 다룰지 정해야 한다.
+이전 설계에서 `participations`는 자체 `id`를 PK로 두고 현재 참가와 끝난 이용 기록을 한 테이블에 담았다(`left_at IS NULL` = 현재 참가). 사용자가 PK를 `(room_id, user_id)` 복합키로 바꾸고, 같은 방 재입장 이력은 로그 테이블에 남기기로 했다(D-025). 복합 PK에서는 한 방에 같은 회원 행이 하나뿐이므로, 나간 뒤의 행을 어떻게 다룰지 정해야 한다.
 
 ## 검토한 옵션
 | 옵션 | 장점 | 단점 | AI 부채 영향(D2~D4) | 평가표 영향 | 되돌리기 비용 |
@@ -28,5 +28,5 @@ user_id unique                        join_order, team_id, joined_at, left_at
 
 ## 결과
 - 좋아지는 점: 현재 참가 조회에 `left_at IS NULL` 조건이 사라지고, 방을 읽을 때 지난 기록을 함께 읽지 않는다. INV-04가 필수 범위에서도 DB 제약(`unique=True`)으로 지켜진다
-- 감수할 점: 이용 이력 = 현재 참가 + 로그를 파이썬에서 합쳐 정렬·페이지를 자른다. 필수 범위에서 같은 회원의 동시 참가·생성은 `unique` 위반 → `IntegrityError` → 500이다(가입 중복과 같은 처리, D-018). 400 변환은 도전 A(TKT-DB-M6-01). 기존 DB는 `create_all`이 테이블을 고치지 않으므로 지우고 다시 만든다. `HistoryItemResponse`에서 `participation_id`가 빠진다
-- 후속 작업: TKT-BE-M9-01, TKT-DB-M9-01, TKT-QA-M9-01
+- 감수할 점: 이용 이력 = 현재 참가 + 로그를 파이썬에서 합쳐 정렬·페이지를 자른다. 필수 범위에서 같은 회원의 동시 참가·생성은 `unique` 위반 → `IntegrityError` → 500이다(가입 중복과 같은 처리, D-018). 400 변환은 도전 A(TKT-DB-M6-01). `HistoryItemResponse`에서 `participation_id`가 빠진다
+- 후속 작업: TKT-BE-M3-01, TKT-DB-M3-02·03, TKT-BE-M3-04(응답 스키마), TKT-QA-M3-01·M5-01

@@ -49,7 +49,7 @@
   - B(교안에 없지만 조금 공부하면 이해 가능한 문법: `dataclass`, `StrEnum`, `Protocol`, pydantic-settings, 예외 계층 등): 유지·허용
   - C(인증·보안): 교안 6장 1강 설계를 따른다(D-021)
 - 근거: 사용자 요청(2026-10-28), 교안 1~6장 검토 결과. 4계층·레포지토리 구조는 교안 7장(발제 §2·§4.1) 범위이므로 이 규칙과 충돌하지 않는다
-- 적용: TKT-DB-M3-01~03·TKT-BE-M3-01~05 코드를 이 규칙으로 고쳤다(제약·인덱스 정리, `relationship`+`selectinload`, 파이썬 필터·슬라이싱, 블랙리스트 토큰 원문). 이후 모든 DB·BE·FE 티켓에 적용
+- 적용: 모든 DB·BE·FE 티켓(제약·인덱스 최소화, `relationship`+`selectinload`, 파이썬 필터·슬라이싱, 블랙리스트 토큰 원문)
 - 감수할 점: 목록·이력 조회가 해당 행을 모두 읽은 뒤 파이썬에서 거르고 자른다(시연 규모 기준). 동시 가입 시 중복 아이디는 DB `unique`가 막아 500이 된다(순차 요청 기준, D-018)
 - 되돌리기 비용: 중
 
@@ -214,7 +214,7 @@
 - trade-off: A — API 주소가 PM 초안의 `/rooms` 예시와 달라진다. B — 브라우저 주소가 길어진다. C — 라우터가 복잡해지고 Swagger 문서가 헷갈린다.
 
 ### D-022 [자율][ARCH] GATE-08 검사 명령을 ORM 모델 이름으로 좁힘
-- 결정: GATE-08 명령을 `Model`로 끝나는 모든 import 대신 ORM 모델 이름 4개(`UserModel`·`TokenBlacklistModel`·`RoomModel`·`ParticipationModel`)와 `infrastructure.models` 경로로 찾게 바꾼다 — `06-quality-gates.md` GATE-08, RISK-02, BE 브리핑(TKT-BE-M3-04)·QA 브리핑(M3~M7)의 오탐 보고
+- 결정: GATE-08 명령을 `Model`로 끝나는 모든 import 대신 ORM 모델 이름 4개(`UserModel`·`TokenBlacklistModel`·`RoomModel`·`ParticipationModel`)와 `infrastructure.models` 경로로 찾게 바꾼다 — `06-quality-gates.md` GATE-08, RISK-02 (pydantic `BaseModel`을 ORM 모델로 잘못 잡는 오탐 방지)
 - 선택지: **A. 모델 이름 + 경로로 좁힘 (권장·채택)** / B. `infrastructure.models` 경로만 검사 / C. 기존 명령 유지, `BaseModel`은 매번 사람이 제외
 - 권장 이유: pydantic `BaseModel` 오탐이 사라져 "출력 0줄" 기준이 실제로 쓸 수 있게 되고, `models.RoomModel`처럼 import 줄에 이름이 없는 사용도 잡는다.
 - trade-off: A — 모델 클래스를 추가하면 명령에도 이름을 넣어야 한다. B — 단순하지만 다른 경로로 들여온 모델 이름은 놓친다. C — 문서 변경은 없지만 매번 실패로 나와 진짜 위반을 놓치기 쉽다.

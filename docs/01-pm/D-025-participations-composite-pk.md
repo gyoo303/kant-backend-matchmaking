@@ -1,8 +1,8 @@
 # D-025 분석: participations 복합 PK와 이용 로그 테이블
 
-- 결정 카드: `decision-log.md` D-025 (`[PENDING]`)
+- 결정 카드: `decision-log.md` D-025 (승인됨, 2026-10-31). 기술 설계는 ADR-011
 - 작성일: 2026-10-31
-- 기준 문서: `docs/02-arch/03-db-schema.md`, `docs/01-pm/03-domain.md`, `src/rooms/infrastructure/models.py`, `src/rooms/infrastructure/repositories.py`
+- 기준 문서: `docs/02-arch/03-db-schema.md`(변경 전 설계), `docs/01-pm/03-domain.md`
 
 ## 0. 변경 요청
 
@@ -30,7 +30,7 @@ A는 한 행에 두 가지 뜻이 섞이고, 재입장 때 "덮기 전에 로그
 1. **같은 방 중복 참가를 DB가 막는다.** 복합 PK가 같은 회원의 같은 방 중복 행을 도메인 검사와 별도로 거부한다.
 2. **INV-04(한 회원 한 방)를 교안 수준 제약으로 지킨다.** B안의 participations에는 지금 참가 중인 회원만 있으므로, `user_id`에 `unique=True` 하나로 INV-04가 보장된다. 도전 A의 부분 UNIQUE 인덱스(`WHERE left_at IS NULL`, ADR-009)보다 단순하다.
 3. **상태와 이력이 분리된다.** participations는 현재 상태, 로그는 지난 이력이다. 로그는 INSERT만 하므로 INV-10(기록 삭제 없음, 종료 기록 재개 없음)을 지키기 쉽다.
-4. **현재 참가자 조회가 단순해진다.** `left_at IS NULL` 조건이 필요 없고, 방을 불러올 때 지난 기록까지 읽지 않는다(지금은 `selectinload(RoomModel.participations)`가 종료 기록까지 가져온다).
+4. **현재 참가자 조회가 단순해진다.** `left_at IS NULL` 조건이 필요 없고, 방을 불러올 때 지난 기록까지 읽지 않는다(이전 설계에서는 방을 읽을 때 종료 기록까지 함께 읽었다).
 
 ## 3. 단점과 위험
 
@@ -38,8 +38,8 @@ A는 한 행에 두 가지 뜻이 섞이고, 재입장 때 "덮기 전에 로그
 2. **한 동작에 두 테이블을 쓴다.** 나가기, 게임 시작(전원 퇴장)마다 participations DELETE와 로그 INSERT를 한 트랜잭션에서 해야 한다. 순서가 어긋나면 이력이 사라지거나 두 번 남는다.
 3. **이용 이력 조회가 두 테이블을 합친다.** 이용 이력 = 현재 참가(participations) + 지난 이용(로그). 정렬·페이지 자르기는 합친 결과로 한다. 삭제 방 보관 정보(`get_archived_room`)는 로그만 읽는다.
 4. **API 계약이 바뀐다.** `HistoryItemResponse.participation_id`(`04-interfaces-api.md`)가 가리킬 단일 id가 없다. `record_id`로 바꾸고 로그 id를 쓰거나 필드를 뺀다.
-5. **도메인 `Participation`의 식별자가 바뀐다.** `RoomRepository.save()`의 "id 없는 참가는 append, 있는 참가는 갱신" 규칙을 `(room_id, user_id)` 기준으로 고쳐야 한다. DB·BE·QA가 모두 영향을 받는다.
-6. **기존 DB를 그대로 쓸 수 없다.** `create_all`은 이미 있는 테이블을 바꾸지 않으므로 개발 DB를 지우고 다시 만든다. 시드도 바뀐다.
+5. **도메인 `Participation`의 식별자가 바뀐다.** 레포지토리 `save`는 참가를 `id`가 아니라 `(room_id, user_id)` 기준으로 짝지어 저장해야 한다. DB·BE·QA가 모두 영향을 받는다.
+6. **시드 구성이 바뀐다.** 끝난 이용은 로그 테이블에 넣는다. 이전 스키마로 만든 개발 DB가 있으면 지우고 다시 만든다(STK-13).
 7. **팀 변경 이력은 여전히 남지 않는다.** 지금처럼 마지막 팀만 기록한다. 필요하면 별도 요구사항으로 정한다.
 
 ## 4. 로그 테이블에 저장할 정보

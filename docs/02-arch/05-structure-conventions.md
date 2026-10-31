@@ -139,7 +139,7 @@ presentation ──▶ application ──▶ domain
 | STK-06 | 시각 | 컬럼은 `DateTime(timezone=True)`이고 읽으면 UTC aware 값이다. 비교·저장하는 값도 `datetime.now(UTC)`(aware)만 쓴다. naive 값과 섞으면 오류가 난다. |
 | STK-07 | bcrypt | passlib 1.7.4는 bcrypt 4.1 이상에서 버전 감지 경고, 5.x에서 오류가 난다. `bcrypt==4.0.1`을 바꾸지 않는다(ADR-002). |
 | STK-08 | 로그인 폼 | `OAuth2PasswordRequestForm`은 `python-multipart`가 필요하다. 필드 이름은 `username`이며 값은 아이디다. |
-| STK-13 | 스키마 변경과 개발 DB | `create_all`은 이미 있는 테이블을 고치지 않는다. D-020·D-021로 `token_blacklist` 컬럼이 바뀌었으므로 기존 개발 DB는 테이블을 지우고 다시 만든다(제약·인덱스 제거는 남아 있어도 동작에 지장 없음). |
+| STK-13 | 스키마 변경과 개발 DB | `create_all`은 이미 있는 테이블을 고치지 않는다. 모델(컬럼·PK·제약)을 바꾸면 개발 DB를 지우고 다시 만든다. |
 | STK-09 | 템플릿 응답 | 최신 Starlette는 `templates.TemplateResponse(request, "rooms/list.html", context)` 순서다(예전 `{"request": request}` 방식은 쓰지 않는다). `.html` 템플릿은 자동 이스케이프가 켜져 있다. |
 | STK-10 | 설정 파일 | pydantic-settings의 `env_file=".env"`는 실행한 작업 디렉토리 기준이다. 서버·테스트는 저장소 루트에서 실행한다. `Settings`는 `extra="ignore"`로 테스트용 변수(`TEST_DATABASE_URL`)를 무시한다. |
 | STK-11 | 비동기 테스트 루프 | 엔진·세션 fixture와 테스트가 같은 이벤트 루프를 써야 한다. `[tool.pytest.ini_options]`에 `asyncio_mode = "auto"`, `asyncio_default_fixture_loop_scope = "session"`을 두고, 테스트 모듈은 `pytestmark = pytest.mark.asyncio(loop_scope="session")`을 쓴다. |
