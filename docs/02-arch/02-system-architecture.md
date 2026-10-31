@@ -8,7 +8,7 @@
 ```mermaid
 flowchart LR
     subgraph Browser["브라우저"]
-        WEB["Jinja2 화면 + polling.js"]
+        WEB["Jinja2 화면 + api.js·rooms.js"]
         SW["Swagger UI /docs"]
     end
     subgraph App["FastAPI (src/main.py)"]

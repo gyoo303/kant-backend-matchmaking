@@ -74,7 +74,7 @@ grep -rnE "\b(UserModel|TokenBlacklistModel|RoomModel|TeamModel|ParticipationMod
 - 테스트 DB: 환경변수 `TEST_DATABASE_URL`(별도 PostgreSQL DB). `tests/conftest.py`가 세션 시작 시 `drop_all`·`create_all`, 테스트마다 테이블을 `TRUNCATE … RESTART IDENTITY CASCADE`. 시드는 주입하지 않는다(테스트가 직접 만든다). 앱의 `get_db`는 `dependency_overrides`로 테스트 세션 팩토리를 쓴다. 동시성 테스트는 요청마다 다른 세션이 필요하므로 오버라이드도 요청마다 새 세션을 연다.
 - SQLite 대체 금지: `timestamptz`(시간대 보존), (도전 A의) 부분 유니크 인덱스·`FOR UPDATE`가 PostgreSQL 동작이다.
 - 도메인 테스트에 목(mock)이 필요하면 설계 결함으로 보고 A4·A5로 되돌린다.
-- 화면(US-15~17)의 폴링 동작(AC-15-5·6, AC-16-3~6)은 자동 테스트 대상이 아니다. QA가 브라우저 수동 점검 체크리스트로 확인한다.
+- 화면(US-15~17)의 갱신 동작(AC-15-2·5·6, AC-16-1·3~6)은 자동 테스트 대상이 아니다. QA가 브라우저 수동 점검 체크리스트로 확인한다. 자동 조회가 없음(NFR-08)은 개발자 도구 Network 탭에서 10초 동안 조작 없이 요청 0건으로 확인하고, `grep -rnE "setInterval|polling" src/static src/templates` 0줄로도 확인한다(ADR-012).
 
 ## 3. AC ↔ 테스트 연결 규칙
 

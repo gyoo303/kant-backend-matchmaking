@@ -39,7 +39,7 @@ kant-ubuntu-books-claude1/
 │   │   └── rooms/         list.html, detail.html, history.html, archived.html
 │   └── static/
 │       ├── css/app.css
-│       └── js/            api.js, polling.js, rooms.js
+│       └── js/            api.js, rooms.js
 ├── tests/
 │   ├── conftest.py
 │   ├── unit/              test_room.py, test_team.py, test_participation.py, test_user.py        # DB 없음
@@ -167,5 +167,5 @@ presentation ──▶ application ──▶ domain
 | 6장 | 인증·인가, bcrypt(passlib `CryptContext`, `bcrypt==4.0.1`), JWT(pyjwt `encode`·`decode`, `ExpiredSignatureError`·`InvalidTokenError`), access·refresh 토큰과 `token_type`, `OAuth2PasswordBearer`·`OAuth2PasswordRequestForm`, `get_current_user` 의존성, `WWW-Authenticate` 헤더, 블랙리스트 로그아웃·`/refresh` |
 | 7장(발제) | 도메인 중심 4계층(presentation·application·domain·infrastructure), 레포지토리(ORM ↔ 도메인 변환), 서비스의 commit, CORS·캐싱 미들웨어, 배포 — 교안 링크에는 아직 없지만 발제 문서(§2·§4)가 요구하므로 A로 보지 않는다 |
 
-- FE(Jinja2·JS): 교안 3장 템플릿 문법을 쓴다. JS는 교안에 없으므로 `fetch`·`localStorage`·`setInterval`·DOM 조작 정도로 단순하게 쓰고 외부 라이브러리·번들러는 쓰지 않는다.
+- FE(Jinja2·JS): 교안 3장 템플릿 문법을 쓴다. JS는 교안에 없으므로 `fetch`·`localStorage`·DOM 조작 정도로 단순하게 쓰고 외부 라이브러리·번들러는 쓰지 않는다. 자동 조회(`setInterval`·반복 `setTimeout`)는 쓰지 않는다(ADR-012).
 - 판단이 애매하면 교안 방식으로 쓰고 브리핑 "구현 중 자율 결정"에 적는다. 교안 방식으로 같은 결과를 낼 수 없으면 추측하지 말고 사용자에게 확인한다.
