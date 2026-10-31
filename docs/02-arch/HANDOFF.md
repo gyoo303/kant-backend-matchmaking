@@ -1,6 +1,6 @@
 # HANDOFF — 하위 에이전트 티켓 (A8)
 
-- 입력: `01-drivers.md`~`06-quality-gates.md`, ADR-001~005·007~011(Accepted, ADR-006은 ADR-009로 대체, ADR-009의 부분 유니크 인덱스는 ADR-011로 대체), `docs/01-pm/04-scope.md` 마일스톤(D-001)
+- 입력: `01-drivers.md`~`06-quality-gates.md`, ADR-001~005·007~012(Accepted, ADR-006은 ADR-009로 대체, ADR-009의 부분 유니크 인덱스는 ADR-011로 대체), `docs/01-pm/04-scope.md` 마일스톤(D-001)
 - **진행 원칙(D-018)**: DB·BE·FE·QA는 필수 티켓(M2~M5, M7)만 차례로 진행한다. M6 도전 티켓("요청 시" 표시)은 필수 완료 뒤 **사용자가 티켓 ID를 지정해 요청할 때만** 착수한다. 선행 점검이 READY여도 요청 없이 시작하지 않는다.
 - 모든 티켓 공통으로 먼저 읽는다: `AGENTS.md`, `docs/02-arch/05-structure-conventions.md`(CONV·금지 패턴, **§8 교안 수준 규칙**), `docs/02-arch/06-quality-gates.md`
 - **교안 수준 규칙(D-020)**: 모든 DB·BE·FE 티켓은 교안 1~6장 수준으로 구현한다. 인증·보안은 교안 6장 1강(ADR-002, D-021). 완료된 M2·M3 티켓 코드는 2026-10-28에 이 규칙으로 고쳤다(아래 표의 완료 티켓 설명은 작성 당시 기준이며, 현재 기준은 `03-db-schema.md`·`04-interfaces-api.md`).
@@ -47,12 +47,15 @@
 | TKT-BE-M9-01 | BE | M9 (15, D-025) | `Participation`에서 `id` 제거(식별 = `room_id`+`user_id`), `Room.create`·`Room.join`의 생성 호출 수정. 읽기 모델 `HistoryItem`·응답 `HistoryItemResponse`에서 `participation_id` 제거. 그 밖의 도메인 규칙·서비스 흐름은 바뀌지 않음 | ADR-011, `04-interfaces-api.md` §2.3·§2.5·§5, D-025, AC-13-5 | `src/rooms/domain/participation.py`, `src/rooms/domain/room.py`, `src/rooms/application/read_models.py`, `src/rooms/presentation/schemas.py`, `docs/04-backend/briefing.md` | GATE-02·05·07 | TKT-QA-M8-01 |
 | TKT-DB-M9-01 | DB | M9 (15, D-025) | `ParticipationModel`을 복합 PK(`room_id`+`user_id`)·`user_id` unique·`left_at` 없음으로, `ParticipationLogModel`(`participation_logs`) 추가, `RoomModel.participations`에 `cascade="all, delete-orphan"`. `RoomRepository`(`find_current_participation`, `save`의 짝짓기·로그 이동), `RoomQueryRepository`(현재 인원, `list_history` 합치기, `get_archived_room` 로그만). 시드: 현재 11 + 로그 11(D2 seed12 재입장 예시). 기존 개발 DB 재생성 방법을 브리핑에 적는다 | ADR-011, `03-db-schema.md` §1·§2·§3.3·§3.4·§3.6·§5·§6, STK-04 | `src/rooms/infrastructure/models.py`, `src/rooms/infrastructure/repositories.py`, `src/seed.py`, `docs/03-db/briefing.md` | GATE-01·02·08, 시드 `participations=11 participation_logs=11 total=60` | TKT-BE-M9-01 |
 | TKT-QA-M9-01 | QA | M9 (15, D-025) | 현재 참가·이용 로그 분리 검증: 단위 테스트(`Participation` 생성 인자), 통합 테스트(AC-02-8 재입장 → 로그, AC-13-1·3·5 이력 합치기·기록 ID 없음, AC-14-1 보관 정보, 퇴장·해산 후 `participations` 0행·로그 건수(RISK-14), 테이블 목록·시드 건수), GATE 전체·시연 리허설 | ADR-011, `06-acceptance-criteria.md` US-02·05·06·13·14, `06-quality-gates.md` | `tests/unit/test_participation.py`, `tests/unit/test_room.py`, `tests/integration/test_rooms_api.py`, `tests/integration/test_history_api.py`, `tests/conftest.py`, `docs/06-qa/briefing-TKT-QA-M9-01.md` | GATE-01~08, AC-02·05·06·13·14 통과 | TKT-DB-M9-01 |
+| TKT-FE-M10-01 | FE | M10 (16, D-026) | 폴링 제거·수동 새로고침(ADR-012): `src/static/js/polling.js` 삭제, `rooms/list.html`·`rooms/detail.html`에서 `polling.js` script 태그 삭제하고 [새로고침] 버튼(`id="refresh-button"`) 추가, `rooms.js`의 `startPolling` 호출을 `loadRoomList()`·`loadRoomDetail()`(진입 1회·버튼·상세 변경 실패 직후 1회, 조회 중 버튼 비활성)로 교체, 늦은 응답 폐기·탭 숨김 처리 삭제. API·서버 코드는 바꾸지 않음 | ADR-012, `04-interfaces-api.md` §7(PAGE-03·04)·§9(SEQ-13), `docs/01-pm/07-screens.md` §2·§3, `docs/01-pm/06-acceptance-criteria.md` US-15·16·NFR-08 | `src/static/js/rooms.js`, `src/static/js/polling.js`(삭제), `src/templates/rooms/list.html`, `src/templates/rooms/detail.html`, `docs/05-frontend/briefing-TKT-FE-M10-01.md` | `grep -rnE "setInterval|polling" src/static src/templates` 0줄, AC-15-2·5·6, AC-16-1·3~6, NFR-08 브라우저 확인 | TKT-QA-M9-01 |
+| TKT-QA-M10-01 | QA | M10 (16, D-026) | 수동 새로고침 검증: 화면 수동 점검표 갱신(AC-15-2·5·6, AC-16-1·3~6, NFR-08 — Network 탭 10초 무조작 요청 0건, 해산 후 다른 참가자 화면의 [새로고침]·버튼 클릭 → 해산 안내), 기존 410/404 통합 테스트 유지 확인, GATE 전체, 시연 흐름(`07-screens.md` §5) 리허설 | ADR-012, `06-acceptance-criteria.md` US-15·16·NFR-08, `06-quality-gates.md` §2, `docs/05-frontend/briefing-TKT-FE-M10-01.md` | `docs/06-qa/briefing-TKT-QA-M10-01.md` | GATE-01~08, 수정 AC 전부 충족, 시연 리허설 통과 | TKT-FE-M10-01 |
 
 - M6 티켓은 사용자가 요청할 때만 착수하고, 11일차가 끝나면 남은 것을 중단한다(D-002, D-018). 요청 순서 기준: 도전 A(TKT-DB-M6-01 → TKT-BE-M6-00 → TKT-QA-M6-01) → 도전 B(TKT-BE-M6-01) → 도전 C(TKT-BE-M6-02) → TKT-QA-M6-02. 사용자가 일부만 요청하면 그 티켓과 선행만 진행한다.
 - M7 티켓(TKT-FE-M7-01, TKT-QA-M7-01)은 M6 진행 여부와 상관없이 필수 완료(TKT-QA-M5-01) 뒤에 진행한다.
 - M8 티켓(TKT-BE-M8-01 → TKT-DB-M8-01 → TKT-QA-M8-01)은 튜터 피드백 반영(D-023·D-024, ADR-010)이다. 도메인 `Team`이 레포지토리보다 먼저 필요하므로 BE가 먼저다. 기존 DB(`matchmaking` 등)는 지우고 다시 만든다.
 - M9 티켓(TKT-BE-M9-01 → TKT-DB-M9-01 → TKT-QA-M9-01)은 현재 참가와 이용 로그 분리(D-025, ADR-011)다. 도메인 `Participation` 시그니처가 레포지토리보다 먼저 필요하므로 BE가 먼저다. 기존 DB는 지우고 다시 만든다.
-- 마일스톤별 티켓 수: M2 2 · M3 9 · M4 4 · M5 7 · M6 6(요청 시) · M7 2 · M8 3 · M9 3 = 36
+- M10 티켓(TKT-FE-M10-01 → TKT-QA-M10-01)은 튜터 피드백에 따른 폴링 제거(D-026, ADR-012)다. 화면 JS·템플릿만 바뀌고 DB·BE·API는 그대로라 DB·BE 티켓이 없다. 위 M5 FE 티켓 설명의 "1초 폴링"·`polling.js`는 작성 당시 기준이며, 현재 기준은 SEQ-13(수동 새로고침)이다.
+- 마일스톤별 티켓 수: M2 2 · M3 9 · M4 4 · M5 7 · M6 6(요청 시) · M7 2 · M8 3 · M9 3 · M10 2 = 38
 
 ### 공통 "하지 말 것"
 - 사용자 요청 없이 M6 도전 티켓을 착수하거나, 필수 티켓에 도전 범위(잠금·`IntegrityError` 400 변환·캐시·CSV·백그라운드 로그)를 미리 넣지 않는다(D-018). `participations`의 PK·unique는 필수 스키마다(ADR-011).
@@ -102,5 +105,5 @@
 |---|---|---|
 | RISK-03~05 | 필수 범위에는 동시 요청 보호가 없음(D-018). 도전 A 적용 후에도 잠금을 빠뜨린 구현이 생길 수 있음 | 시연은 순차 조작, 도전 A 요청 시 TKT-DB-M6-01·TKT-BE-M6-00·TKT-QA-M6-01, GATE-09 |
 | RISK-10 | `localStorage` 토큰의 XSS 노출 | 헤더 전용(ADR-002·D-021), 템플릿 자동 이스케이프 유지(CONV-12) |
-| RISK-11 | 폴링 해산 신호(410)를 화면이 잘못 처리 | AC-16-4 수동 점검 |
+| RISK-11 | 해산 신호(410)를 새로고침·변경 실패 뒤 조회에서 화면이 잘못 처리 | SEQ-13, AC-16-4 수동 점검(TKT-QA-M10-01) |
 | REQ-039 | 돌아오지 않는 사용자가 자리·방장 역할을 계속 차지 | PM이 알려진 제약으로 수용(D-004) |

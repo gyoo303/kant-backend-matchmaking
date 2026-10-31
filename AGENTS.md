@@ -28,7 +28,7 @@
 | `src/<기능>/infrastructure/` | `models.py`, `repositories.py`(ORM ↔ 도메인 변환, `FOR UPDATE`), auth만 `security.py` |
 | `src/<기능>/application/` | `service.py`(변경·commit), rooms만 `queries.py`·`read_models.py`·`list_cache.py` |
 | `src/<기능>/presentation/` | `schemas.py`, `router.py`(`/api`), `pages.py`(Jinja2 화면), auth만 `dependencies.py` |
-| `src/templates/` · `src/static/` | Jinja2 화면, CSS·JS(폴링) |
+| `src/templates/` · `src/static/` | Jinja2 화면, CSS·JS(API 호출·수동 새로고침, ADR-012) |
 | `tests/` | `unit/`(도메인), `integration/`(API), `concurrency/`(CH-A) |
 
 | 단계 | 쓰는 곳 | 읽는 설계 문서 |

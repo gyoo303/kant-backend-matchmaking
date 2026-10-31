@@ -286,7 +286,7 @@ class Participation:
 | 400 | `DomainRuleError` 하위: 입력 규칙 위반, 정원·팀 정원, 삭제된 방 변경, 방장·참가자가 아닌 요청 | 도메인 → 전역 핸들러 |
 | 401 | `AuthenticationError`: 서명 오류·만료·refresh 토큰으로 API 접근·블랙리스트·회원 없음, 로그인 실패. 헤더 없음은 `OAuth2PasswordBearer` 기본 401 | 인증 의존성, `AuthApplicationService.login`·`refresh` |
 | 404 | `NotFoundError`: 없는 방, EMPTY로 삭제된 방 상세, 보관 정보 권한 없음 | 응용 서비스 |
-| 410 | `GoneError`: GAME_STARTED로 삭제된 방 상세 조회 (폴링 해산 신호) | `RoomQueryService.get_room_detail` |
+| 410 | `GoneError`: GAME_STARTED로 삭제된 방 상세 조회 (화면의 해산 신호, SEQ-13) | `RoomQueryService.get_room_detail` |
 | 422 | `RequestValidationError` → `{"detail": "<loc 마지막>: <msg>; …"}`(최대 3개) | 전역 핸들러 (ADR-004) |
 | 500 | 처리하지 않은 예외 → `{"detail": "서버 오류가 발생했습니다"}`. 스택은 로그에만 | 전역 핸들러 (NFR-02) |
 
@@ -301,15 +301,15 @@ class Participation:
 |---|---|---|---|---|---|---|
 | PAGE-01 | SCR-01 | `GET /signup` | `auth/signup.html` | — | API-AUTH-01 | 실패 문구 표시, 성공 시 `/login` |
 | PAGE-02 | SCR-02 | `GET /login` | `auth/login.html` | `notice: str \| None` (`?expired=1` → "로그인이 만료되었습니다. 다시 로그인해 주세요") | API-AUTH-02(form) → 두 토큰을 `localStorage`에 저장 후 `/` | 401 문구 표시 |
-| PAGE-03 | SCR-03 | `GET /` (쿼리 `keyword`, `available_only`, `sort`, `page`, `notice`) | `rooms/list.html` | `cond`(쿼리 값 그대로: 검색 폼 초기값), `notice: str \| None` (`notice=dissolved` → "게임이 시작되어 방이 해산되었습니다") | API-AUTH-04(머리글 닉네임), API-ROOM-01·02·05·09 | 목록 비면 "조건에 맞는 방이 없습니다. 새 방을 만들어 보세요" |
-| PAGE-04 | SCR-04 | `GET /rooms/{room_id}` | `rooms/detail.html` | `room_id: int` | API-AUTH-04, API-ROOM-03·04·06·07·08 | 410 → `/?notice=dissolved`, 404 → "방을 찾을 수 없습니다" |
+| PAGE-03 | SCR-03 | `GET /` (쿼리 `keyword`, `available_only`, `sort`, `page`, `notice`) | `rooms/list.html` | `cond`(쿼리 값 그대로: 검색 폼 초기값), `notice: str \| None` (`notice=dissolved` → "게임이 시작되어 방이 해산되었습니다") | API-AUTH-04(머리글 닉네임), API-ROOM-01·02·05·09 (진입·[새로고침] 때, SEQ-13) | 목록 비면 "조건에 맞는 방이 없습니다. 새 방을 만들어 보세요" |
+| PAGE-04 | SCR-04 | `GET /rooms/{room_id}` | `rooms/detail.html` | `room_id: int` | API-AUTH-04, API-ROOM-03·04·06·07·08 (상세는 진입·[새로고침]·변경 실패 직후, SEQ-13) | 410 → `/?notice=dissolved`, 404 → "방을 찾을 수 없습니다" |
 | PAGE-05 | SCR-05 | `GET /me/history` (쿼리 `page`) | `rooms/history.html` | `page: int` | API-AUTH-04, API-ROOM-10 | 비면 "아직 이용 기록이 없습니다" |
 | PAGE-06 | SCR-06 | `GET /me/history/{room_id}` | `rooms/archived.html` | `room_id: int` | API-AUTH-04, API-ROOM-11 | 404 → "찾을 수 없습니다" |
 
 - 공통 레이아웃 `base.html`, 조각 `partials/notice.html`, `partials/pagination.html`(필요 시). 목록 행은 JS가 그린다.
-- 정적 파일: `src/static/css/app.css`, `src/static/js/api.js`(fetch 래퍼: `localStorage`의 access 토큰을 `Authorization: Bearer`로 붙임, JSON, `detail` 추출, 401 → `/api/auth/refresh`로 한 번 재발급 후 재시도, 실패하면 토큰 삭제 후 `/login?expired=1`, 로그아웃 → API-AUTH-03 후 토큰 삭제), `src/static/js/polling.js`(SEQ-13), `src/static/js/rooms.js`(목록·상세 동작).
+- 정적 파일: `src/static/css/app.css`, `src/static/js/api.js`(fetch 래퍼: `localStorage`의 access 토큰을 `Authorization: Bearer`로 붙임, JSON, `detail` 추출, 401 → `/api/auth/refresh`로 한 번 재발급 후 재시도, 실패하면 토큰 삭제 후 `/login?expired=1`, 로그아웃 → API-AUTH-03 후 토큰 삭제), `src/static/js/rooms.js`(목록·상세 동작, SEQ-13). 목록·상세 템플릿에 [새로고침] 버튼을 둔다(`id="refresh-button"`).
 - 변경 요청(생성·참가·팀·나가기·시작·로그아웃)은 모두 `api.js`의 JSON `fetch`로 보낸다.
-- JS는 교안 수준을 넘지 않게 단순하게 쓴다: `fetch`·`localStorage`·`setInterval`·DOM 조작만, 외부 라이브러리·번들러 없음(D-020).
+- JS는 교안 수준을 넘지 않게 단순하게 쓴다: `fetch`·`localStorage`·DOM 조작만, 외부 라이브러리·번들러 없음(D-020). 자동 조회(`setInterval`·반복 `setTimeout`)는 쓰지 않는다(D-026, ADR-012).
 
 ---
 
@@ -369,11 +369,13 @@ page_router → `templates.TemplateResponse(request, "rooms/list.html", {"cond":
 ### SEQ-12 lifespan
 `create_all`(`run_sync(Base.metadata.create_all)`) → `async with AsyncSessionLocal() as s: await seed_initial_data(s, settings); await s.commit()` → yield → `engine.dispose()`.
 
-### SEQ-13 화면 폴링 (`polling.js`)
-- `startPolling(fetchFn, intervalMs=1000)`: 진행 중인 요청이 있으면 건너뜀, 요청마다 증가하는 `seq`를 붙여 조건 변경 전 응답은 버림, `document.visibilitychange`로 숨김 시 중단·보이면 즉시 1회 후 재개.
-- 목록(SCR-03): `GET /api/rooms?…`와 `GET /api/me/room`을 같은 주기로 호출.
-- 상세(SCR-04): `GET /api/rooms/{id}` — 200 → 갱신, 410 → 중단 후 `/?notice=dissolved`, 404 → 중단 후 "방을 찾을 수 없습니다", 401 → (`api.js`가 재발급에 실패하면) 중단 후 `/login?expired=1`, 네트워크 오류·5xx → 마지막 정보 유지 + "최신 정보를 불러오지 못했습니다".
-- 게임 시작 성공(방장): 폴링 중단 → `/?notice=dissolved`.
+### SEQ-13 화면 새로고침 (`rooms.js`, ADR-012)
+- 자동 조회는 없다. 화면마다 조회 함수 하나를 두고 아래 때만 부른다. 조회 중에는 [새로고침] 버튼을 비활성화하고, 끝나면 다시 켠다(겹침 방지는 이것뿐).
+- 목록(SCR-03) `loadRoomList()`: 화면 진입 1회, [새로고침] 클릭. `GET /api/rooms?…`와 `GET /api/me/room`을 차례로 호출해 목록·현재 방 링크를 그린다. 검색·필터·정렬·페이지 변경은 URL 쿼리를 바꿔 이동하므로 진입 1회로 처리된다(PAGE-03). 생성·참가 성공은 방 상세로 이동한다.
+- 상세(SCR-04) `loadRoomDetail()`: 화면 진입 1회, [새로고침] 클릭, 변경 요청(제목·팀·나가기·시작·참가)이 실패한 직후 1회. `GET /api/rooms/{id}` — 200 → 다시 그림, 410 → `/?notice=dissolved`, 404 → "방을 찾을 수 없습니다", 401 → (`api.js`가 재발급에 실패하면) `/login?expired=1`, 네트워크 오류·5xx → 마지막 정보 유지 + "최신 정보를 불러오지 못했습니다".
+- 변경 요청 성공: 응답(`RoomDetailResponse`)으로 바로 다시 그린다(추가 조회 없음).
+- 변경 요청 실패: 서버 `detail` 문구를 보인 뒤 `loadRoomDetail()`을 1회 부른다. 해산된 방에 보낸 변경은 400(`RoomDeletedError`)이고, 이어진 조회가 410이므로 해산 안내와 함께 목록으로 간다(AC-16-4). 그 밖의 거부는 최신 구성으로 다시 그려진다.
+- 게임 시작 성공(방장): `/?notice=dissolved`로 이동.
 
 ### SEQ-14 도전 B
 - 해산 로그: `log_room_dissolved(room_id, dissolved_at)`가 `logger.info("room dissolved room_id=%s at=%s", …)`. 예외는 잡아 `logger.exception`으로만 남기고 응답에는 영향 없음.
@@ -404,4 +406,4 @@ page_router → `templates.TemplateResponse(request, "rooms/list.html", {"cond":
 | 같은 팀으로 변경 2회 | 둘 다 200, 변화 없음 |
 | 방 생성 2회(응답 유실 후 재시도) | 두 번째 400 "이미 다른 방에 참가 중입니다" |
 
-- 응답을 못 받은 클라이언트는 `GET /api/me/room`(현재 참가 방)과 `GET /api/rooms/{id}`(404/410 포함)로 결과를 확인한다. 화면은 다음 폴링이 이 역할을 한다.
+- 응답을 못 받은 클라이언트는 `GET /api/me/room`(현재 참가 방)과 `GET /api/rooms/{id}`(404/410 포함)로 결과를 확인한다. 화면은 [새로고침]과 변경 실패 뒤 상세 재조회(SEQ-13)가 이 역할을 한다.
