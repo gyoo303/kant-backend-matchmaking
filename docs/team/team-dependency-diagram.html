@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>팀 작업 선후 관계</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --surface: #ffffff; --text: #1d2330; --muted: #5b6475; --grid: #dfe3ea; --zebra: rgba(36,87,197,.035);
+    --edge: #8b93a3; --crit: #d0342c; --shell: #1f8a5b;
+    --A: #2457c5; --A-soft: #e7eefc; --B: #8a3fb8; --B-soft: #f3e9fa; --C: #1f8a5b; --C-soft: #e3f4ec;
+    --D: #c0602a; --D-soft: #fbeee5; --E: #a8871a; --E-soft: #f8f1dc;
+    --sans: "Pretendard", system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --surface: #1a1e26; --text: #e6e9ef; --muted: #9aa3b5; --grid: #2e3542; --zebra: rgba(125,162,255,.05);
+      --edge: #6f7889; --crit: #ff6b61; --shell: #6fd3a3;
+      --A: #7da2ff; --A-soft: #23304d; --B: #c99af0; --B-soft: #35284a; --C: #6fd3a3; --C-soft: #1f3a2f;
+      --D: #f0a374; --D-soft: #45301f; --E: #e3c35c; --E-soft: #3f371b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--sans); }
+  header { max-width: 1600px; margin: 0 auto; padding: 24px 16px 8px; }
+  h1 { margin: 0 0 6px; font-size: 24px; }
+  p.sub { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
+  .legend { display: flex; flex-wrap: wrap; gap: 18px; margin: 14px 0 0; font-size: 14px; color: var(--muted); align-items: center; }
+  .legend svg { vertical-align: middle; }
+  .wrap { max-width: 1600px; margin: 0 auto; padding: 8px 16px 24px; overflow-x: auto; }
+  .card { background: var(--surface); border: 1px solid var(--grid); border-radius: 14px; padding: 10px; min-width: 1100px; }
+  .card svg { width: 100%; height: auto; display: block; font-family: var(--sans); }
+  .grid { stroke: var(--grid); }
+  .col { text-anchor: middle; font-size: 15px; font-weight: 700; fill: var(--muted); }
+  .lane { stroke: none; }
+  .laneA { fill: var(--A-soft); } .laneB { fill: var(--B-soft); } .laneC { fill: var(--C-soft); } .laneD { fill: var(--D-soft); } .laneE { fill: var(--E-soft); }
+  .lanekey { text-anchor: middle; font-size: 30px; font-weight: 800; }
+  .kA { fill: var(--A); } .kB { fill: var(--B); } .kC { fill: var(--C); } .kD { fill: var(--D); } .kE { fill: var(--E); }
+  .lanelabel { text-anchor: middle; font-size: 13px; fill: var(--muted); }
+  .p0 { fill: var(--surface); stroke: var(--muted); stroke-dasharray: 6 4; }
+  .p0t { text-anchor: middle; font-size: 14px; fill: var(--text); }
+  .box { fill: var(--surface); stroke-width: 1.5; }
+  .bA { stroke: var(--A); } .bB { stroke: var(--B); } .bC { stroke: var(--C); } .bD { stroke: var(--D); } .bE { stroke: var(--E); }
+  .n-crit .box { stroke: var(--crit); stroke-width: 2.6; }
+  .n-shell .box { stroke-dasharray: 4 3; }
+  .t1 { font-size: 13px; font-weight: 700; fill: var(--text); }
+  .t2 { font-size: 12px; fill: var(--muted); }
+  .node { cursor: pointer; }
+  svg.focus .e { opacity: .08; }
+  svg.focus .node { opacity: .35; }
+  svg.focus .e.on { opacity: 1; }
+  svg.focus .node.on { opacity: 1; }
+  .hint { color: var(--muted); font-size: 13px; margin-top: 8px; }
+  section.notes { max-width: 1600px; margin: 0 auto; padding: 0 16px 32px; font-size: 14px; line-height: 1.7; }
+  section.notes h2 { font-size: 17px; margin: 10px 0 6px; }
+  code { background: var(--zebra); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>팀 작업 선후 관계 — 파트별 순서와 서로 기다리는 지점</h1>
+  <p class="sub">가로는 일차, 세로는 파트예요. 상자의 번호는 각 파트 계획표(<code>work-plan-A~E.md</code>)의 단계 번호예요. 상자를 누르면 그 단계와 이어진 선만 강조돼요(다시 누르면 해제).</p>
+  <div class="legend">
+    <span><svg width="44" height="10"><line x1="0" y1="5" x2="44" y2="5" stroke="var(--crit)" stroke-width="2.6"/></svg> 임계 경로 (늦으면 전체가 늦어짐)</span>
+    <span><svg width="44" height="10"><line x1="0" y1="5" x2="44" y2="5" stroke="var(--edge)" stroke-width="1.3"/></svg> 머지가 필요한 선행</span>
+    <span><svg width="44" height="10"><line x1="0" y1="5" x2="44" y2="5" stroke="var(--edge)" stroke-width="1.2" stroke-dasharray="5 4"/></svg> 이름 합의로 먼저 작성, 확인만 기다림</span>
+    <span><svg width="44" height="10"><line x1="0" y1="5" x2="44" y2="5" stroke="var(--shell)" stroke-width="1.6" stroke-dasharray="2 4"/></svg> 껍데기(이름·시그니처만) 먼저 머지</span>
+  </div>
+</header>
+<div class="wrap"><div class="card">
+<svg viewBox="0 0 1586 856" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="파트별 작업 순서와 선후 관계">
+<defs>
+  <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--edge)"/></marker>
+  <marker id="mcrit" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--crit)"/></marker>
+  <marker id="mshell" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--shell)"/></marker>
+</defs>
+<rect x="150" y="50" width="236" height="786" fill="none"/>
+<text x="268.0" y="36" class="col">0단계</text>
+<rect x="386" y="50" width="236" height="786" fill="var(--zebra)"/>
+<text x="504.0" y="36" class="col">1일차 오전</text>
+<rect x="622" y="50" width="236" height="786" fill="none"/>
+<text x="740.0" y="36" class="col">1일차 오후</text>
+<rect x="858" y="50" width="236" height="786" fill="var(--zebra)"/>
+<text x="976.0" y="36" class="col">2일차</text>
+<rect x="1094" y="50" width="236" height="786" fill="none"/>
+<text x="1212.0" y="36" class="col">3일차</text>
+<rect x="1330" y="50" width="236" height="786" fill="var(--zebra)"/>
+<text x="1448.0" y="36" class="col">4일차 · 통합</text>
+<line x1="0" y1="56" x2="1566" y2="56" class="grid"/>
+<rect x="8" y="68" width="128" height="132" rx="10" class="lane laneA"/>
+<text x="72.0" y="130.0" class="lanekey kA">A</text>
+<text x="72.0" y="152.0" class="lanelabel">공통·조립</text>
+<line x1="0" y1="212" x2="1566" y2="212" class="grid"/>
+<rect x="8" y="224" width="128" height="132" rx="10" class="lane laneB"/>
+<text x="72.0" y="286.0" class="lanekey kB">B</text>
+<text x="72.0" y="308.0" class="lanelabel">인증</text>
+<line x1="0" y1="368" x2="1566" y2="368" class="grid"/>
+<rect x="8" y="380" width="128" height="132" rx="10" class="lane laneC"/>
+<text x="72.0" y="442.0" class="lanekey kC">C</text>
+<text x="72.0" y="464.0" class="lanelabel">방 도메인·서비스</text>
+<line x1="0" y1="524" x2="1566" y2="524" class="grid"/>
+<rect x="8" y="536" width="128" height="132" rx="10" class="lane laneD"/>
+<text x="72.0" y="598.0" class="lanekey kD">D</text>
+<text x="72.0" y="620.0" class="lanelabel">방 DB·조회</text>
+<line x1="0" y1="680" x2="1566" y2="680" class="grid"/>
+<rect x="8" y="692" width="128" height="132" rx="10" class="lane laneE"/>
+<text x="72.0" y="754.0" class="lanekey kE">E</text>
+<text x="72.0" y="776.0" class="lanelabel">방 API·화면</text>
+<line x1="0" y1="836" x2="1566" y2="836" class="grid"/>
+<rect x="165.0" y="70" width="206" height="752" rx="12" class="p0"/>
+<text x="268.0" y="366.0" class="p0t">이름 합의 회의</text>
+<text x="268.0" y="390.0" class="p0t">전원 · 1시간</text>
+<text x="268.0" y="414.0" class="p0t"></text>
+<text x="268.0" y="438.0" class="p0t">연결 지점 15개</text>
+<text x="268.0" y="462.0" class="p0t">(팀 계획표 §2)</text>
+<text x="268.0" y="486.0" class="p0t"></text>
+<text x="268.0" y="510.0" class="p0t">→ 이후 모든 파트가</text>
+<text x="268.0" y="534.0" class="p0t">동시에 작성 시작</text>
+<path d="M607.0,134.0 C622.0,134.0 622.0,110.5 635.0,110.5" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="A1" data-to="A6"/>
+<path d="M637.0,110.5 C605.36,110.5 605.36,157.5 635.0,157.5" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="A6" data-to="A7"/>
+<path d="M843.0,110.5 C858.0,110.5 858.0,134.0 871.0,134.0" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="A6" data-to="A8"/>
+<path d="M1079.0,134.0 C1094.0,134.0 1094.0,134.0 1107.0,134.0" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="A8" data-to="A9"/>
+<path d="M1315.0,134.0 C1330.0,134.0 1330.0,134.0 1343.0,134.0" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="A9" data-to="A10"/>
+<path d="M401.0,134.0 C359.1,134.0 359.1,266.5 399.0,266.5" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="A1" data-to="B3"/>
+<path d="M607.0,266.5 C622.0,266.5 622.0,290.0 635.0,290.0" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="B3" data-to="B6"/>
+<path d="M843.0,290.0 C858.0,290.0 858.0,266.5 871.0,266.5" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="B6" data-to="B8"/>
+<path d="M873.0,266.5 C841.36,266.5 841.36,313.5 871.0,313.5" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="B8" data-to="B9"/>
+<path d="M843.0,157.5 C976.0,157.5 976.0,266.5 1107.0,266.5" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="A7" data-to="B10"/>
+<path d="M1109.0,266.5 C1077.36,266.5 1077.36,313.5 1107.0,313.5" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="B10" data-to="B11"/>
+<path d="M1315.0,313.5 C1330.0,313.5 1330.0,290.0 1343.0,290.0" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="B11" data-to="B12"/>
+<path d="M607.0,446.0 C622.0,446.0 622.0,399.0 635.0,399.0" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="C1" data-to="C4"/>
+<path d="M843.0,399.0 C858.0,399.0 858.0,446.0 871.0,446.0" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="C4" data-to="C5"/>
+<path d="M607.0,446.0 C622.0,446.0 622.0,446.0 635.0,446.0" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="C1" data-to="C6"/>
+<path d="M1315.0,469.5 C1330.0,469.5 1330.0,446.0 1343.0,446.0" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="C9" data-to="C10"/>
+<path d="M1079.0,602.0 C1094.0,602.0 1094.0,578.5 1107.0,578.5" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="D4" data-to="D6"/>
+<path d="M1109.0,578.5 C1077.36,578.5 1077.36,625.5 1107.0,625.5" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="D6" data-to="D7"/>
+<path d="M1315.0,625.5 C1330.0,625.5 1330.0,602.0 1343.0,602.0" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="D7" data-to="D8"/>
+<path d="M607.0,758.0 C622.0,758.0 622.0,758.0 635.0,758.0" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="E1" data-to="E2w"/>
+<path d="M843.0,758.0 C858.0,758.0 858.0,734.5 871.0,734.5" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="E2w" data-to="E2"/>
+<path d="M1079.0,781.5 C1094.0,781.5 1094.0,758.0 1107.0,758.0" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="E4" data-to="E6"/>
+<path d="M1345.0,734.5 C1313.36,734.5 1313.36,781.5 1343.0,781.5" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="E7" data-to="E8"/>
+<path d="M607.0,578.5 C858.0,578.5 858.0,422.5 1107.0,422.5" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="D1" data-to="C7"/>
+<path d="M637.0,290.0 C573.56,290.0 573.56,602.0 635.0,602.0" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="B6" data-to="D2"/>
+<path d="M843.0,290.0 C858.0,290.0 858.0,134.0 871.0,134.0" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="B6" data-to="A8"/>
+<path d="M843.0,602.0 C858.0,602.0 858.0,134.0 871.0,134.0" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="D2" data-to="A8"/>
+<path d="M843.0,446.0 C858.0,446.0 858.0,134.0 871.0,134.0" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="C6" data-to="A8"/>
+<path d="M873.0,734.5 C787.0,734.5 787.0,134.0 871.0,134.0" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="E2" data-to="A8"/>
+<path d="M873.0,313.5 C825.46,313.5 825.46,134.0 871.0,134.0" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="B9" data-to="A8"/>
+<path d="M843.0,290.0 C976.0,290.0 976.0,134.0 1107.0,134.0" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="B6" data-to="A9"/>
+<path d="M1079.0,446.0 C1094.0,446.0 1094.0,134.0 1107.0,134.0" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="C5" data-to="A9"/>
+<path d="M1079.0,602.0 C1094.0,602.0 1094.0,134.0 1107.0,134.0" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="D4" data-to="A9"/>
+<path d="M1315.0,625.5 C1330.0,625.5 1330.0,734.5 1343.0,734.5" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="D7" data-to="E7"/>
+<path d="M1079.0,134.0 C1212.0,134.0 1212.0,734.5 1343.0,734.5" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="A8" data-to="E7"/>
+<path d="M1315.0,469.5 C1330.0,469.5 1330.0,134.0 1343.0,134.0" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="C9" data-to="A10"/>
+<path d="M1345.0,781.5 C1259.0,781.5 1259.0,134.0 1343.0,134.0" fill="none" stroke="var(--edge)" stroke-width="1.3" marker-end="url(#m)" class="e e-need" data-from="E8" data-to="A10"/>
+<path d="M873.0,446.0 C828.28,446.0 828.28,602.0 871.0,602.0" fill="none" stroke="var(--edge)" stroke-width="1.2" stroke-dasharray="5 4" marker-end="url(#m)" class="e e-check" data-from="C5" data-to="D4"/>
+<path d="M1079.0,266.5 C1212.0,266.5 1212.0,734.5 1343.0,734.5" fill="none" stroke="var(--edge)" stroke-width="1.2" stroke-dasharray="5 4" marker-end="url(#m)" class="e e-check" data-from="B8" data-to="E7"/>
+<path d="M843.0,157.5 C976.0,157.5 976.0,469.5 1107.0,469.5" fill="none" stroke="var(--edge)" stroke-width="1.2" stroke-dasharray="5 4" marker-end="url(#m)" class="e e-check" data-from="A7" data-to="C9"/>
+<path d="M843.0,157.5 C858.0,157.5 858.0,781.5 871.0,781.5" fill="none" stroke="var(--edge)" stroke-width="1.2" stroke-dasharray="5 4" marker-end="url(#m)" class="e e-check" data-from="A7" data-to="E4"/>
+<path d="M1109.0,266.5 C1058.64,266.5 1058.64,469.5 1107.0,469.5" fill="none" stroke="var(--edge)" stroke-width="1.2" stroke-dasharray="5 4" marker-end="url(#m)" class="e e-check" data-from="B10" data-to="C9"/>
+<path d="M1109.0,266.5 C1024.02,266.5 1024.02,758.0 1107.0,758.0" fill="none" stroke="var(--edge)" stroke-width="1.2" stroke-dasharray="5 4" marker-end="url(#m)" class="e e-check" data-from="B10" data-to="E6"/>
+<path d="M1079.0,734.5 C1094.0,734.5 1094.0,469.5 1107.0,469.5" fill="none" stroke="var(--edge)" stroke-width="1.2" stroke-dasharray="5 4" marker-end="url(#m)" class="e e-check" data-from="E2" data-to="C9"/>
+<path d="M607.0,313.5 C740.0,313.5 740.0,734.5 871.0,734.5" fill="none" stroke="var(--shell)" stroke-width="1.6" stroke-dasharray="2 4" marker-end="url(#mshell)" class="e e-shell" data-from="Bsh" data-to="E2"/>
+<path d="M843.0,493.0 C858.0,493.0 858.0,734.5 871.0,734.5" fill="none" stroke="var(--shell)" stroke-width="1.6" stroke-dasharray="2 4" marker-end="url(#mshell)" class="e e-shell" data-from="Csh" data-to="E2"/>
+<path d="M607.0,625.5 C740.0,625.5 740.0,734.5 871.0,734.5" fill="none" stroke="var(--shell)" stroke-width="1.6" stroke-dasharray="2 4" marker-end="url(#mshell)" class="e e-shell" data-from="Dsh" data-to="E2"/>
+<path d="M401.0,134.0 C337.56,134.0 337.56,446.0 399.0,446.0" fill="none" stroke="var(--crit)" stroke-width="2.6" marker-end="url(#mcrit)" class="e e-crit" data-from="A1" data-to="C1"/>
+<path d="M401.0,446.0 C359.1,446.0 359.1,578.5 399.0,578.5" fill="none" stroke="var(--crit)" stroke-width="2.6" marker-end="url(#mcrit)" class="e e-crit" data-from="C1" data-to="D1"/>
+<path d="M607.0,578.5 C622.0,578.5 622.0,602.0 635.0,602.0" fill="none" stroke="var(--crit)" stroke-width="2.6" marker-end="url(#mcrit)" class="e e-crit" data-from="D1" data-to="D2"/>
+<path d="M843.0,602.0 C858.0,602.0 858.0,602.0 871.0,602.0" fill="none" stroke="var(--crit)" stroke-width="2.6" marker-end="url(#mcrit)" class="e e-crit" data-from="D2" data-to="D4"/>
+<path d="M1079.0,602.0 C1094.0,602.0 1094.0,422.5 1107.0,422.5" fill="none" stroke="var(--crit)" stroke-width="2.6" marker-end="url(#mcrit)" class="e e-crit" data-from="D4" data-to="C7"/>
+<path d="M1315.0,422.5 C1330.0,422.5 1330.0,734.5 1343.0,734.5" fill="none" stroke="var(--crit)" stroke-width="2.6" marker-end="url(#mcrit)" class="e e-crit" data-from="C7" data-to="E7"/>
+<path d="M1345.0,734.5 C1259.0,734.5 1259.0,134.0 1343.0,134.0" fill="none" stroke="var(--crit)" stroke-width="2.6" marker-end="url(#mcrit)" class="e e-crit" data-from="E7" data-to="A10"/>
+<g class="node n-crit" data-id="A1"><rect x="401.0" y="115.0" width="206" height="38" rx="8" class="box bA"/><text x="411.0" y="130.0" class="t1">A①~④ PR①</text><text x="411.0" y="146.0" class="t2">config·database·exceptions</text></g>
+<g class="node n-normal" data-id="A6"><rect x="637.0" y="91.5" width="206" height="38" rx="8" class="box bA"/><text x="647.0" y="106.5" class="t1">A⑤⑥ PR②</text><text x="647.0" y="122.5" class="t2">logging·main v1</text></g>
+<g class="node n-normal" data-id="A7"><rect x="637.0" y="138.5" width="206" height="38" rx="8" class="box bA"/><text x="647.0" y="153.5" class="t1">A⑦ PR③</text><text x="647.0" y="169.5" class="t2">base·partials·app.css</text></g>
+<g class="node n-normal" data-id="A8"><rect x="873.0" y="115.0" width="206" height="38" rx="8" class="box bA"/><text x="883.0" y="130.0" class="t1">A⑧ PR④</text><text x="883.0" y="146.0" class="t2">main v2 조립 (머지되는 대로)</text></g>
+<g class="node n-normal" data-id="A9"><rect x="1109.0" y="115.0" width="206" height="38" rx="8" class="box bA"/><text x="1119.0" y="130.0" class="t1">A⑨ PR⑤</text><text x="1119.0" y="146.0" class="t2">seed.py</text></g>
+<g class="node n-crit" data-id="A10"><rect x="1345.0" y="115.0" width="206" height="38" rx="8" class="box bA"/><text x="1355.0" y="130.0" class="t1">A⑩</text><text x="1355.0" y="146.0" class="t2">통합 점검</text></g>
+<g class="node n-normal" data-id="B3"><rect x="401.0" y="247.5" width="206" height="38" rx="8" class="box bB"/><text x="411.0" y="262.5" class="t1">B②③ PR①</text><text x="411.0" y="278.5" class="t2">auth 도메인·예외</text></g>
+<g class="node n-shell" data-id="Bsh"><rect x="401.0" y="294.5" width="206" height="38" rx="8" class="box bB"/><text x="411.0" y="309.5" class="t1">B⑧ 껍데기</text><text x="411.0" y="325.5" class="t2">get_current_user_id</text></g>
+<g class="node n-normal" data-id="B6"><rect x="637.0" y="271.0" width="206" height="38" rx="8" class="box bB"/><text x="647.0" y="286.0" class="t1">B④⑤⑥ PR②</text><text x="647.0" y="302.0" class="t2">security·models·repos</text></g>
+<g class="node n-normal" data-id="B8"><rect x="873.0" y="247.5" width="206" height="38" rx="8" class="box bB"/><text x="883.0" y="262.5" class="t1">B⑦⑧ PR③</text><text x="883.0" y="278.5" class="t2">service·dependencies</text></g>
+<g class="node n-normal" data-id="B9"><rect x="873.0" y="294.5" width="206" height="38" rx="8" class="box bB"/><text x="883.0" y="309.5" class="t1">B⑨ PR④</text><text x="883.0" y="325.5" class="t2">auth API</text></g>
+<g class="node n-normal" data-id="B10"><rect x="1109.0" y="247.5" width="206" height="38" rx="8" class="box bB"/><text x="1119.0" y="262.5" class="t1">B⑩ PR⑤</text><text x="1119.0" y="278.5" class="t2">api.js</text></g>
+<g class="node n-normal" data-id="B11"><rect x="1109.0" y="294.5" width="206" height="38" rx="8" class="box bB"/><text x="1119.0" y="309.5" class="t1">B⑪ PR⑥</text><text x="1119.0" y="325.5" class="t2">로그인·가입 화면</text></g>
+<g class="node n-normal" data-id="B12"><rect x="1345.0" y="271.0" width="206" height="38" rx="8" class="box bB"/><text x="1355.0" y="286.0" class="t1">B⑫</text><text x="1355.0" y="302.0" class="t2">점검</text></g>
+<g class="node n-crit" data-id="C1"><rect x="401.0" y="427.0" width="206" height="38" rx="8" class="box bC"/><text x="411.0" y="442.0" class="t1">C① PR①</text><text x="411.0" y="458.0" class="t2">도메인 껍데기</text></g>
+<g class="node n-normal" data-id="C4"><rect x="637.0" y="380.0" width="206" height="38" rx="8" class="box bC"/><text x="647.0" y="395.0" class="t1">C②~④</text><text x="647.0" y="411.0" class="t2">도메인 작성</text></g>
+<g class="node n-normal" data-id="C6"><rect x="637.0" y="427.0" width="206" height="38" rx="8" class="box bC"/><text x="647.0" y="442.0" class="t1">C⑥ PR③</text><text x="647.0" y="458.0" class="t2">pages.py</text></g>
+<g class="node n-shell" data-id="Csh"><rect x="637.0" y="474.0" width="206" height="38" rx="8" class="box bC"/><text x="647.0" y="489.0" class="t1">C⑦ 껍데기</text><text x="647.0" y="505.0" class="t2">RoomApplicationService</text></g>
+<g class="node n-normal" data-id="C5"><rect x="873.0" y="427.0" width="206" height="38" rx="8" class="box bC"/><text x="883.0" y="442.0" class="t1">C⑤ PR②</text><text x="883.0" y="458.0" class="t2">도메인 완성</text></g>
+<g class="node n-crit" data-id="C7"><rect x="1109.0" y="403.5" width="206" height="38" rx="8" class="box bC"/><text x="1119.0" y="418.5" class="t1">C⑦ PR④</text><text x="1119.0" y="434.5" class="t2">service.py 본문</text></g>
+<g class="node n-normal" data-id="C9"><rect x="1109.0" y="450.5" width="206" height="38" rx="8" class="box bC"/><text x="1119.0" y="465.5" class="t1">C⑧⑨ PR⑤</text><text x="1119.0" y="481.5" class="t2">기록·보관 화면</text></g>
+<g class="node n-normal" data-id="C10"><rect x="1345.0" y="427.0" width="206" height="38" rx="8" class="box bC"/><text x="1355.0" y="442.0" class="t1">C⑩</text><text x="1355.0" y="458.0" class="t2">연결 확인</text></g>
+<g class="node n-crit" data-id="D1"><rect x="401.0" y="559.5" width="206" height="38" rx="8" class="box bD"/><text x="411.0" y="574.5" class="t1">D① PR①</text><text x="411.0" y="590.5" class="t2">read_models</text></g>
+<g class="node n-shell" data-id="Dsh"><rect x="401.0" y="606.5" width="206" height="38" rx="8" class="box bD"/><text x="411.0" y="621.5" class="t1">D⑦ 껍데기</text><text x="411.0" y="637.5" class="t2">RoomQueryService</text></g>
+<g class="node n-crit" data-id="D2"><rect x="637.0" y="583.0" width="206" height="38" rx="8" class="box bD"/><text x="647.0" y="598.0" class="t1">D② PR②</text><text x="647.0" y="614.0" class="t2">ORM models</text></g>
+<g class="node n-crit" data-id="D4"><rect x="873.0" y="583.0" width="206" height="38" rx="8" class="box bD"/><text x="883.0" y="598.0" class="t1">D③④ PR③ ★최우선</text><text x="883.0" y="614.0" class="t2">RoomRepository.save</text></g>
+<g class="node n-normal" data-id="D6"><rect x="1109.0" y="559.5" width="206" height="38" rx="8" class="box bD"/><text x="1119.0" y="574.5" class="t1">D⑤⑥ PR④</text><text x="1119.0" y="590.5" class="t2">RoomQueryRepository</text></g>
+<g class="node n-normal" data-id="D7"><rect x="1109.0" y="606.5" width="206" height="38" rx="8" class="box bD"/><text x="1119.0" y="621.5" class="t1">D⑦ PR⑤</text><text x="1119.0" y="637.5" class="t2">RoomQueryService 본문</text></g>
+<g class="node n-normal" data-id="D8"><rect x="1345.0" y="583.0" width="206" height="38" rx="8" class="box bD"/><text x="1355.0" y="598.0" class="t1">D⑧</text><text x="1355.0" y="614.0" class="t2">점검</text></g>
+<g class="node n-normal" data-id="E1"><rect x="401.0" y="739.0" width="206" height="38" rx="8" class="box bE"/><text x="411.0" y="754.0" class="t1">E①</text><text x="411.0" y="770.0" class="t2">schemas.py</text></g>
+<g class="node n-normal" data-id="E2w"><rect x="637.0" y="739.0" width="206" height="38" rx="8" class="box bE"/><text x="647.0" y="754.0" class="t1">E② 작성</text><text x="647.0" y="770.0" class="t2">router.py 11개</text></g>
+<g class="node n-normal" data-id="E2"><rect x="873.0" y="715.5" width="206" height="38" rx="8" class="box bE"/><text x="883.0" y="730.5" class="t1">E② PR①</text><text x="883.0" y="746.5" class="t2">router 머지</text></g>
+<g class="node n-normal" data-id="E4"><rect x="873.0" y="762.5" width="206" height="38" rx="8" class="box bE"/><text x="883.0" y="777.5" class="t1">E③④ PR②</text><text x="883.0" y="793.5" class="t2">목록 화면 (초안)</text></g>
+<g class="node n-normal" data-id="E6"><rect x="1109.0" y="739.0" width="206" height="38" rx="8" class="box bE"/><text x="1119.0" y="754.0" class="t1">E⑤⑥ PR③</text><text x="1119.0" y="770.0" class="t2">상세 화면 (초안)</text></g>
+<g class="node n-crit" data-id="E7"><rect x="1345.0" y="715.5" width="206" height="38" rx="8" class="box bE"/><text x="1355.0" y="730.5" class="t1">E⑦</text><text x="1355.0" y="746.5" class="t2">API 확인</text></g>
+<g class="node n-normal" data-id="E8"><rect x="1345.0" y="762.5" width="206" height="38" rx="8" class="box bE"/><text x="1355.0" y="777.5" class="t1">E⑧</text><text x="1355.0" y="793.5" class="t2">화면 확인 → PR②·③ 머지</text></g>
+</svg>
+</div><div class="hint">화면이 좁으면 가로로 스크롤해요.</div></div>
+<section class="notes">
+  <h2>읽는 법</h2>
+  <p><b>임계 경로</b>: A①~④ → C① 껍데기 → D① read_models → D② models → <b>D③④ save</b> → C⑦ service → E⑦ API 확인 → A⑩ 통합 점검.
+  D③④는 C⑦ 서비스와 A⑨ 시드가 함께 기다리는 단일 병목이라 2일차 최우선이에요.</p>
+  <p><b>껍데기</b>: B⑧ <code>get_current_user_id</code>, C⑦ <code>RoomApplicationService</code>, D⑦ <code>RoomQueryService</code>를 이름·시그니처만으로 먼저 머지하면 E② 라우터가 2일차에 머지되고, A⑧이 rooms 라우터를 일찍 등록할 수 있어요.</p>
+</section>
+<script>
+  const svg = document.querySelector("svg[role=img]");
+  let active = null;
+  svg.querySelectorAll(".node").forEach((node) => {
+    node.addEventListener("click", () => {
+      const id = node.dataset.id;
+      svg.querySelectorAll(".on").forEach((el) => el.classList.remove("on"));
+      if (active === id) { active = null; svg.classList.remove("focus"); return; }
+      active = id;
+      svg.classList.add("focus");
+      node.classList.add("on");
+      svg.querySelectorAll(".e").forEach((edge) => {
+        if (edge.dataset.from === id || edge.dataset.to === id) {
+          edge.classList.add("on");
+          const other = edge.dataset.from === id ? edge.dataset.to : edge.dataset.from;
+          const otherNode = svg.querySelector('.node[data-id="' + other + '"]');
+          if (otherNode) otherNode.classList.add("on");
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

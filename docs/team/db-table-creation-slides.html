@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DB 테이블 생성 흐름</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --slide: #ffffff;
+    --text: #1d2330;
+    --muted: #5b6475;
+    --line: #d9dee7;
+    --accent: #2457c5;
+    --accent-soft: #e7eefc;
+    --a: #2457c5;   --a-soft: #e7eefc;
+    --b: #8a3fb8;   --b-soft: #f3e9fa;
+    --c: #1f8a5b;   --c-soft: #e3f4ec;
+    --d: #c0602a;   --d-soft: #fbeee5;
+    --e: #a8871a;   --e-soft: #f8f1dc;
+    --warn: #b42318; --warn-soft: #fdecea;
+    --code-bg: #f1f3f7;
+    --mono: ui-monospace, "SFMono-Regular", "Cascadia Code", Consolas, monospace;
+    --sans: "Pretendard", system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --slide: #1a1e26; --text: #e6e9ef; --muted: #9aa3b5; --line: #2e3542;
+      --accent: #7da2ff; --accent-soft: #23304d;
+      --a: #7da2ff; --a-soft: #23304d;
+      --b: #c99af0; --b-soft: #35284a;
+      --c: #6fd3a3; --c-soft: #1f3a2f;
+      --d: #f0a374; --d-soft: #45301f;
+      --e: #e3c35c; --e-soft: #3f371b;
+      --warn: #ff8a80; --warn-soft: #452222;
+      --code-bg: #232833;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); overflow: hidden; }
+
+  .deck { height: 100%; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .slide {
+    display: none; width: min(1200px, 100%); aspect-ratio: 16 / 9; max-height: calc(100vh - 72px);
+    background: var(--slide); border: 1px solid var(--line); border-radius: 14px;
+    padding: clamp(20px, 3.4vw, 52px) clamp(22px, 4vw, 64px);
+    box-shadow: 0 10px 40px rgba(0,0,0,.08); overflow: auto; flex-direction: column;
+  }
+  .slide.active { display: flex; }
+  .slide:not(.active) { display: none !important; }
+  .kicker { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 700; margin-bottom: 6px; }
+  h1 { font-size: clamp(30px, 4.2vw, 52px); margin: 0 0 14px; line-height: 1.2; }
+  h2 { font-size: clamp(22px, 2.6vw, 34px); margin: 0 0 18px; line-height: 1.25; }
+  p, li { font-size: clamp(15px, 1.45vw, 20px); line-height: 1.6; }
+  ul { margin: 0; padding-left: 1.2em; }
+  li + li { margin-top: 6px; }
+  .muted { color: var(--muted); }
+  code { font-family: var(--mono); font-size: .9em; background: var(--code-bg); padding: 1px 6px; border-radius: 5px; }
+  pre { font-family: var(--mono); background: var(--code-bg); border-radius: 10px; padding: 14px 18px; margin: 0;
+        font-size: clamp(12px, 1.2vw, 16px); line-height: 1.55; overflow: auto; }
+  pre code { background: none; padding: 0; }
+  .hl { color: var(--accent); font-weight: 700; }
+  table { border-collapse: collapse; width: 100%; font-size: clamp(13px, 1.3vw, 18px); }
+  th, td { border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  .grow { flex: 1; min-height: 0; }
+  .row { display: flex; gap: 18px; }
+  .row > * { flex: 1; min-width: 0; }
+  .center { display: flex; flex-direction: column; justify-content: center; }
+
+  .tag { display: inline-block; font-size: .75em; font-weight: 700; padding: 1px 8px; border-radius: 999px; vertical-align: middle; }
+  .tA { color: var(--a); background: var(--a-soft); }
+  .tB { color: var(--b); background: var(--b-soft); }
+  .tC { color: var(--c); background: var(--c-soft); }
+  .tD { color: var(--d); background: var(--d-soft); }
+  .tE { color: var(--e); background: var(--e-soft); }
+
+  .callout { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 12px 16px; border-radius: 8px; margin-top: 16px; }
+  .callout.warn { border-color: var(--warn); background: var(--warn-soft); }
+  .callout p { margin: 0; }
+
+  /* 세 구간 */
+  .phases { display: flex; gap: 14px; margin-top: 10px; }
+  .phase { flex: 1; border: 1px solid var(--line); border-radius: 12px; padding: 16px; position: relative; }
+  .phase .num { font-size: 40px; font-weight: 800; color: var(--accent); line-height: 1; }
+  .phase h3 { margin: 8px 0 6px; font-size: clamp(17px, 1.7vw, 22px); }
+  .phase p { margin: 0; font-size: clamp(14px, 1.3vw, 17px); color: var(--muted); }
+  .phase.db { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+
+  /* 흐름 상자 */
+  .flow { display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap; }
+  .box { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; background: var(--slide); }
+  .box small { display: block; color: var(--muted); font-size: clamp(13px, 1.2vw, 16px); line-height: 1.5; margin-top: 3px; }
+  .arrow { align-self: center; color: var(--muted); font-size: 22px; }
+  .stack { display: flex; flex-direction: column; gap: 10px; }
+
+  .chain { display: flex; flex-direction: column; gap: 8px; }
+  .chain .step { display: flex; gap: 12px; align-items: flex-start; }
+  .chain .dot { flex: 0 0 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700;
+                display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .chain .step p { margin: 2px 0 0; }
+
+  .tables { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .tbl { border-radius: 10px; padding: 10px 12px; font-family: var(--mono); font-size: clamp(13px, 1.3vw, 17px); }
+  .tbl small { display: block; font-family: var(--sans); font-size: 12px; opacity: .8; }
+
+  .fk { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-family: var(--mono); font-size: clamp(13px, 1.3vw, 17px); }
+  .fk span.t { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); }
+  .fk span.n { color: var(--muted); font-family: var(--sans); font-size: 12px; display: block; }
+
+  .split { display: grid; grid-template-columns: 1fr auto 1fr; gap: 14px; align-items: center; }
+  .fork { display: flex; flex-direction: column; gap: 14px; }
+
+  .timeline { display: flex; gap: 0; margin-top: 8px; }
+  .tl { flex: 1; border-top: 3px solid var(--line); padding-top: 10px; position: relative; font-size: clamp(14px, 1.45vw, 19px); line-height: 1.5; padding-right: 8px; }
+  .tl::before { content: ""; position: absolute; top: -8px; left: 0; width: 13px; height: 13px; border-radius: 50%; background: var(--accent); }
+  .tl b { display: block; }
+  .tl.end::before { background: var(--warn); }
+
+  .bar { position: fixed; left: 0; bottom: 0; height: 4px; background: var(--accent); transition: width .2s; }
+  .nav { position: fixed; right: 18px; bottom: 14px; display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 14px; }
+  .nav button { border: 1px solid var(--line); background: var(--slide); color: var(--text); border-radius: 8px; width: 36px; height: 32px; cursor: pointer; font-size: 16px; }
+  .nav button:focus-visible { outline: 3px solid var(--accent); }
+  .hint { position: fixed; left: 18px; bottom: 14px; color: var(--muted); font-size: 13px; }
+
+  @media (max-width: 760px) {
+    .slide { aspect-ratio: auto; max-height: none; height: calc(100vh - 72px); }
+    .row, .phases, .split { flex-direction: column; display: flex; }
+    .tables { grid-template-columns: 1fr 1fr; }
+    .hint { display: none; }
+  }
+  @media print {
+    body { overflow: visible; background: #fff; }
+    .deck { display: block; padding: 0; height: auto; }
+    .slide, .slide:not(.active) { display: flex !important; page-break-after: always; box-shadow: none; max-height: none; width: 100%; border: none; }
+    .bar, .nav, .hint { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+
+  <!-- 1 -->
+  <section class="slide center">
+    <div class="kicker">2vs2 매치메이킹 · 팀 공유</div>
+    <h1>앱이 뜰 때 DB 테이블과<br>시드는 어떻게 만들어질까?</h1>
+    <p class="muted">파일·함수 단위로 따라가는 <code>uvicorn main:app</code> 기동 과정</p>
+    <p class="muted" style="margin-top:28px">
+      <span class="tag tA">A 공통·조립</span> <span class="tag tB">B 인증</span> <span class="tag tC">C 방 도메인</span>
+      <span class="tag tD">D 방 DB</span> <span class="tag tE">E 방 API·화면</span>
+    </p>
+    <p class="muted" style="font-size:14px">기준: <code>reference/agent-pipeline-blueprint</code> 참고 구현 · ←/→ 키로 넘기기</p>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide">
+    <div class="kicker">한 줄 요약</div>
+    <h2>Docker는 <span class="hl">빈 DB</span>만 만들어요. 테이블은 <span class="hl">앱이 처음 뜰 때</span> 생겨요</h2>
+    <table>
+      <tr><th>파일</th><th>담당</th><th>역할</th></tr>
+      <tr><td><code>config.py</code>, <code>database.py</code></td><td><span class="tag tA">A</span></td><td><code>.env</code> 읽기, 엔진·세션·<code>Base</code></td></tr>
+      <tr><td><code>auth/infrastructure/models.py</code></td><td><span class="tag tB">B</span></td><td><code>users</code>, <code>token_blacklist</code> 설계도</td></tr>
+      <tr><td><code>rooms/infrastructure/models.py</code></td><td><span class="tag tD">D</span></td><td><code>rooms</code>, <code>teams</code>, <code>participations</code>, <code>participation_logs</code> 설계도</td></tr>
+      <tr><td><code>main.py</code></td><td><span class="tag tA">A</span></td><td>모델 import, lifespan(<code>create_all</code> → 시드 → commit)</td></tr>
+      <tr><td><code>seed.py</code></td><td><span class="tag tA">A</span></td><td>시드 60건 (B·C·D 코드를 불러 씀)</td></tr>
+    </table>
+    <div class="callout"><p>지금 <code>dev</code>는 주석만 있는 스켈레톤이라 서버를 띄워도 테이블이 생기지 않아요.</p></div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide">
+    <div class="kicker">큰 그림</div>
+    <h2>기동은 세 구간으로 나뉘어요</h2>
+    <div class="phases">
+      <div class="phase"><div class="num">1</div><h3>import 구간</h3><p><code>main.py</code>를 읽을 때.<br>설정 읽기, 엔진 준비,<br>테이블 <b>설계도</b> 등록.<br><b>DB 접속 없음</b></p></div>
+      <div class="phase db"><div class="num">2</div><h3>시작 구간</h3><p>lifespan의 <code>yield</code> 전.<br><b>CREATE TABLE</b>,<br>시드 INSERT, commit</p></div>
+      <div class="phase"><div class="num">3</div><h3>종료 구간</h3><p>lifespan의 <code>yield</code> 뒤.<br><code>engine.dispose()</code></p></div>
+    </div>
+    <pre style="margin-top:22px"><code>uv run uvicorn main:app --app-dir src --reload</code></pre>
+    <p class="muted"><code>--app-dir src</code> → <code>src/</code>가 import 경로. uvicorn은 <code>src/main.py</code>를 import하고 <code>app</code> 객체를 찾아요.</p>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide">
+    <div class="kicker">1. import 구간 · 1-1</div>
+    <h2><code>import auth.infrastructure.models</code> 한 줄이 연쇄로 불러요</h2>
+    <div class="row grow">
+      <pre><code>main.py
+ └─ import auth.infrastructure.models     <span class="tag tB">B</span>
+     └─ from database import Base          <span class="tag tA">A</span>
+         └─ from config import get_settings <span class="tag tA">A</span></code></pre>
+      <div class="chain">
+        <div class="step"><div class="dot">1</div><div><b><code>config.py</code></b><p class="muted"><code>Settings</code>·<code>get_settings()</code> 정의만. <code>.env</code>는 아직 안 읽어요</p></div></div>
+        <div class="step"><div class="dot">2</div><div><b><code>database.py</code></b><p class="muted"><code>get_settings()</code> 실행 → 여기서 처음 <code>.env</code> 읽음 (필수값 없으면 즉시 실패)</p></div></div>
+        <div class="step"><div class="dot">3</div><div><b><code>create_async_engine(...)</code></b><p class="muted">"접속하는 방법"만 준비. <b>실제 접속은 아직 안 해요</b></p></div></div>
+        <div class="step"><div class="dot">4</div><div><b><code>AsyncSessionLocal</code>, <code>class Base</code></b><p class="muted">세션 틀, 그리고 빈 테이블 목록 <code>Base.metadata</code></p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide">
+    <div class="kicker">1. import 구간 · 1-1 ~ 1-2</div>
+    <h2>모델 클래스가 정의되는 순간 <code>Base.metadata</code>에 등록돼요</h2>
+    <div class="tables">
+      <div class="tbl" style="background:var(--b-soft);color:var(--b)">users<small>UserModel · B</small></div>
+      <div class="tbl" style="background:var(--b-soft);color:var(--b)">token_blacklist<small>TokenBlacklistModel · B</small></div>
+      <div class="tbl" style="background:var(--d-soft);color:var(--d)">rooms<small>RoomModel · D</small></div>
+      <div class="tbl" style="background:var(--d-soft);color:var(--d)">teams<small>TeamModel · D</small></div>
+      <div class="tbl" style="background:var(--d-soft);color:var(--d)">participations<small>ParticipationModel · D</small></div>
+      <div class="tbl" style="background:var(--d-soft);color:var(--d)">participation_logs<small>ParticipationLogModel · D</small></div>
+    </div>
+    <p class="muted" style="margin-top:14px"><code>database.py</code>는 두 번째 import 때 다시 실행되지 않아요. 파이썬은 모듈을 한 번만 실행해요.</p>
+    <div class="callout warn"><p><b>왜 <code>main.py</code>가 모델 모듈을 굳이 import할까?</b><br>
+      <code>create_all</code>은 <b>등록된 것만</b> 만들어요. import를 빠뜨리면 <b>오류 없이 테이블만 빠진 채</b> 앱이 떠요.
+      그래서 <code># noqa: F401</code>을 붙여 남겨요.</p></div>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide">
+    <div class="kicker">1. import 구간 · 1-3 ~ 1-4</div>
+    <h2>나머지 import, 그리고 <code>app</code> 만들기</h2>
+    <ul>
+      <li>라우터: <code>router</code>·<code>page_router</code> <span class="tag tB">B</span> <span class="tag tC">C</span> <span class="tag tE">E</span></li>
+      <li><code>config</code>, <code>database</code>, <code>exceptions</code>, <code>logging_middleware</code> <span class="tag tA">A</span></li>
+      <li><code>from seed import seed_initial_data</code> <span class="tag tA">A</span> → 안에서 다시 import:
+        <div class="flow" style="margin-top:8px">
+          <div class="box"><span class="tag tB">B</span> <code>User</code>, <code>UserRepository</code>, <code>PasswordHasher</code></div>
+          <div class="box"><span class="tag tC">C</span> <code>Room</code></div>
+          <div class="box"><span class="tag tD">D</span> <code>RoomRepository</code></div>
+        </div>
+      </li>
+      <li><code>app = FastAPI(..., lifespan=lifespan)</code> → lifespan은 <b>등록만</b>, 실행은 아직</li>
+    </ul>
+    <div class="callout"><p>B·C·D 중 하나라도 비어 있으면 <b>import 단계에서 앱이 멈춰요</b>. 그래서 <code>seed.py</code>는 가장 마지막에 해요.<br>
+      <b>여기까지 DB에는 아무 일도 일어나지 않았어요.</b></p></div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide">
+    <div class="kicker">2. 시작 구간</div>
+    <h2>uvicorn이 서버를 열기 직전에 lifespan을 실행해요</h2>
+    <pre class="grow"><code>@asynccontextmanager
+async def lifespan(_: FastAPI):
+    async with engine.begin() as conn:                         <span class="hl"># 2-1 첫 DB 접속</span>
+        await conn.run_sync(Base.metadata.create_all)           <span class="hl"># 2-2 CREATE TABLE</span>
+    async with AsyncSessionLocal() as session:                  <span class="hl"># 2-3 시드용 세션</span>
+        await seed_initial_data(session, get_settings())        <span class="hl"># 2-4 시드 INSERT</span>
+        await session.commit()                                  <span class="hl"># 2-5 한 번에 확정</span>
+    yield                                                       <span class="hl"># 2-6 요청 받기 시작</span>
+    await engine.dispose()                                      <span class="hl"># 3   종료 정리</span></code></pre>
+  </section>
+
+  <!-- 8 -->
+  <section class="slide">
+    <div class="kicker">2-1 · 2-2</div>
+    <h2>첫 접속 → <code>create_all</code>이 FK 순서대로 테이블을 만들어요</h2>
+    <ul>
+      <li><b>2-1 <code>engine.begin()</code></b>: 풀에서 연결을 열고 트랜잭션 시작. DB가 꺼져 있거나 <code>.env</code>가 틀리면 <b>여기서 처음 실패</b></li>
+      <li><b>2-2</b>: <code>create_all</code>은 동기 함수 → 비동기 연결 위에서 <code>run_sync</code>로 실행 (교안 5장)</li>
+    </ul>
+    <div class="fk" style="margin:18px 0">
+      <span class="t">users</span>→<span class="t">token_blacklist</span>→<span class="t">rooms<span class="n">→ users</span></span>→<span class="t">teams<span class="n">→ rooms</span></span>→<span class="t">participations<span class="n">→ rooms·users·teams</span></span>→<span class="t">participation_logs</span>
+    </div>
+    <ul>
+      <li>테이블마다 <b>있으면 건너뛰고, 없으면 <code>CREATE TABLE</code></b></li>
+      <li><code>async with</code>가 끝나면 commit → <b>테이블은 이 시점에 확정</b></li>
+    </ul>
+    <div class="callout warn"><p>이미 있는 테이블의 컬럼·PK는 <b>고치지 않아요</b>(STK-13). 모델을 바꾸면 개발 DB를 다시 만들어요.</p></div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide">
+    <div class="kicker">2-4 시드 · ① ~ ③</div>
+    <h2><code>seed_initial_data</code> <span class="tag tA">A</span> — 확인, 준비, 회원 14명</h2>
+    <div class="row grow">
+      <div class="stack">
+        <div class="box"><b>① 중복 확인</b><small><code>UserRepository.exists_login_id("seed01")</code> <span class="tag tB">B</span></small>
+          <small><code>True</code>면 <code>seed skipped</code> 로그 후 <b>바로 반환</b> → 두 번째 실행부터는 여기서 끝</small></div>
+        <div class="box"><b>② 준비</b><small><code>base = datetime.now(UTC)</code> — 모든 생성 시각의 기준</small>
+          <small><code>PasswordHasher().hash(seed_user_password)</code> <span class="tag tB">B</span> — bcrypt 해시 <b>1번</b>, 14명이 공유</small></div>
+      </div>
+      <div>
+        <b>③ 회원 14명 (14번 반복)</b>
+        <table style="margin-top:8px">
+          <tr><th>호출</th><th>일어나는 일</th></tr>
+          <tr><td><code>User.register(...)</code> <span class="tag tB">B</span></td><td>규칙 검사 → <code>id=None</code>인 <code>User</code></td></tr>
+          <tr><td><code>UserRepository.save</code> <span class="tag tB">B</span></td><td><code>session.add</code> → <code>flush</code></td></tr>
+          <tr><td><code>flush</code></td><td><code>INSERT … RETURNING id</code></td></tr>
+          <tr><td>시드 <span class="tag tA">A</span></td><td><code>user_ids[1] = 1</code> 기록</td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="callout"><p><b>flush ≠ commit</b>: SQL은 DB로 보내지만 확정은 안 해요. 같은 세션 안에서는 <code>id</code>를 바로 받아 쓸 수 있어요.</p></div>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide">
+    <div class="kicker">2-4 시드 · ④ 삭제된 방 3개 (먼저)</div>
+    <h2>도메인으로 방을 만들고 → 끝내고 → 레포지토리가 저장</h2>
+    <div class="flow" style="flex-wrap:nowrap">
+      <div class="box" style="flex:1"><b>a. <code>_build_room</code></b> <span class="tag tA">A</span>
+        <small><code>Room.create(title, host_id, None, created)</code> <span class="tag tC">C</span></small>
+        <small>→ <code>Room(id=None)</code> + <code>Team</code> A·B + 방장 참가(A팀, 순서 1)</small>
+        <small><code>room.join(...)</code> 1분 간격 · A팀 우선(D-024)</small></div>
+      <div class="arrow">→</div>
+      <div class="box" style="flex:1"><b>b. 방 끝내기</b> <span class="tag tC">C</span>
+        <small><b>D1·D3</b> <code>start_game</code> → <code>deleted_at</code>, <code>GAME_STARTED</code>, 전원 <code>left_at</code></small>
+        <small><b>D2</b> 나감 → 재입장 → 나감 → 마지막 1명 나감 → <code>EMPTY</code></small></div>
+      <div class="arrow">→</div>
+      <div class="box" style="flex:1"><b>c. <code>RoomRepository.save</code></b> <span class="tag tD">D</span>
+        <small><code>id is None</code> → <code>TeamModel</code>×2, <code>RoomModel</code> 생성, <code>session.add</code></small>
+        <small>필드 복사 → 참가 분기 → <code>flush</code></small></div>
+    </div>
+    <p class="muted" style="margin-top:14px"><code>None</code> 인자 = "이 회원은 지금 참가 중인 방이 없다". 시드는 비어 있는 회원만 골라 써요.</p>
+    <div class="callout"><p>시드는 <b>ORM 모델을 직접 만들지 않아요</b>. 도메인 규칙을 거치고, 로그 이동은 D의 <code>save</code>가 맡아요(ADR-011).</p></div>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide">
+    <div class="kicker">RoomRepository.save · 참가 분기</div>
+    <h2>현재 참가는 <code>participations</code>, 끝난 참가는 <code>participation_logs</code></h2>
+    <div class="split" style="margin-top:6px">
+      <div class="box center" style="text-align:center"><b>도메인 <code>room.participations</code></b><small>하나씩 확인</small></div>
+      <div class="arrow">⇉</div>
+      <div class="fork">
+        <div class="box" style="border-color:var(--c)"><b><code>left_at</code> 없음 = 현재 참가</b>
+          <small><code>model.participations.append(ParticipationModel(...))</code></small>
+          <small>→ <code>INSERT participations</code> (활성 방)</small></div>
+        <div class="box" style="border-color:var(--d)"><b><code>left_at</code> 있음 = 끝난 참가</b>
+          <small><code>session.add(ParticipationLogModel(room=model, team=…, left_at=…))</code></small>
+          <small>→ <code>INSERT participation_logs</code> (삭제 방)</small></div>
+      </div>
+    </div>
+    <p style="margin-top:18px"><code>flush</code> 때 SQLAlchemy가 FK 순서로 INSERT해요:
+      <code>rooms</code> → <code>teams</code> 2행 → <code>participations</code> 또는 <code>participation_logs</code></p>
+    <p class="muted">삭제된 방은 참가가 전부 끝난 상태라 <code>participations</code> 행이 하나도 안 생기고 바로 로그로 가요.</p>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide">
+    <div class="kicker">D2 "아무도 없음" · 재입장 예시</div>
+    <h2>마지막 1명이 나가면 방이 삭제되므로 <b>2명</b>이 필요해요</h2>
+    <div class="timeline">
+      <div class="tl"><b>seed12 방 생성</b>순서 1 · A팀</div>
+      <div class="tl"><b>seed13 참가</b>순서 2</div>
+      <div class="tl"><b>seed12 퇴장</b>방장 → seed13<br><span class="muted">로그 ①</span></div>
+      <div class="tl"><b>seed12 재입장</b>순서 3</div>
+      <div class="tl"><b>seed12 퇴장</b><span class="muted">로그 ②</span></div>
+      <div class="tl end"><b>seed13 퇴장</b>빈 방 → EMPTY 삭제<br><span class="muted">로그 ③</span></div>
+    </div>
+    <div class="callout" style="margin-top:28px"><p>seed12의 로그 2건(입장 순서 1·3)이 "같은 회원이 같은 방에 다시 들어오면 새 기록"이라는 규칙의 예시예요(D-025, ADR-011).</p></div>
+  </section>
+
+  <!-- 13 -->
+  <section class="slide">
+    <div class="kicker">2-4 ⑤ ~ 2-6</div>
+    <h2>활성 방 5개 → 건수 로그 → <span class="hl">한 번에 commit</span></h2>
+    <ul>
+      <li><b>⑤ 활성 방 R1~R5</b>: ④와 같은데 "방 끝내기"만 없음 → <code>INSERT participations</code></li>
+      <li><b>삭제 방을 먼저 만드는 이유</b>: seed01~08이 과거 방에서 이미 나간 상태가 되고, 생성 시각도 맞고, D1~D3이 작은 방 번호를 가져가요</li>
+      <li><b>⑥</b> <code>seed_initial_data</code>는 <b>commit하지 않고</b> 반환</li>
+    </ul>
+    <pre style="margin:14px 0"><code>seed inserted: users=14 rooms=8 teams=16 participations=11 participation_logs=11 total=60</code></pre>
+    <div class="row">
+      <div class="box"><b>2-5 <code>session.commit()</code></b><small>60건이 <b>한꺼번에</b> 확정</small></div>
+      <div class="box" style="border-color:var(--warn)"><b>중간에 예외가 나면?</b><small>시드는 0건(롤백), 앱 기동 실패.<br>빈 테이블은 2-2에서 이미 commit돼 남아요 → 다음 실행 때 시드 재시도</small></div>
+      <div class="box"><b>2-6 <code>yield</code></b><small>이제부터 <code>/docs</code>·화면 접속 가능<br>종료 시 <code>engine.dispose()</code></small></div>
+    </div>
+  </section>
+
+  <!-- 14 -->
+  <section class="slide">
+    <div class="kicker">한 장 요약</div>
+    <h2>전체 흐름</h2>
+    <pre class="grow" style="font-size:clamp(11px,1.05vw,14px)"><code>uvicorn main:app
+│
+├─ [import] main.py
+│   ├─ auth.infrastructure.models (B) ─▶ database.py (A) ─▶ config.py (A): .env 읽기
+│   │     engine·AsyncSessionLocal·Base 준비 (접속 X)
+│   │     UserModel·TokenBlacklistModel → Base.metadata 등록
+│   ├─ rooms.infrastructure.models (D): Room·Team·Participation·ParticipationLog Model 등록
+│   ├─ routers (B·C·E), seed.py (A) ─▶ User·UserRepository·PasswordHasher(B), Room(C), RoomRepository(D)
+│   └─ app = FastAPI(lifespan=…)  ← 등록만
+│
+├─ [startup] lifespan
+│   ├─ engine.begin()                 ← 첫 DB 접속
+│   ├─ create_all                     ← CREATE TABLE ×6 (없을 때만) → commit
+│   ├─ seed_initial_data(session)
+│   │   ├─ exists_login_id("seed01")  ← 있으면 여기서 끝
+│   │   ├─ 회원 14: User.register → UserRepository.save (flush)
+│   │   ├─ 삭제 방 3: Room.create/join → start_game|leave → RoomRepository.save
+│   │   │                                   └ rooms·teams·participation_logs INSERT
+│   │   └─ 활성 방 5: Room.create/join → RoomRepository.save
+│   │                                     └ rooms·teams·participations INSERT
+│   ├─ session.commit()               ← 시드 60건 한 번에 확정
+│   └─ yield → 요청 받기 시작
+│
+└─ [shutdown] engine.dispose()</code></pre>
+  </section>
+
+  <!-- 15 -->
+  <section class="slide">
+    <div class="kicker">실행할 때마다</div>
+    <h2>처음 / 두 번째 / 모델 변경 후</h2>
+    <table>
+      <tr><th>상황</th><th>2-2 <code>create_all</code></th><th>2-4 시드</th></tr>
+      <tr><td>빈 DB로 처음 실행</td><td>테이블 6개 생성</td><td>60건 INSERT</td></tr>
+      <tr><td>두 번째 실행부터</td><td>전부 있어서 건너뜀</td><td><code>seed01</code>이 있어서 바로 반환</td></tr>
+      <tr><td>모델을 바꾼 뒤 기존 DB 그대로</td><td>건너뜀 · <b style="color:var(--warn)">바뀐 컬럼 반영 안 됨</b></td><td>건너뜀</td></tr>
+      <tr><td>모델을 바꾸고 DB를 다시 만든 뒤</td><td>새 구조로 생성</td><td>60건 INSERT</td></tr>
+    </table>
+    <p style="margin-top:20px"><b>직접 확인하기</b></p>
+    <pre><code>docker exec -it matchmaking-db psql -U matchmaking -d matchmaking -c "\dt"</code></pre>
+    <p class="muted">앱이 제대로 뜨기 전: <code>Did not find any relations.</code> · 뜬 뒤: 테이블 6개</p>
+  </section>
+
+  <!-- 16 -->
+  <section class="slide">
+    <div class="kicker">문제 해결</div>
+    <h2>어디서 실패하면 무엇을 의심할까</h2>
+    <table>
+      <tr><th>증상</th><th>실패 지점</th><th>확인할 것</th></tr>
+      <tr><td><code>database_url Field required</code></td><td>1-1 <code>get_settings()</code></td><td>저장소 루트에서 실행했는지, <code>.env</code>가 있는지</td></tr>
+      <tr><td><code>ImportError</code></td><td>1-3 import</td><td>아직 안 된 파트의 import를 <code>main.py</code>·<code>seed.py</code>에 넣었는지</td></tr>
+      <tr><td><code>connection refused</code> / <code>password authentication failed</code></td><td>2-1 첫 접속</td><td><code>docker ps</code>, <code>.env</code> 값</td></tr>
+      <tr><td>앱은 뜨는데 테이블 일부가 없음</td><td>2-2</td><td><code>main.py</code>의 모델 모듈 import</td></tr>
+      <tr><td><code>column … does not exist</code></td><td>2-2 이후 요청</td><td>모델 변경 후 DB 재생성(STK-13)</td></tr>
+      <tr><td>기동 중 도메인 예외 (<code>RoomFullError</code> 등)</td><td>2-4 시드</td><td>시드 데이터와 도메인 규칙, C·D 구현</td></tr>
+    </table>
+  </section>
+
+</div>
+
+<div class="bar" id="bar"></div>
+<div class="hint">← → / Space 이동 · P 인쇄(PDF)</div>
+<div class="nav">
+  <button type="button" id="prev" aria-label="이전 슬라이드">‹</button>
+  <span id="count"></span>
+  <button type="button" id="next" aria-label="다음 슬라이드">›</button>
+</div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll(".slide"));
+  const bar = document.getElementById("bar");
+  const count = document.getElementById("count");
+  let current = 0;
+
+  function show(index) {
+    current = Math.max(0, Math.min(slides.length - 1, index));
+    slides.forEach((slide, i) => slide.classList.toggle("active", i === current));
+    bar.style.width = ((current + 1) / slides.length * 100) + "%";
+    count.textContent = (current + 1) + " / " + slides.length;
+    history.replaceState(null, "", "#" + (current + 1));
+  }
+
+  document.getElementById("prev").addEventListener("click", () => show(current - 1));
+  document.getElementById("next").addEventListener("click", () => show(current + 1));
+  document.addEventListener("keydown", (event) => {
+    if (["ArrowRight", "PageDown", " "].includes(event.key)) { event.preventDefault(); show(current + 1); }
+    if (["ArrowLeft", "PageUp"].includes(event.key)) { event.preventDefault(); show(current - 1); }
+    if (event.key === "Home") show(0);
+    if (event.key === "End") show(slides.length - 1);
+    if (event.key === "p" || event.key === "P") window.print();
+  });
+
+  function showFromHash() {
+    const start = parseInt(location.hash.slice(1), 10);
+    show(Number.isNaN(start) ? 0 : start - 1);
+  }
+  window.addEventListener("hashchange", showFromHash);
+  showFromHash();
+</script>
+</body>
+</html>
