@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -15,18 +17,23 @@ from rooms.application.read_models import (
 from rooms.domain.participation import Participation, TeamSide
 from rooms.domain.room import DeleteReason, Room, RoomTitle
 from rooms.domain.team import Team
-from rooms.infrastructure.models import ParticipationModel, RoomModel, TeamModel
+from rooms.infrastructure.models import (
+    ParticipationLogModel,
+    ParticipationModel,
+    RoomModel,
+    TeamModel,
+)
 
 
 def _current(room_model: RoomModel) -> list[ParticipationModel]:
-    """방의 이용 기록 중 아직 나가지 않은(left_at 없는) 참가만 입장 순서대로."""
-    current = [p for p in room_model.participations if p.left_at is None]
-    return sorted(current, key=lambda p: p.join_order)
+    """방의 현재 참가(participations에는 현재 참가만 있음)를 입장 순서대로 (ADR-011)."""
+    return sorted(room_model.participations, key=lambda p: p.join_order)
 
 
 class RoomRepository:
     """rooms·teams·participations ↔ Room·Team·Participation.
 
+    끝난 참가는 save 때 participation_logs로 옮긴다 (ADR-011).
     flush만 하고 commit은 응용 서비스가 한다.
     """
 
@@ -40,11 +47,10 @@ class RoomRepository:
     async def find_current_participation(self, user_id: int) -> Participation | None:
         result = await self.session.execute(
             select(ParticipationModel)
-            .where(ParticipationModel.user_id == user_id, ParticipationModel.left_at.is_(None))
+            .where(ParticipationModel.user_id == user_id)
             .options(selectinload(ParticipationModel.team))
-            .order_by(ParticipationModel.joined_at.desc(), ParticipationModel.id.desc())
         )
-        model = result.scalars().first()
+        model = result.scalar_one_or_none()
         return self._participation_to_domain(model) if model else None
 
     async def save(self, room: Room) -> Room:
@@ -66,22 +72,37 @@ class RoomRepository:
 
         # 참가 기록의 팀은 같은 방의 TeamModel로만 연결한다 (RISK-13)
         team_models = {TeamSide(t.side): t for t in model.teams}
-        saved = {p.id: p for p in model.participations}
+        # 저장된 현재 참가는 (user_id, join_order)로 짝짓는다. 별도 id가 없다 (ADR-011)
+        saved = {(p.user_id, p.join_order): p for p in model.participations}
         for participation in room.participations:
-            if participation.id is None:
-                model.participations.append(
-                    ParticipationModel(
+            participation_model = saved.get((participation.user_id, participation.join_order))
+            team = team_models[participation.team]
+            if participation.is_current:
+                if participation_model is None:
+                    model.participations.append(
+                        ParticipationModel(
+                            user_id=participation.user_id,
+                            join_order=participation.join_order,
+                            team=team,
+                            joined_at=participation.joined_at,
+                        )
+                    )
+                else:
+                    participation_model.team = team
+            else:
+                # 끝난 참가 → 이용 로그 INSERT, 현재 참가 행은 목록에서 빼서 지운다
+                self.session.add(
+                    ParticipationLogModel(
+                        room=model,
                         user_id=participation.user_id,
                         join_order=participation.join_order,
-                        team=team_models[participation.team],
+                        team=team,
                         joined_at=participation.joined_at,
                         left_at=participation.left_at,
                     )
                 )
-            else:
-                participation_model = saved[participation.id]
-                participation_model.team = team_models[participation.team]
-                participation_model.left_at = participation.left_at
+                if participation_model is not None:
+                    model.participations.remove(participation_model)
         await self.session.flush()
         return self._to_domain(model)
 
@@ -113,20 +134,19 @@ class RoomRepository:
     @staticmethod
     def _participation_to_domain(model: ParticipationModel) -> Participation:
         return Participation(
-            id=model.id,
             room_id=model.room_id,
             user_id=model.user_id,
             join_order=model.join_order,
             team=TeamSide(model.team.side),
             joined_at=model.joined_at,
-            left_at=model.left_at,
         )
 
 
 class RoomQueryRepository:
     """조회 전용. 결과를 읽기 모델로 돌려준다. auth의 UserModel은 닉네임 조회에만 쓴다(ADR-001).
 
-    방과 이용 기록을 selectinload로 함께 읽고, 인원 계산·검색·페이지 자르기는 파이썬에서 한다.
+    방과 현재 참가를 selectinload로 함께 읽고, 인원 계산·검색·페이지 자르기는 파이썬에서 한다.
+    이용 이력은 현재 참가(participations) + 이용 로그(participation_logs)다 (ADR-011).
     """
 
     def __init__(self, session: AsyncSession) -> None:
@@ -205,25 +225,21 @@ class RoomQueryRepository:
     async def list_history(
         self, user_id: int, page: int, size: int
     ) -> tuple[list[HistoryItem], int]:
-        result = await self.session.execute(
+        current = await self.session.execute(
             select(ParticipationModel)
             .where(ParticipationModel.user_id == user_id)
             .options(selectinload(ParticipationModel.room))
-            .order_by(ParticipationModel.joined_at.desc(), ParticipationModel.id.desc())
         )
-        records = result.scalars().all()
-        items = [
-            HistoryItem(
-                participation_id=p.id,
-                room_id=p.room_id,
-                room_title=p.room.title,
-                joined_at=p.joined_at,
-                left_at=p.left_at,
-                is_current=p.left_at is None,
-                room_deleted=p.room.deleted_at is not None,
-            )
-            for p in records
-        ]
+        logs = await self.session.execute(
+            select(ParticipationLogModel)
+            .where(ParticipationLogModel.user_id == user_id)
+            .options(selectinload(ParticipationLogModel.room))
+            .order_by(ParticipationLogModel.joined_at.desc(), ParticipationLogModel.id.desc())
+        )
+        items = [_history_item(p, left_at=None) for p in current.scalars()]
+        items += [_history_item(log, left_at=log.left_at) for log in logs.scalars()]
+        # 입장 시각 최신순. 같으면 현재 참가가 먼저, 로그끼리는 위 정렬(id 큰 것 먼저)을 유지한다
+        items.sort(key=lambda item: item.joined_at, reverse=True)
         skip = (page - 1) * size
         return items[skip : skip + size], len(items)
 
@@ -232,12 +248,16 @@ class RoomQueryRepository:
         room = await self.session.get(RoomModel, room_id)
         if room is None or room.deleted_at is None:
             return None
+        # 삭제된 방에는 현재 참가가 없으므로 이용 로그만 읽는다 (INV-06, ADR-011)
         result = await self.session.execute(
-            select(ParticipationModel)
-            .where(ParticipationModel.room_id == room_id, ParticipationModel.user_id == user_id)
-            .order_by(ParticipationModel.joined_at, ParticipationModel.id)
+            select(ParticipationLogModel)
+            .where(
+                ParticipationLogModel.room_id == room_id,
+                ParticipationLogModel.user_id == user_id,
+            )
+            .order_by(ParticipationLogModel.joined_at, ParticipationLogModel.id)
         )
-        records = [MyRecord(joined_at=p.joined_at, left_at=p.left_at) for p in result.scalars()]
+        records = [MyRecord(joined_at=r.joined_at, left_at=r.left_at) for r in result.scalars()]
         if not records:
             return None
         return ArchivedRoom(
@@ -248,3 +268,17 @@ class RoomQueryRepository:
             deleted_at=room.deleted_at,
             my_records=records,
         )
+
+
+def _history_item(
+    record: ParticipationModel | ParticipationLogModel, left_at: datetime | None
+) -> HistoryItem:
+    """현재 참가(left_at 없음)나 이용 로그 한 건을 이력 항목으로."""
+    return HistoryItem(
+        room_id=record.room_id,
+        room_title=record.room.title,
+        joined_at=record.joined_at,
+        left_at=left_at,
+        is_current=left_at is None,
+        room_deleted=record.room.deleted_at is not None,
+    )

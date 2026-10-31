@@ -30,9 +30,10 @@ ACTIVE_ROOMS: list[tuple[str, list[int], int]] = [
 ]
 
 # (제목, 참가 회원 번호, 생성 시각: 기준 시각에서 뺄 분, 삭제 방식)
+# "reentry"는 첫 회원이 나갔다 다시 들어온 뒤 모두 나가는 재입장 예시다 (ADR-011)
 DELETED_ROOMS: list[tuple[str, list[int], int, str]] = [
     ("어제 한 판", [1, 2, 3, 4], 1440, "game_started"),
-    ("아무도 없음", [12], 600, "empty"),
+    ("아무도 없음", [12, 13], 600, "reentry"),
     ("저녁 매치", [5, 6, 7, 8], 300, "game_started"),
 ]
 
@@ -61,6 +62,7 @@ async def seed_initial_data(session: AsyncSession, settings: Settings) -> None:
     rooms = RoomRepository(session)
     room_count = 0
     participation_count = 0
+    log_count = 0
 
     for title, members, minutes_ago, deletion in DELETED_ROOMS:
         created = base - timedelta(minutes=minutes_ago)
@@ -69,10 +71,10 @@ async def seed_initial_data(session: AsyncSession, settings: Settings) -> None:
         if deletion == "game_started":
             room.start_game(room.host_user_id, ended)
         else:
-            room.leave(room.host_user_id, ended)
+            _leave_and_reenter_then_empty(room, user_ids[members[0]], ended)
         await rooms.save(room)
         room_count += 1
-        participation_count += len(room.participations)
+        log_count += len(room.participations)
 
     for title, members, minutes_ago in ACTIVE_ROOMS:
         created = base - timedelta(minutes=minutes_ago)
@@ -83,12 +85,14 @@ async def seed_initial_data(session: AsyncSession, settings: Settings) -> None:
 
     await session.flush()
     logger.info(
-        "seed inserted: users=%d rooms=%d teams=%d participations=%d total=%d",
+        "seed inserted: users=%d rooms=%d teams=%d participations=%d participation_logs=%d "
+        "total=%d",
         len(user_ids),
         room_count,
         room_count * 2,
         participation_count,
-        len(user_ids) + room_count * 3 + participation_count,
+        log_count,
+        len(user_ids) + room_count * 3 + participation_count + log_count,
     )
 
 
@@ -99,3 +103,15 @@ def _build_room(title: str, member_ids: list[int], created: datetime) -> Room:
     for offset, user_id in enumerate(others, start=1):
         room.join(user_id, None, created + timedelta(minutes=offset))
     return room
+
+
+def _leave_and_reenter_then_empty(room: Room, first_id: int, ended: datetime) -> None:
+    """첫 회원이 나갔다 다시 들어온 뒤 모두 나가 방이 삭제된다(EMPTY).
+
+    끝난 참가는 save 때 이용 로그가 된다.
+    """
+    room.leave(first_id, ended)
+    room.join(first_id, None, ended + timedelta(minutes=2))
+    room.leave(first_id, ended + timedelta(minutes=10))
+    for participation in list(room.current_participants):
+        room.leave(participation.user_id, ended + timedelta(minutes=20))

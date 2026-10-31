@@ -1,6 +1,6 @@
 ---
 stage: DB
-tickets: [TKT-DB-M2-01, TKT-DB-M3-01, TKT-DB-M3-02, TKT-DB-M3-03, TKT-DB-M8-01]
+tickets: [TKT-DB-M2-01, TKT-DB-M3-01, TKT-DB-M3-02, TKT-DB-M3-03, TKT-DB-M8-01, TKT-DB-M9-01]
 status: done
 inputs_read: [AR-MAP, AR-HAND, AR-DB, AR-API, AR-CONV, AR-GATE, AR-ADR, BE-BRIEF]
 next_readers: [BE, QA]
@@ -32,8 +32,32 @@ next_readers: [BE, QA]
 | TKT-DB-M8-01 | GATE-01 | 충족 (새 DB `matchmaking_m8`에서 기동 2회: `/docs` 200, 1회차 `seed inserted: … teams=16 … total=58`, 2회차 `seed skipped`) |
 | | GATE-02·08 | 충족 (명령 그대로 0줄, GATE-08은 `TeamModel` 포함 정규식) |
 | | 시드 `teams=16`, 참가의 팀 = 같은 방의 팀 | 충족 (SQL: `teams` 16행, 방이 어긋난 참가 0건, R3 "Fun Room" A2·B0) |
+| TKT-DB-M9-01 | GATE-01 | 충족 (새 DB `matchmaking_m9`에서 기동 2회: `/docs` 200, 1회차 `seed inserted: users=14 rooms=8 teams=16 participations=11 participation_logs=11 total=60`, 2회차 `seed skipped`) |
+| | GATE-02·08 | 충족 (명령 그대로 0줄, GATE-08은 `ParticipationLogModel` 포함 정규식) |
+| | 시드 `participations=11 participation_logs=11 total=60` | 충족 (SQL: `participations` 11행, D2 로그 seed12 입장 순서 1·3 + seed13 2) |
 
 ## 만든 것
+### TKT-DB-M9-01 (D-025, ADR-011)
+| 테이블 | 제약 | 근거 |
+|---|---|---|
+| `participations` | PK `participations_pkey`(`room_id`, `user_id`), UNIQUE `participations_user_id_key`(`user_id`), FK `room_id`·`user_id`·`team_id`. `id`·`left_at` 컬럼 없음 | INV-04, ADR-011 |
+| `participation_logs` (신규, `ParticipationLogModel`) | PK `id`, FK `room_id`·`user_id`·`team_id`, 모든 컬럼 NOT NULL(`left_at` 포함) | INV-10, REQ-046 |
+
+- 이름 붙인 제약은 만들지 않았다. 위 이름은 PostgreSQL 기본 이름이다(D-020)
+- `RoomModel.participations`: `cascade="all, delete-orphan"`. 목록에서 `remove`하면 flush 때 행이 지워진다(STK-04)
+- `ParticipationLogModel.room`·`team`: 역방향 없는 N:1 관계
+
+| 클래스 | 메서드 | 바뀐 점 |
+|---|---|---|
+| `RoomRepository` | `find_current_participation(user_id) -> Participation \| None` | `participations`에서 `user_id`로 `scalar_one_or_none`(`left_at` 조건·정렬 없음) |
+| | `save(room) -> Room` | 현재 참가를 (`user_id`, `join_order`)로 짝지음. 참가 중이고 행 없음 → append / 행 있음 → `team` 갱신 / 끝남 → `ParticipationLogModel` add, 행이 있으면 `participations.remove` |
+| | `_participation_to_domain` | `id`·`left_at` 없이 만든다 |
+| `RoomQueryRepository` | `list_active_rooms`·`get_room_detail` | 현재 인원 = `participations` 전체(거르기 없음) |
+| | `list_history(user_id, page, size)` | 현재 참가 + 로그를 합쳐 `joined_at` 최신순(같으면 현재 참가 먼저, 로그는 `id` 큰 것 먼저), 파이썬에서 페이지 자르기. `HistoryItem`에 `participation_id` 없음 |
+| | `get_archived_room(room_id, user_id)` | `participation_logs`만 읽음(`joined_at`, `id` 순) |
+
+- 시드(`src/seed.py`): D2 "아무도 없음"을 `[12, 13]`, 삭제 방식 `reentry`로 바꿨다(`_leave_and_reenter_then_empty`: seed12 퇴장 → 재입장 → 퇴장 → 남은 사람 퇴장, EMPTY). 시드 로그에 `participation_logs` 건수를 더했다
+
 ### TKT-DB-M8-01 (ADR-010)
 - `src/rooms/infrastructure/models.py`: `TeamModel`(`teams`: `id`, `room_id` FK, `side` `String(1)`, 관계 `room`·`participations`). `RoomModel.teams` 관계 추가. `ParticipationModel.team`(문자열) → `team_id` FK(`teams.id`) + 관계 `team`
 - `src/rooms/infrastructure/repositories.py`:
@@ -115,11 +139,17 @@ next_readers: [BE, QA]
 | | `delete_expired(now)` — `expires_at < now` 행 삭제 | 삭제 건수 `int` |
 
 ## 인프라 확인 포인트
+- TKT-DB-M9-01: **기존 DB(`matchmaking`, `matchmaking_m8` 등)는 지우고 다시 만든다.** `create_all`은 기존 `participations`의 PK·컬럼을 바꾸지 않아 옛 스키마(`id`·`left_at` 있음)로 남고 `participation_logs`만 새로 생긴다. 예: `psql -c "drop database matchmaking" -c "create database matchmaking"` 후 서버 기동(시드 60건)
 - 필요한 환경변수: `DATABASE_URL`(필수, `postgresql+asyncpg://…`), `DB_POOL_SIZE`·`DB_MAX_OVERFLOW`(기본 10). `config.Settings`가 `.env`에서 읽는다
 - `database` 모듈을 import하는 순간 `get_settings()`가 실행되므로 `DATABASE_URL`·`JWT_SECRET_KEY`·`SEED_USER_PASSWORD`가 없으면 import 단계에서 `ValidationError`가 난다. 엔진 생성만으로는 DB에 접속하지 않는다(첫 쿼리 때 접속)
 - 스키마 반영: 이 티켓에는 테이블이 없다. 테이블 생성은 lifespan의 `create_all`(TKT-BE-M3-05)
 
 ## 다음 단계(BE)가 쓸 것
+### TKT-DB-M9-01
+- 서비스 코드는 바꿀 것이 없다. 메서드 이름·시그니처는 그대로이고, 끝난 참가의 로그 이동은 `save`가 같은 트랜잭션에서 한다(commit은 서비스)
+- 같은 회원이 동시에 두 방에 들어가면 `participations_user_id_key` 위반 `IntegrityError` → 500(필수 범위, D-018). 400 변환은 도전 A(TKT-DB-M6-01)
+- 주의: `save`는 넘겨받은 `Room`의 끝난 참가를 모두 로그로 넣는다. 그래서 `save`가 돌려준 `Room`(현재 참가만 있음)이 아니라 같은 `Room` 객체로 `save`를 두 번 부르면 로그가 두 번 들어간다. 지금 서비스·시드는 방마다 한 번만 부른다
+
 ### TKT-DB-M8-01
 - `Room`은 레포지토리에서 팀 2개(`Team(id, side)`)를 받아 만들어진다. API·읽기 모델은 그대로 `TeamSide`를 쓴다
 - **기존 DB 재생성 필요**: `create_all`은 이미 있는 테이블에 `teams`·`team_id`를 만들지 않는다. 기존 개발 DB(`matchmaking` 등)는 지우고 다시 만들어야 한다. 테스트 DB는 conftest의 `drop_all`·`create_all`로 자동이다
@@ -156,6 +186,13 @@ docker exec matchmaking-pg createdb -U postgres matchmaking
 - 모델 등록: `create_all` 전에 모든 `models.py`가 import되어 있어야 `Base.metadata`에 테이블이 잡힌다
 
 ## 구현 중 자율 결정
+
+#### TKT-DB-M9-01 현재 참가 짝짓기 키를 (user_id, join_order)로
+- 결정: `save`가 기존 `ParticipationModel`을 `user_id`만이 아니라 (`user_id`, `join_order`)로 찾는다 — ADR-011, 시드 재입장 예시
+- 선택지: **A. (user_id, join_order) (권장·채택)** / B. `user_id`만
+- 권장 이유: 한 `Room` 객체 안에 같은 회원의 끝난 참가와 다시 들어온 참가가 함께 있을 수 있다(시드 D2). `user_id`만 쓰면 끝난 참가를 처리하다 새 참가 행을 지울 수 있다.
+- trade-off: A — 키가 두 값이라 읽을 때 한 번 더 생각해야 한다. B — 단순하지만 같은 객체 안 재입장에서 틀린 행을 지운다.
+
 
 #### TKT-DB-M8-01 참가의 팀 연결을 관계 객체로
 - 결정: `ParticipationModel(team=team_models[side])`처럼 `team` 관계에 같은 방의 `TeamModel` 객체를 넣는다. `team_id` 숫자를 직접 넣지 않는다 — ADR-010, RISK-13, 교안 5장 `relationship`
@@ -210,6 +247,12 @@ docker exec matchmaking-pg createdb -U postgres matchmaking
 - TKT-DB-M3-02: `rooms.host_user_id`의 인덱스는 문서에 "INDEX"로만 적혀 있어 SQLAlchemy 기본 이름 `ix_rooms_host_user_id`를 썼다. ARCH 문서에 이름을 적어 달라고 요청한다
 
 ## 검증 결과
+
+### TKT-DB-M9-01
+- GATE-05: `ruff check src` 통과, `ruff format --check src` 40 files / GATE-02·08: 0줄
+- GATE-01: 새 DB `matchmaking_m9`(로컬 PostgreSQL 16, 포트 55432)에서 기동 2회 — 1회차 시드 60건, 2회차 `seed skipped`, `/docs` 200
+- `\d participations`: PK (`room_id`, `user_id`), UNIQUE (`user_id`), `id`·`left_at` 없음
+- 확인하지 못함: API 흐름별 로그 이동·이력 합치기(TKT-QA-M9-01 통합 테스트)
 
 ### TKT-DB-M8-01
 - GATE-05: `ruff check src` 통과, `ruff format --check src` 40 files / GATE-02·08: 0줄
