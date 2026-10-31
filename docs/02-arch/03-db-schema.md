@@ -202,10 +202,10 @@ erDiagram
 |---|---|---|
 | `users` | 14 | `seed01`~`seed14`, 닉네임 `시드유저01`~`시드유저14` |
 | 활성 `rooms` | 5 | R1 "2vs2 시연 방"(seed01~04, A·B 각 2명 — 게임 시작 시연, D-014) / R2 "한 자리 남음"(seed05~07, A2·B1) / R3 "Fun Room"(seed08~09, A2·B0 — A팀 우선 배정, D-024) / R4 "100% 즐겜"(seed10) / R5 "초보 환영"(seed11). 방장은 각 방의 입장 순서 1 |
-| 삭제 `rooms` | 3 | D1 "어제 한 판"(GAME_STARTED, seed01~04 과거 기록) / D2 "아무도 없음"(EMPTY, seed12 과거 기록) / D3 "저녁 매치"(GAME_STARTED, seed05~08 과거 기록) |
+| 삭제 `rooms` | 3 | D1 "어제 한 판"(GAME_STARTED, seed01~04 과거 기록) / D2 "아무도 없음"(EMPTY, seed12·13 과거 기록 — seed12 재입장 예시) / D3 "저녁 매치"(GAME_STARTED, seed05~08 과거 기록) |
 | `teams` | 16 | 방 8개 × A·B (방 생성 때 함께 저장) |
 | `participations` | 11 | 현재 참가(R1~R5) |
-| `participation_logs` | 10 | 끝난 이용(D1 4, D2 2, D3 4). D2는 seed12가 입장 → 퇴장 → 재입장 → 퇴장한 재입장 예시(입장 순서 1·2, ADR-011) |
-| 합계 | 59 | 20건 이상 |
+| `participation_logs` | 11 | 끝난 이용(D1 4, D2 3, D3 4). D2는 seed12가 방을 만들고 seed13 참가 → seed12 퇴장(방장 seed13) → seed12 재입장 → seed12 퇴장 → seed13 퇴장(EMPTY). seed12 로그 2건(입장 순서 1·3)이 재입장 예시다(ADR-011). 마지막 1명이 나가면 방이 삭제되므로 재입장 예시에는 2명이 필요하다 |
+| 합계 | 60 | 20건 이상 |
 
 - seed12~14는 참가 중이 아닌 회원이다(시연 중 참가·생성용). R2는 정원 마감 직전, R1은 정원 마감 + 게임 시작 가능 상태다.
