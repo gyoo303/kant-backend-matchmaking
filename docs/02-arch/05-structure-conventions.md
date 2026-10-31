@@ -12,7 +12,6 @@ kant-ubuntu-books-claude1/
 ├── .env.example                # 환경변수 이름·용도 (BE, ADR-003)
 ├── .gitignore
 ├── README.md                   # (FE)
-├── AGENTS.md
 ├── src/
 │   ├── __init__.py
 │   ├── main.py                 # 앱 생성, lifespan(create_all·seed), 미들웨어, 전역 예외 핸들러, 라우터·StaticFiles 등록
@@ -104,8 +103,8 @@ presentation ──▶ application ──▶ domain
 12. (도전 A 적용 후) 방 변경 요청에서 `find_by_id`(잠금 없음) 사용 (CONV-08)
 13. 게임 결과·승패를 저장하는 테이블·필드·API (INV-09)
 
-## 5. AGENTS.md
-저장소 루트 `AGENTS.md`의 `## 디렉토리 지도`를 이 문서 기준으로 갱신했다.
+## 5. 디렉토리 지도
+저장소 지도는 §1 디렉토리 트리를 기준으로 한다.
 
 ## 6. 스타일 기준 (UX 단계 미사용, D-019)
 
@@ -148,7 +147,7 @@ presentation ──▶ application ──▶ domain
 
 ## 8. 교안 수준 규칙 (D-020, DB·BE·FE 공통)
 
-구현 코드는 수강 중인 **KANT 백엔드 교안 1~6장**(1년차 부트캠프 대상)과 그 예제 코드로 이해할 수 있는 수준으로 쓴다. 스킬 문서의 예시·기본값보다 이 절이 우선한다(AGENTS.md 규칙 7·9).
+구현 코드는 수강 중인 **KANT 백엔드 교안 1~6장**(1년차 부트캠프 대상)과 그 예제 코드로 이해할 수 있는 수준으로 쓴다. 스킬 문서의 예시·기본값보다 이 절이 우선한다.
 
 | 등급 | 기준 | 처리 |
 |---|---|---|
@@ -166,7 +165,7 @@ presentation ──▶ application ──▶ domain
 | 4장 | `APIRouter(prefix, tags, dependencies)`·`include_router`, `Depends`·`Header` 의존성, `@app.middleware("http")`(전처리·`call_next`·후처리, 처리 시간 헤더), `add_middleware`·등록 순서, `TrustedHostMiddleware`, `UploadFile`·`File`, `BackgroundTasks.add_task`, `StreamingResponse`(async 제너레이터), `aiofiles` |
 | 5장 | docker-compose PostgreSQL, `create_async_engine`(`pool_size`·`max_overflow`·`pool_timeout`·`pool_recycle`·`pool_pre_ping`), `async_sessionmaker(expire_on_commit=False)`, `DeclarativeBase`, `get_db`(yield·rollback·close), `Mapped`·`mapped_column`(`primary_key`·`nullable`·`unique`·`index`·`server_default`·`String`·`Integer`·`Boolean`), `ForeignKey(ondelete=)`, `relationship(back_populates, cascade, uselist, secondary)`, `select().where().offset().limit()`, `db.get`, `scalars().all()`·`scalar_one_or_none()`, `add`·`flush`·`commit`·`refresh`·`delete`, `joinedload`·`selectinload`(N+1), `with_for_update()`, `engine.begin()`+`run_sync(create_all)`, `engine.dispose()`, `from_attributes` |
 | 6장 | 인증·인가, bcrypt(passlib `CryptContext`, `bcrypt==4.0.1`), JWT(pyjwt `encode`·`decode`, `ExpiredSignatureError`·`InvalidTokenError`), access·refresh 토큰과 `token_type`, `OAuth2PasswordBearer`·`OAuth2PasswordRequestForm`, `get_current_user` 의존성, `WWW-Authenticate` 헤더, 블랙리스트 로그아웃·`/refresh` |
-| 7장(발제) | 도메인 중심 4계층(presentation·application·domain·infrastructure), 레포지토리(ORM ↔ 도메인 변환), 서비스의 commit, CORS·캐싱 미들웨어, 배포 — 교안 링크에는 아직 없지만 발제(`kant-rubric.md` §2·§4)가 요구하므로 A로 보지 않는다 |
+| 7장(발제) | 도메인 중심 4계층(presentation·application·domain·infrastructure), 레포지토리(ORM ↔ 도메인 변환), 서비스의 commit, CORS·캐싱 미들웨어, 배포 — 교안 링크에는 아직 없지만 발제 문서(§2·§4)가 요구하므로 A로 보지 않는다 |
 
 - FE(Jinja2·JS): 교안 3장 템플릿 문법을 쓴다. JS는 교안에 없으므로 `fetch`·`localStorage`·`setInterval`·DOM 조작 정도로 단순하게 쓰고 외부 라이브러리·번들러는 쓰지 않는다.
-- 판단이 애매하면 교안 방식으로 쓰고 브리핑 "구현 중 자율 결정"에 적는다. 교안 방식으로 같은 결과를 낼 수 없으면 추측하지 말고 사용자에게 확인한다(AGENTS.md 규칙 7).
+- 판단이 애매하면 교안 방식으로 쓰고 브리핑 "구현 중 자율 결정"에 적는다. 교안 방식으로 같은 결과를 낼 수 없으면 추측하지 말고 사용자에게 확인한다.

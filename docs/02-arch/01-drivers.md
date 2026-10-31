@@ -1,6 +1,6 @@
 # 01. 아키텍처 드라이버 (A1)
 
-- 입력: `docs/01-pm/04-scope.md` Architect 요약 블록, `03-domain.md` §6, `06-acceptance-criteria.md` §2, 발제 `kant-rubric.md`
+- 입력: `docs/01-pm/04-scope.md` Architect 요약 블록, `03-domain.md` §6, `06-acceptance-criteria.md` §2, 발제 문서
 - A0 입력 검증: 미해결 Q 0, `[PENDING]` 결정 0, Must US 전부 AC 보유, 평가표 매트릭스 빈 행 0, 저장소에 `src/` 없음(발제 구조와 충돌하는 파일 없음). 결손 없음.
 
 ## 1. →ARCH 질문 배정
