@@ -1,6 +1,6 @@
 ---
 stage: BE
-tickets: [TKT-BE-M2-01, TKT-BE-M3-01, TKT-BE-M3-02, TKT-BE-M3-03, TKT-BE-M3-04, TKT-BE-M3-05, TKT-BE-M4-01, TKT-BE-M4-02, TKT-BE-M4-03, TKT-BE-M5-01, TKT-BE-M8-01, TKT-BE-M9-01]
+tickets: [TKT-BE-M2-01, TKT-BE-M3-01, TKT-BE-M3-02, TKT-BE-M3-03, TKT-BE-M3-04, TKT-BE-M3-05, TKT-BE-M4-01, TKT-BE-M4-02, TKT-BE-M4-03, TKT-BE-M5-01, TKT-BE-M8-01, TKT-BE-M9-01, TKT-QA-M10-01 지적 반영]
 status: done
 inputs_read: [AR-MAP, AR-HAND, AR-SYS, AR-API, AR-CONV, AR-GATE, AR-ADR, DB-BRIEF, PM-DOMAIN, PM-AC, PM-DEC]
 next_readers: [DB, FE, QA]
@@ -45,6 +45,9 @@ next_readers: [DB, FE, QA]
 | | 팀 정원을 `Team.add`가 거부 | 충족 | 임시 스크립트: 4명 방에서 A팀 이동 → `TeamFullError`, 참가 순서별 팀 A·A·B·B, 나가기·이동 후 팀 인원 갱신 |
 
 ## 만든 것
+### TKT-QA-M10-01 지적 반영 (410 캐시, 2026-10-31)
+- `src/main.py` `handle_gone_error`: 410 응답에 `Cache-Control: no-store` 헤더를 붙였다. 헤더가 없으면 Chrome이 410을 캐시해, DB를 다시 만든 뒤 같은 번호의 활성 방 상세가 "해산됨"으로 보였다(QA 재현). 본문 형식·상태 코드는 그대로다. `04-interfaces-api.md` §6 410 행에 반영
+
 ### TKT-BE-M9-01 (D-025, ADR-011)
 - `src/rooms/domain/participation.py`: `Participation`에서 `id` 필드를 뺐다. 식별은 (`room_id`, `user_id`)다. `left_at`은 그대로이며, 레포지토리 `save`가 이 값을 보고 끝난 참가를 `participation_logs`로 옮긴다(TKT-DB-M9-01)
 - `src/rooms/domain/room.py`: `create`·`join`의 `Participation(...)` 생성에서 `id=None`을 뺐다. 규칙·검사 순서는 그대로다
@@ -358,6 +361,10 @@ next_readers: [DB, FE, QA]
 - pytest는 `tests/`가 없어 "No files were found in testpaths" 경고를 낸다. QA가 `tests/`를 만들면 사라진다(정상).
 
 ## 검증 결과
+
+### TKT-QA-M10-01 지적 반영 (410 캐시)
+- GATE-05: `ruff check src tests` 통과, `ruff format --check src tests` 통과 / `uv run pytest -q`: 76 passed, 88 skipped(PostgreSQL 없음)
+- 재현 방법 재실행: QA 브리핑 이슈 1 참고(TKT-QA-M10-01 재검증 기록)
 
 ### TKT-BE-M9-01
 - GATE-02·07: 명령 그대로 0줄 / GATE-05: `ruff check src tests` 통과, `ruff format --check src tests` 49 files already formatted

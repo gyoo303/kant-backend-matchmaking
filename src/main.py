@@ -75,7 +75,8 @@ async def handle_not_found_error(_: Request, exc: NotFoundError) -> JSONResponse
 
 @app.exception_handler(GoneError)
 async def handle_gone_error(_: Request, exc: GoneError) -> JSONResponse:
-    return _detail(410, exc.message)
+    """410은 브라우저가 캐시할 수 있다. DB 재생성 뒤 같은 방 번호가 해산으로 보이지 않게 막는다."""
+    return _detail(410, exc.message, headers={"Cache-Control": "no-store"})
 
 
 @app.exception_handler(AuthenticationError)

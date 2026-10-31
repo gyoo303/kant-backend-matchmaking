@@ -19,6 +19,12 @@ function clearLoadError() {
   }
 }
 
+// 거부 사유 등 다른 오류 문구. 조회 실패 안내를 덮어쓰므로, 다음 조회 성공이 이 문구를 지우지 않게 표시를 내린다.
+function showError(message) {
+  showingLoadError = false;
+  showNotice(message, "error");
+}
+
 // [새로고침] 버튼에 조회 함수를 연결한다. 조회가 끝날 때까지 버튼을 막아 요청이 겹치지 않게 한다.
 // 돌려주는 함수를 화면 진입 때와 변경 요청 실패 뒤에도 부른다.
 function setupRefreshButton(load) {
@@ -128,7 +134,7 @@ async function joinRoom(roomId, button) {
     location.href = "/rooms/" + roomId;
     return;
   }
-  showNotice(errorMessage(result), "error");
+  showError(errorMessage(result));
   button.disabled = false;
 }
 
@@ -144,7 +150,7 @@ async function createRoom(event) {
     location.href = "/rooms/" + result.data.id;
     return;
   }
-  showNotice(errorMessage(result), "error");
+  showError(errorMessage(result));
   button.disabled = false;
 }
 
@@ -155,7 +161,7 @@ async function loadRoomList(cond) {
   if (rooms.ok) {
     renderRoomPage(cond, rooms.data);
   } else if (rooms.status !== 0) {
-    showNotice(errorMessage(rooms), "error");
+    showError(errorMessage(rooms));
   }
   if (mine.ok) {
     renderCurrentRoom(mine.data);
@@ -270,11 +276,11 @@ function handleDetailError(result) {
     location.href = "/?notice=dissolved";
   } else if (result.status === 404) {
     document.getElementById("room").hidden = true;
-    showNotice("방을 찾을 수 없습니다", "error");
+    showError("방을 찾을 수 없습니다");
   } else if (result.status === 0) {
     showLoadError();
   } else {
-    showNotice(errorMessage(result), "error");
+    showError(errorMessage(result));
   }
 }
 
@@ -291,7 +297,7 @@ async function loadRoomDetail() {
 // 변경 요청이 거부되면 사유를 보이고 상세를 한 번 다시 조회한다(SEQ-13).
 // 해산된 방이면 서버는 400을 주고, 이어진 조회가 410이라 목록으로 간다(AC-16-4).
 async function showChangeFailure(result) {
-  showNotice(errorMessage(result), "error");
+  showError(errorMessage(result));
   updateDetailButtons();
   await refreshDetail();
 }

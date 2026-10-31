@@ -71,10 +71,16 @@ next_readers: [QA]
 - 없음
 
 ### 변경 범위
-- 수정: `src/static/js/rooms.js`, `src/templates/rooms/list.html`, `src/templates/rooms/detail.html`
+- 수정: `src/static/js/rooms.js`(검수 지적 반영 포함), `src/templates/rooms/list.html`, `src/templates/rooms/detail.html`
 - 삭제: `src/static/js/polling.js`
 - 추가: `docs/05-frontend/briefing-TKT-FE-M10-01.md`
 - 공통 파일(`base.html`, `api.js`, `app.css`)·서버 코드 변경 없음, 새 의존성 없음
+
+### 검수 지적 반영 (TKT-QA-M10-01, 2026-10-31)
+- 막힘 0 · 불편 1(이슈 2, 하) — 이번 PR에서 고침
+- 이슈 2 "조회 실패 안내 뒤 변경 거부 사유가 사라짐": `rooms.js`에 `showError(message)`를 두어, 거부 사유·접근 불가 등 오류 문구를 보일 때 조회 실패 표시(`showingLoadError`)를 내린다. 다음 조회 성공의 `clearLoadError()`가 그 문구를 지우지 않는다. 목록의 [참가]·[만들기]·목록 조회 오류, 상세의 404·기타 오류·변경 거부가 모두 이 함수를 쓴다
+- 재검증(같은 재현 방법): 통신 실패로 [새로고침] → 안내 → 복구 후 정원 찬 팀으로 이동 → "선택한 팀의 정원이 찼습니다"가 남음, 구성 4/4로 다시 그려짐. 회귀: 통신 실패 안내는 다음 [새로고침] 성공 때 여전히 사라짐, 해산 방 [새로고침] → `/?notice=dissolved`. JS 오류 0
+- 이슈 1(410 캐시)은 BE `src/main.py` 수정(백엔드 브리핑)
 
 ### 확인하지 못한 것
 - PostgreSQL 실제 DB에서의 화면 동작(TKT-QA-M10-01)

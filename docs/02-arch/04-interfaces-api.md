@@ -286,7 +286,7 @@ class Participation:
 | 400 | `DomainRuleError` 하위: 입력 규칙 위반, 정원·팀 정원, 삭제된 방 변경, 방장·참가자가 아닌 요청 | 도메인 → 전역 핸들러 |
 | 401 | `AuthenticationError`: 서명 오류·만료·refresh 토큰으로 API 접근·블랙리스트·회원 없음, 로그인 실패. 헤더 없음은 `OAuth2PasswordBearer` 기본 401 | 인증 의존성, `AuthApplicationService.login`·`refresh` |
 | 404 | `NotFoundError`: 없는 방, EMPTY로 삭제된 방 상세, 보관 정보 권한 없음 | 응용 서비스 |
-| 410 | `GoneError`: GAME_STARTED로 삭제된 방 상세 조회 (화면의 해산 신호, SEQ-13) | `RoomQueryService.get_room_detail` |
+| 410 | `GoneError`: GAME_STARTED로 삭제된 방 상세 조회 (화면의 해산 신호, SEQ-13). 응답 헤더 `Cache-Control: no-store`(브라우저가 410을 캐시해 DB 재생성 뒤 재사용된 방 번호를 해산으로 보이는 것을 막음, TKT-QA-M10-01) | `RoomQueryService.get_room_detail` → 전역 핸들러 |
 | 422 | `RequestValidationError` → `{"detail": "<loc 마지막>: <msg>; …"}`(최대 3개) | 전역 핸들러 (ADR-004) |
 | 500 | 처리하지 않은 예외 → `{"detail": "서버 오류가 발생했습니다"}`. 스택은 로그에만 | 전역 핸들러 (NFR-02) |
 
