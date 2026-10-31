@@ -1,9 +1,10 @@
-// 방 화면 동작 (SCR-03 공개 방 목록, SCR-04 방 상세). api.js·polling.js 다음에 불러온다.
+// 방 화면 동작 (SCR-03 공개 방 목록, SCR-04 방 상세). api.js 다음에 불러온다.
 // 사용자가 입력한 문자열(방 제목·닉네임)은 textContent로만 넣는다.
+// 자동 조회는 없다. 화면 진입·[새로고침]·변경 요청 실패 직후에만 조회한다(SEQ-13, ADR-012).
 
 const FAILED_TO_LOAD = "최신 정보를 불러오지 못했습니다";
 
-// 폴링 실패 안내는 다음 조회가 성공하면 지운다. 서버가 넘긴 안내(해산 등)는 그대로 둔다.
+// 조회 실패 안내는 다음 조회가 성공하면 지운다. 서버가 넘긴 안내(해산 등)는 그대로 둔다.
 let showingLoadError = false;
 
 function showLoadError() {
@@ -16,6 +17,19 @@ function clearLoadError() {
     showingLoadError = false;
     hideNotice();
   }
+}
+
+// [새로고침] 버튼에 조회 함수를 연결한다. 조회가 끝날 때까지 버튼을 막아 요청이 겹치지 않게 한다.
+// 돌려주는 함수를 화면 진입 때와 변경 요청 실패 뒤에도 부른다.
+function setupRefreshButton(load) {
+  const button = document.getElementById("refresh-button");
+  async function refresh() {
+    button.disabled = true;
+    await load();
+    button.disabled = false;
+  }
+  button.addEventListener("click", refresh);
+  return refresh;
 }
 
 // ---------------------------------------------------------------------------
@@ -85,15 +99,7 @@ function renderRoomRows(rooms) {
   });
 }
 
-// 1초마다 다시 그리면 키보드 포커스가 사라지므로, 내용이 바뀌었을 때만 다시 그린다.
-let lastRoomPage = "";
-
 function renderRoomPage(cond, data) {
-  const snapshot = JSON.stringify(data);
-  if (snapshot === lastRoomPage) {
-    return;
-  }
-  lastRoomPage = snapshot;
   document.getElementById("room-total").textContent = "전체 " + data.total + "개";
   document.getElementById("room-empty").hidden = data.items.length > 0;
   renderRoomRows(data.items);
@@ -142,6 +148,25 @@ async function createRoom(event) {
   button.disabled = false;
 }
 
+// 목록과 현재 참가 방을 함께 조회한다(SEQ-13). 검색·페이지 변경은 URL 이동이라 화면 진입으로 처리된다.
+async function loadRoomList(cond) {
+  const rooms = await apiRequest("GET", "/api/rooms?" + listQuery(cond, cond.page));
+  const mine = await apiRequest("GET", "/api/me/room");
+  if (rooms.ok) {
+    renderRoomPage(cond, rooms.data);
+  } else if (rooms.status !== 0) {
+    showNotice(errorMessage(rooms), "error");
+  }
+  if (mine.ok) {
+    renderCurrentRoom(mine.data);
+  }
+  if (rooms.status === 0 || mine.status === 0) {
+    showLoadError();
+  } else if (rooms.ok && mine.ok) {
+    clearLoadError();
+  }
+}
+
 function initRoomListPage() {
   if (!getAccessToken()) {
     return;
@@ -149,27 +174,10 @@ function initRoomListPage() {
   const cond = readListCondition();
   document.getElementById("create-form").addEventListener("submit", createRoom);
 
-  // 목록과 현재 참가 방을 1초마다 함께 조회한다(SEQ-13).
-  startPolling(async function (isCurrent) {
-    const rooms = await apiRequest("GET", "/api/rooms?" + listQuery(cond, cond.page));
-    const mine = await apiRequest("GET", "/api/me/room");
-    if (!isCurrent()) {
-      return;
-    }
-    if (rooms.ok) {
-      renderRoomPage(cond, rooms.data);
-    } else if (rooms.status !== 0) {
-      showNotice(errorMessage(rooms), "error");
-    }
-    if (mine.ok) {
-      renderCurrentRoom(mine.data);
-    }
-    if (rooms.status === 0 || mine.status === 0) {
-      showLoadError();
-    } else if (rooms.ok && mine.ok) {
-      clearLoadError();
-    }
+  const refresh = setupRefreshButton(function () {
+    return loadRoomList(cond);
   });
+  refresh();
 }
 
 // ---------------------------------------------------------------------------
@@ -178,11 +186,11 @@ function initRoomListPage() {
 
 const TEAM_SIZE = 2;
 
-let detailPolling = null;
 let lastDetail = null;
-let lastDetailSnapshot = "";
-// 변경 요청을 보내는 동안 버튼을 막는다. 폴링이 다시 그려도 풀리지 않게 따로 둔다.
+// 변경 요청을 보내는 동안 버튼을 막는다. 조회가 다시 그려도 풀리지 않게 따로 둔다.
 let detailBusy = false;
+// 상세 조회([새로고침]과 같은 동작). initRoomDetailPage에서 정한다.
+let refreshDetail = null;
 
 function detailRoomId() {
   return document.getElementById("room").dataset.roomId;
@@ -241,44 +249,51 @@ function updateDetailButtons() {
   document.getElementById("join-button").disabled = detailBusy;
 }
 
-// 1초마다 다시 그리면 포커스가 사라지므로 바뀌었을 때만 다시 그린다. 제목 변경 입력칸은 건드리지 않는다.
+// 제목 변경 입력칸은 건드리지 않는다.
 function renderDetail(detail) {
   lastDetail = detail;
-  const snapshot = JSON.stringify(detail);
-  if (snapshot !== lastDetailSnapshot) {
-    lastDetailSnapshot = snapshot;
-    document.getElementById("room-title").textContent = detail.title;
-    document.getElementById("room-count").textContent = detail.current_count + "/" + detail.capacity;
-    renderTeam("A", teamMembers(detail, "A"));
-    renderTeam("B", teamMembers(detail, "B"));
-  }
+  document.getElementById("room-title").textContent = detail.title;
+  document.getElementById("room-count").textContent = detail.current_count + "/" + detail.capacity;
+  renderTeam("A", teamMembers(detail, "A"));
+  renderTeam("B", teamMembers(detail, "B"));
   updateDetailButtons();
   document.getElementById("room").hidden = false;
-}
-
-function stopDetailPolling() {
-  if (detailPolling !== null) {
-    detailPolling.stop();
-  }
 }
 
 // 410: 게임 시작으로 해산 → 목록 + 해산 안내(AC-16-4). 404: 해산과 다른 안내(AC-16-7).
 // 401: api.js가 로그인 화면으로 보낸다(AC-16-6). 통신 실패: 마지막 정보 유지(AC-16-5).
 function handleDetailError(result) {
+  if (result.status === 401) {
+    return;
+  }
   if (result.status === 410) {
-    stopDetailPolling();
     location.href = "/?notice=dissolved";
   } else if (result.status === 404) {
-    stopDetailPolling();
     document.getElementById("room").hidden = true;
     showNotice("방을 찾을 수 없습니다", "error");
-  } else if (result.status === 401) {
-    stopDetailPolling();
   } else if (result.status === 0) {
     showLoadError();
   } else {
     showNotice(errorMessage(result), "error");
   }
+}
+
+async function loadRoomDetail() {
+  const result = await apiRequest("GET", "/api/rooms/" + detailRoomId());
+  if (result.ok) {
+    clearLoadError();
+    renderDetail(result.data);
+  } else {
+    handleDetailError(result);
+  }
+}
+
+// 변경 요청이 거부되면 사유를 보이고 상세를 한 번 다시 조회한다(SEQ-13).
+// 해산된 방이면 서버는 400을 주고, 이어진 조회가 410이라 목록으로 간다(AC-16-4).
+async function showChangeFailure(result) {
+  showNotice(errorMessage(result), "error");
+  updateDetailButtons();
+  await refreshDetail();
 }
 
 // 변경 요청 공통: 보내는 동안 버튼을 막고, 성공하면 응답(RoomDetailResponse)으로 다시 그린다.
@@ -291,8 +306,7 @@ async function sendDetailChange(method, url, body) {
     hideNotice();
     renderDetail(result.data);
   } else {
-    showNotice(errorMessage(result), "error");
-    updateDetailButtons();
+    await showChangeFailure(result);
   }
   return result;
 }
@@ -323,28 +337,24 @@ async function leaveRoom() {
   updateDetailButtons();
   const result = await apiRequest("DELETE", "/api/rooms/" + detailRoomId() + "/participants/me");
   if (result.ok) {
-    stopDetailPolling();
     location.href = "/";
     return;
   }
   detailBusy = false;
-  showNotice(errorMessage(result), "error");
-  updateDetailButtons();
+  await showChangeFailure(result);
 }
 
-// 게임 시작 성공 → 조회 중단 후 공개 방 목록(AC-16-3)
+// 게임 시작 성공 → 공개 방 목록 + 해산 안내(AC-16-3)
 async function startGame() {
   detailBusy = true;
   updateDetailButtons();
   const result = await apiRequest("POST", "/api/rooms/" + detailRoomId() + "/start");
   if (result.ok) {
-    stopDetailPolling();
-    location.href = "/";
+    location.href = "/?notice=dissolved";
     return;
   }
   detailBusy = false;
-  showNotice(errorMessage(result), "error");
-  updateDetailButtons();
+  await showChangeFailure(result);
 }
 
 function initRoomDetailPage() {
@@ -357,17 +367,7 @@ function initRoomDetailPage() {
   document.getElementById("start-button").addEventListener("click", startGame);
   document.getElementById("join-button").addEventListener("click", joinFromDetail);
 
-  // 상세를 1초마다 조회한다(SEQ-13). 다른 사람의 참가·이동이 2초 안에 보인다(AC-16-1).
-  detailPolling = startPolling(async function (isCurrent) {
-    const result = await apiRequest("GET", "/api/rooms/" + detailRoomId());
-    if (!isCurrent()) {
-      return;
-    }
-    if (result.ok) {
-      clearLoadError();
-      renderDetail(result.data);
-    } else {
-      handleDetailError(result);
-    }
-  });
+  // 다른 사람의 참가·이동은 [새로고침]으로 보인다(AC-16-1).
+  refreshDetail = setupRefreshButton(loadRoomDetail);
+  refreshDetail();
 }

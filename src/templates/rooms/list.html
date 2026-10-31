@@ -3,6 +3,10 @@
 {% block title %}공개 방 목록 · 2vs2 매치메이킹{% endblock %}
 
 {% block content %}
+{# [새로고침]: 자동 조회 대신 누를 때만 다시 조회한다(SEQ-13, ADR-012, AC-15-6). #}
+<div class="form-row">
+  <button type="button" id="refresh-button" class="secondary">새로고침</button>
+</div>
 <p id="current-room" class="card" hidden>
   참가 중인 방: <a id="current-room-link" href="#"></a>
 </p>
@@ -70,7 +74,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', path='js/polling.js') }}"></script>
 <script src="{{ url_for('static', path='js/rooms.js') }}"></script>
 <script>
   document.addEventListener("DOMContentLoaded", initRoomListPage);

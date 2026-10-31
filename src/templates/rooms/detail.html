@@ -3,6 +3,10 @@
 {% block title %}방 상세 · 2vs2 매치메이킹{% endblock %}
 
 {% block content %}
+{# [새로고침]: 자동 조회 대신 누를 때만 다시 조회한다(SEQ-13, ADR-012, AC-16-1). #}
+<div class="form-row">
+  <button type="button" id="refresh-button" class="secondary">새로고침</button>
+</div>
 <section class="card" id="room" data-room-id="{{ room_id }}" aria-labelledby="room-title" hidden>
   <h1 id="room-title"></h1>
   <p class="muted">인원 <span id="room-count"></span></p>
@@ -55,7 +59,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', path='js/polling.js') }}"></script>
 <script src="{{ url_for('static', path='js/rooms.js') }}"></script>
 <script>
   document.addEventListener("DOMContentLoaded", initRoomDetailPage);
