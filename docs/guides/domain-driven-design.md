@@ -106,7 +106,7 @@ def join(self, user_id: int, current_participation: Participation | None, now: d
 | 용어 | 쉬운 설명 | 이 프로젝트에서 |
 |---|---|---|
 | **유비쿼터스 언어** (공통 언어) | 기획자·개발자·코드가 **같은 단어**를 쓰자는 약속. 문서의 "방장"이 코드에서도 `host`여야 한다 | PM 용어집 `docs/01-pm/03-domain.md` §3 |
-| **엔티티** (Entity) | **식별자(id)** 로 구분되는 객체. 내용이 바뀌어도 같은 객체 | `User`, `Room`, `Participation` |
+| **엔티티** (Entity) | **식별자** 로 구분되는 객체. 내용이 바뀌어도 같은 객체 | `User`, `Room`(id), `Participation`(방 + 회원) |
 | **값 객체** (Value Object) | **값 자체**로 구분되는 객체. 바뀌지 않고, 같은 값이면 같은 것 | `RoomTitle`, `TeamSide`, `DeleteReason` |
 | **애그리거트** (Aggregate, 집합) | 함께 바뀌어야 하는 객체들의 묶음. 바깥에서는 **루트** 하나로만 다룬다 | `Room`(루트)이 `Participation`들을 묶는다 |
 | **불변 규칙** (Invariant) | 언제나 참이어야 하는 규칙 | `INV-01`~`INV-15` (예: 활성 방 인원은 1~4명) |
@@ -173,7 +173,8 @@ flowchart LR
 |---|---|---|
 | 방 | `Room` | 정원 4명 고정의 2vs2 공개 방. 참가 기록을 묶는 집합의 루트 |
 | 방 제목 | `RoomTitle` (값 객체) | 앞뒤 공백 제거 후 1~20자 |
-| 참가(이용 기록) | `Participation` | 한 회원이 한 방에 한 번 입장한 기록. 퇴장 시각이 없으면 '참가 중' |
+| 참가(이용 기록) | `Participation` | 한 회원이 한 방에 한 번 입장한 기록. 퇴장 시각이 없으면 '참가 중'. 참가 중인 기록은 (방, 회원)으로 구분 |
+| 이용 로그 | — | 끝난 이용 기록의 보관본. 같은 방에 로그가 여러 건이면 재입장 (D-025) |
 | 소프트 삭제 | `Room._soft_delete()` | 행을 남기고 삭제 시각·사유를 기록 |
 
 문서의 단어와 코드의 이름이 1:1로 맞아요. 기획 회의에서 "참가 기록"이라고 말하면 개발자는 바로 `Participation`을 떠올릴 수 있어요.
@@ -273,7 +274,7 @@ classDiagram
         remove()
     }
     class Participation {
-        id
+        room_id
         user_id
         join_order
         team: TeamSide
@@ -299,7 +300,7 @@ classDiagram
 
 ### 4.2 엔티티와 값 객체
 
-**엔티티**: `Room`은 제목이 바뀌어도, 참가자가 바뀌어도 `id`가 같으면 같은 방이에요.
+**엔티티**: `Room`은 제목이 바뀌어도, 참가자가 바뀌어도 `id`가 같으면 같은 방이에요. `Participation`은 따로 `id`가 없고 **(방, 회원)** 짝으로 구분해요. 한 회원은 한 방에 동시에 한 번만 참가할 수 있으니 이 짝이면 충분해요(D-025, ADR-011).
 
 **값 객체**: `RoomTitle`은 "값 그 자체"예요. 만들 때 규칙을 검사하고, 만든 뒤에는 바꿀 수 없어요(`frozen=True`).
 
@@ -479,6 +480,8 @@ def _to_domain(cls, model: RoomModel) -> Room:
     )
 ```
 
+저장할 때(`save`)는 반대로 번역해요. 나가기·게임 시작으로 **끝난 참가**(`left_at`이 채워진 `Participation`)는 `participation_logs`(이용 로그)에 한 행으로 넣고, `participations`(현재 참가) 행은 지워요. 도메인은 "끝났다"는 사실만 알고, 어느 테이블로 옮길지는 레포지토리가 정해요(D-025, ADR-011).
+
 레포지토리는 `flush`까지만 하고, **commit은 응용 서비스가 한 번만** 해요. "방 참가" 같은 업무 하나가 통째로 저장되거나 통째로 취소되게 하려는 거예요(PM §5.3 "함께 처리되는 업무 단위").
 
 ### 5.5 도메인 예외 → HTTP 응답
@@ -551,7 +554,7 @@ async def change_team(self, room_id, user_id, team):
 <details>
 <summary>정답 보기</summary>
 
-- 엔티티: `User`, `Participation` (id로 구분, 상태가 바뀜)
+- 엔티티: `User`(id로 구분), `Participation`((방, 회원)으로 구분) — 둘 다 상태가 바뀜
 - 값 객체: `RoomTitle`, `TeamSide` (값으로 구분, 바뀌지 않음)
 
 </details>

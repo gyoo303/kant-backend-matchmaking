@@ -126,7 +126,7 @@ ERD의 가장 중요한 근거예요.
 <details>
 <summary>✅ 단계 1 정리</summary>
 
-- 테이블: **회원, 방, 참가, 토큰 블랙리스트**
+- 테이블: **회원, 방, 참가, 토큰 블랙리스트** — 이 저장소는 뒤에 참가를 현재 참가 + 이용 로그 두 테이블로 나눴어요(§9, D-025·ADR-011)
 - 방장 → 방의 **속성**(누가 방장인지)
 - 팀 → 참가의 **속성**(A 또는 B) — 처음 설계 기준. 이 저장소는 튜터 피드백 뒤 팀을 별도 테이블로 바꿨어요(§9, D-023·ADR-010). 둘 다 가능한 답이에요
 - 입장 순서 → 참가의 **속성**
@@ -370,7 +370,9 @@ ERD 도구에서 선을 그어요.
 - 방 삭제: **C** — `deleted_at` + `delete_reason`
   - 활성 = `deleted_at`이 비어 있음
   - 둘 다 비거나 둘 다 차 있어야 함(INV-07)
-- 참가: **A** — 테이블 하나, `left_at`이 비면 참가 중
+- 참가: **B** — 현재 참가 테이블(PK = 방 + 회원) + 이용 로그 테이블.
+  나가기·해산 때 행을 로그로 옮긴다(한 트랜잭션, D-025).
+  처음 설계는 A(테이블 하나)였고, 튜터 질문 뒤 바꿨어요(§9)
 - 승패 컬럼: **없음** (INV-09)
 
 </details>
@@ -489,14 +491,16 @@ ERD 위에서 행이 어떻게 바뀌는지 손으로 따라가요.
 <details>
 <summary>✅ 단계 6 정리</summary>
 
-- 현재 인원: 참가 중(`left_at` 빈) 행을 방별로 셈
+- 현재 인원: 현재 참가 테이블의 행을 방별로 셈
 - 닉네임: 참가.회원 id → 회원 테이블에서 읽음
 - 방장 위임: 남은 참가 중 행에서 입장 순서가
   가장 작은 사람 → 방.방장 회원 id 변경
-- 재입장: 행 2개(옛 기록 + 새 기록),
+- 나가기: 현재 참가 행을 지우고, 이용 로그에
+  같은 내용 + 퇴장 시각으로 한 행 추가
+- 재입장: 이용 로그 1행(옛 기록) + 현재 참가 1행(새 기록),
   새 입장 순서 = 방.마지막 입장 순서 + 1
 - 게임 시작: 방 `deleted_at`·`delete_reason`,
-  참가 4행 `left_at` 채움, 새 행 없음
+  현재 참가 4행 → 이용 로그 4행. 결과·승패 행은 없음
 - 로그아웃: 블랙리스트에만 행 추가, 참가는 그대로
 
 </details>
@@ -555,13 +559,27 @@ Table teams {
 }
 
 Table participations {
-  id integer [pk, increment]
   room_id integer [not null, ref: > rooms.id]
-  user_id integer [not null, ref: > users.id]
+  user_id integer [not null, unique, ref: > users.id, note: '한 회원 한 방']
   join_order integer [not null, note: '방 안 입장 순서']
   team_id integer [not null, ref: > teams.id, note: '같은 방의 팀']
   joined_at timestamptz [not null]
-  left_at timestamptz [null, note: '비면 참가 중']
+  Note: '지금 참가 중인 회원만. 행이 있으면 참가 중'
+
+  indexes {
+    (room_id, user_id) [pk]
+  }
+}
+
+Table participation_logs {
+  id integer [pk, increment]
+  room_id integer [not null, ref: > rooms.id]
+  user_id integer [not null, ref: > users.id]
+  join_order integer [not null, note: '그 체류의 입장 순서']
+  team_id integer [not null, ref: > teams.id, note: '퇴장 때의 팀']
+  joined_at timestamptz [not null]
+  left_at timestamptz [not null]
+  Note: '끝난 이용 1건 = 1행. 같은 방이 여러 행이면 재입장'
 }
 
 Table token_blacklist {
@@ -580,14 +598,18 @@ Table token_blacklist {
 <details>
 <summary>🗣️ 실제 설계에서 고른 이유</summary>
 
-- **참가 테이블 하나** — 현재 참가와 이력을
-  같은 행으로 관리(ARCH-Q-03). 나가기는 `left_at`만 채움.
+- **현재 참가 + 이용 로그 두 테이블(D-025·ADR-011)** —
+  처음에는 테이블 하나(`left_at`이 비면 참가 중)였어요.
+  튜터 질문 뒤 현재 참가의 PK를 (방, 회원)으로 바꾸고,
+  재입장 이력은 `participation_logs`에 남기기로 했어요.
+  나가기·해산은 현재 참가 행을 지우고 로그에 한 행을
+  넣어요(한 트랜잭션). 이력 화면은 둘을 합쳐 보여 줘요.
 - **`last_join_order`를 방에 둠** — 재입장 번호를
   `MAX` 계산 대신 방의 숫자 +1로 정함.
   방을 저장할 때 함께 바뀌어 단순해요.
 - **`capacity` 컬럼** — 정원은 늘 4지만
   REQ-032·053이 "고정 정원 저장"을 요구해서 둠.
-- **현재 인원은 컬럼 없음** — 참가 중 행을 셈.
+- **현재 인원은 컬럼 없음** — 현재 참가 행을 셈.
 - **팀 테이블(튜터 피드백, D-023·ADR-010)** — 처음에는
   참가의 `team` 값(A/B)이었지만, 팀을 엔티티로 보고
   `teams`로 뺐어요. 팀 정원 2명은 컬럼이 아니라
@@ -596,8 +618,9 @@ Table token_blacklist {
 - **블랙리스트는 회원과 FK 없음** — 토큰 문자열로만 확인.
 - **CHECK 제약은 두지 않음** — 제목 길이·팀 편 값·
   삭제 상태는 도메인 클래스가 검사(D-020).
-- **한 회원 한 방 DB 보장** — 부분 유니크 인덱스는
-  도전 A에서 추가(D-018).
+- **한 회원 한 방 DB 보장** — 현재 참가의 `user_id`
+  unique(ADR-011). 동시 요청 오류를 400으로 바꾸는 일은
+  도전 A(D-018).
 
 </details>
 

@@ -1,7 +1,7 @@
 # 2vs2 매치메이킹 API 명세서 v1 (M4 인증 · 방 도메인)
 
-- 문서 버전: `0.1.0`
-- 근거: API 명세 회의 메모, DB 스키마(`docs/02-arch/03-db-schema.md`), 팀 엔티티 분리·A팀 우선 배정(D-023·D-024, ADR-010)
+- 문서 버전: `0.2.0` (참가 테이블 복합 PK·이용 로그 테이블 반영)
+- 근거: API 명세 회의 메모, DB 스키마(`docs/02-arch/03-db-schema.md`), 팀 엔티티 분리·A팀 우선 배정(D-023·D-024, ADR-010), 현재 참가와 이용 로그 분리(D-025, ADR-011)
 - 범위: 회의에서 다룬 API 9개
   - 인증 4개: 회원가입, 토큰 발급, 토큰 만료, 로그인 확인
   - 방 5개: 방 생성, 방 참가, 방 제목 변경, 팀 변경, 방 나가기
@@ -372,7 +372,7 @@ Body
 | `id` | integer | 방 ID | `rooms.id` |
 | `title` | string | 방 제목 (앞뒤 공백 제거, 1~20자) | `rooms.title` |
 | `capacity` | integer | 정원, 항상 4 | `rooms.capacity` |
-| `current_count` | integer | 현재 참가 인원 | `participations` 중 `left_at IS NULL` 개수 |
+| `current_count` | integer | 현재 참가 인원 | 그 방의 `participations` 행 수 (현재 참가만 들어 있음) |
 | `is_full` | boolean | 정원 마감 여부 | `current_count == capacity` |
 | `host_user_id` | integer | 현재 방장 회원 ID | `rooms.host_user_id` |
 | `participants` | array | 현재 참가자. A팀 먼저, 같은 팀 안에서는 입장 순서 | `participations` + `users.nickname` |
@@ -722,7 +722,7 @@ Body
 
 | 상황 | 서버가 바꾸는 값 |
 |---|---|
-| 모든 경우 | `participations.left_at` = 서버 현재 시각 |
+| 모든 경우 | 내 참가를 `participation_logs`에 한 행으로 남기고(`left_at` = 서버 현재 시각), `participations` 행은 지운다 |
 | 방장이 나감 + 남은 사람 있음 | `rooms.host_user_id` = 남은 사람 중 `join_order`가 가장 작은 회원 |
 | 마지막 사람이 나감 | `rooms.deleted_at` = 현재 시각, `rooms.delete_reason` = `"EMPTY"` |
 
@@ -763,7 +763,7 @@ Body (마지막 사람이 나가 방이 삭제된 경우)
 | 필드 | 타입 | 설명 | DB 근거 |
 |---|---|---|---|
 | `room_id` | integer | 나간 방 ID | `rooms.id` |
-| `left_at` | string(datetime) | 내 퇴장 시각 | `participations.left_at` |
+| `left_at` | string(datetime) | 내 퇴장 시각 | `participation_logs.left_at` |
 | `new_host_user_id` | integer \| null | 방장이 바뀌었으면 새 방장 ID, 아니면 `null` | `rooms.host_user_id` |
 | `room_deleted` | boolean | 이번 나가기로 방이 삭제됐는지 | `rooms.deleted_at IS NOT NULL` |
 | `deleted_at` | string(datetime) \| null | 방 삭제 시각 | `rooms.deleted_at` |
@@ -788,11 +788,15 @@ Body (마지막 사람이 나가 방이 삭제된 경우)
 
 ### Q1. `participations`의 PK를 `room_id`, `user_id` 두 개로 해야 하나? (튜터님 질문)
 
-DB 스키마는 **`id` 하나를 자동 증가 PK로** 둔다. `room_id`·`user_id`는 FK다.
+**그렇게 바꿨다(D-025, ADR-011).** `participations`의 PK는 `(room_id, user_id)`이고, `user_id`에는 unique가 걸려 있다.
 
-- 같은 회원이 같은 방에 **나갔다가 다시 들어올 수 있다.** 재입장은 새 이용 기록·새 입장 순서다(INV-10·11).
-- `(room_id, user_id)`를 PK로 하면 같은 쌍의 두 번째 행을 넣을 수 없다. 그러면 재입장 기록을 남길 수 없다.
-- "한 회원은 동시에 한 방에만"이라는 규칙은 PK가 아니라 `left_at IS NULL`인 행이 회원당 하나인지로 확인한다. 지금은 도메인 코드가 검사하고, 도전 A에서는 부분 유니크 인덱스로 DB에서도 막는다.
+- `participations`에는 **지금 참가 중인 회원만** 있다. 행이 있으면 참가 중이라서 `left_at` 컬럼이 없다.
+- 같은 쌍의 행은 하나뿐이라, 나간 기록은 이 테이블에 남길 수 없다. 그래서 나가거나 게임 시작으로 해산될 때 그 참가를 **`participation_logs`(이용 로그)**에 한 행으로 옮기고 `participations` 행을 지운다. 두 일은 한 트랜잭션이다.
+- 같은 회원이 같은 방에 다시 들어오면 `participations`에 새 행이 생기고, 새 입장 순서를 받는다(INV-11). 같은 방의 로그가 여러 행이면 재입장이다.
+- "한 회원은 동시에 한 방에만"(INV-04)은 도메인 코드가 검사하고, DB에서는 `participations.user_id` unique가 막는다.
+- 이용 이력은 "현재 참가 + 이용 로그"를 합쳐 보여 준다. 이력 항목에는 기록 ID(`participation_id`)를 넣지 않는다.
+
+`participation_logs` 컬럼: `id`(PK), `room_id`, `user_id`, `join_order`, `team_id`(퇴장 때의 팀), `joined_at`, `left_at`.
 
 ### Q2. 참가할 때 team 정보를 못 받는 게 맞나?
 
