@@ -70,7 +70,20 @@ async def test_ac_13_3_rejoin_same_room_creates_two_records(client, make_users):
 
     items = (await get_history(client, me)).json()["items"]
     assert [item["room_id"] for item in items] == [room_id, room_id]
-    assert items[0]["participation_id"] != items[1]["participation_id"]
+    # 다시 들어온 참가(현재)와 이전 참가(이용 로그)가 따로 보인다 (D-025)
+    assert items[0]["is_current"] is True and items[1]["is_current"] is False
+
+
+async def test_ac_13_5_history_item_has_no_record_id(client, make_users):
+    me, host = await make_users(2)
+    room_id = await create_room(client, host)
+    await join(client, room_id, me)
+    await leave(client, room_id, me)
+    await join(client, room_id, me)
+
+    items = (await get_history(client, me)).json()["items"]
+    fields = {"room_id", "room_title", "joined_at", "left_at", "is_current", "room_deleted"}
+    assert all(set(item) == fields for item in items)
 
 
 async def test_ac_13_4_history_size_51_is_422(client, make_users):

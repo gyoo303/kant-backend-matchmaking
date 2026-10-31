@@ -388,6 +388,7 @@ async def test_ac_06_1_start_game_dissolves_room_without_results(client, make_us
         "rooms",
         "teams",
         "participations",
+        "participation_logs",
     }
 
 
@@ -602,7 +603,7 @@ async def count_seed_rows(session) -> dict[str, int]:
     from sqlalchemy import text
 
     counts = {}
-    for table in ("users", "rooms", "teams", "participations"):
+    for table in ("users", "rooms", "teams", "participations", "participation_logs"):
         counts[table] = (await session.execute(text(f"SELECT COUNT(*) FROM {table}"))).scalar_one()
     return counts
 
@@ -622,17 +623,84 @@ async def test_nfr_06_seed_twenty_rows_and_idempotent(session_factory):
             await session.execute(
                 text(
                     "SELECT COUNT(*) FROM rooms r WHERE r.deleted_at IS NULL AND "
-                    "(SELECT COUNT(*) FROM participations p "
-                    "WHERE p.room_id = r.id AND p.left_at IS NULL) = 4"
+                    "(SELECT COUNT(*) FROM participations p WHERE p.room_id = r.id) = 4"
                 )
             )
         ).scalar_one()
     assert sum(first.values()) >= 20
     assert first["rooms"] > 0 and four_player_rooms >= 1
     assert first["teams"] == first["rooms"] * 2  # 방마다 A·B (ADR-010)
+    # 현재 참가 11 + 이용 로그 11, D2는 seed12 재입장 예시 (ADR-011, 03-db-schema.md §6)
+    assert first["participations"] == 11 and first["participation_logs"] == 11
 
     for _ in range(2):  # 재시작 2회
         async with session_factory() as session:
             await seed_initial_data(session, get_settings())
             await session.commit()
             assert await count_seed_rows(session) == first
+
+
+# --- RISK-14 현재 참가 ↔ 이용 로그 이동 (ADR-011) ---
+
+
+async def table_rows(session_factory, sql: str, params: dict) -> list:
+    from sqlalchemy import text
+
+    async with session_factory() as session:
+        return (await session.execute(text(sql), params)).all()
+
+
+async def test_risk_14_leave_moves_participation_to_log(client, session_factory, make_users):
+    host, guest = await make_users(2)
+    room_id = await create_room(client, host)
+    await join(client, room_id, guest)
+    await client.delete(f"/api/rooms/{room_id}/participants/me", headers=auth_header(guest))
+
+    current = await table_rows(
+        session_factory, "SELECT user_id FROM participations WHERE room_id = :r", {"r": room_id}
+    )
+    logs = await table_rows(
+        session_factory,
+        "SELECT user_id, join_order, left_at FROM participation_logs WHERE room_id = :r",
+        {"r": room_id},
+    )
+    assert [row.user_id for row in current] == [host]
+    assert [(row.user_id, row.join_order) for row in logs] == [(guest, 2)]
+    assert logs[0].left_at is not None
+
+
+async def test_risk_14_rejoin_keeps_old_log_and_adds_current(client, session_factory, make_users):
+    host, guest = await make_users(2)
+    room_id = await create_room(client, host)
+    for _ in range(2):
+        await join(client, room_id, guest)
+        await client.delete(f"/api/rooms/{room_id}/participants/me", headers=auth_header(guest))
+    await join(client, room_id, guest)
+
+    current = await table_rows(
+        session_factory,
+        "SELECT join_order FROM participations WHERE room_id = :r AND user_id = :u",
+        {"r": room_id, "u": guest},
+    )
+    logs = await table_rows(
+        session_factory,
+        "SELECT join_order FROM participation_logs WHERE room_id = :r AND user_id = :u ORDER BY id",
+        {"r": room_id, "u": guest},
+    )
+    assert [row.join_order for row in logs] == [2, 3]  # 재입장마다 새 입장 순서 (INV-11)
+    assert [row.join_order for row in current] == [4]
+
+
+async def test_risk_14_start_game_moves_all_to_logs(client, session_factory, make_users):
+    users = await make_users(4)
+    room_id = await full_room(client, users)
+    await client.post(f"/api/rooms/{room_id}/start", headers=auth_header(users[0]))
+
+    current = await table_rows(
+        session_factory, "SELECT user_id FROM participations WHERE room_id = :r", {"r": room_id}
+    )
+    logs = await table_rows(
+        session_factory, "SELECT user_id FROM participation_logs WHERE room_id = :r", {"r": room_id}
+    )
+    assert current == []
+    assert sorted(row.user_id for row in logs) == sorted(users)

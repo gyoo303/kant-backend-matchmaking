@@ -11,7 +11,7 @@ T0 = datetime(2026, 10, 28, tzinfo=UTC)
 
 
 def make(joined_minutes: int = 0) -> Participation:
-    return Participation(1, 1, 1, 1, TeamSide.A, T0 + timedelta(minutes=joined_minutes))
+    return Participation(1, 1, 1, TeamSide.A, T0 + timedelta(minutes=joined_minutes))
 
 
 def test_new_participation_is_current():
@@ -46,9 +46,9 @@ def test_inv_10_ended_record_cannot_change_team():
 
 def test_inv_11_join_order_must_be_positive():
     with pytest.raises(ValueError):
-        Participation(1, 1, 1, 0, TeamSide.A, T0)
+        Participation(1, 1, 0, TeamSide.A, T0)
 
 
 def test_inv_10_constructor_rejects_left_before_joined():
     with pytest.raises(ValueError):
-        Participation(1, 1, 1, 1, TeamSide.A, T0, left_at=T0 - timedelta(minutes=1))
+        Participation(1, 1, 1, TeamSide.A, T0, left_at=T0 - timedelta(minutes=1))

@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import (  # noqa: E402
     create_async_engine,
 )
 
-TABLES = ("participations", "teams", "rooms", "token_blacklist", "users")
+TABLES = ("participation_logs", "participations", "teams", "rooms", "token_blacklist", "users")
 TEST_PASSWORD = "password123"
 
 # make_users가 만든 회원 ID → 아이디. auth_header가 토큰의 sub(아이디)를 찾는 데 쓴다.

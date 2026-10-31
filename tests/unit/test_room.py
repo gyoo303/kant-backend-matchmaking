@@ -39,7 +39,7 @@ def make_room(member_ids: list[int], room_id: int = 10) -> Room:
 
 
 def other_room_participation(user_id: int) -> Participation:
-    return Participation(1, 99, user_id, 1, TeamSide.A, T0)
+    return Participation(99, user_id, 1, TeamSide.A, T0)
 
 
 def two_teams() -> list[Team]:
@@ -301,8 +301,8 @@ def test_constructor_requires_team_a_and_b(teams):
 
 def test_constructor_fills_team_members_from_current_participations():
     """레포지토리가 팀원 없이 넘겨도 현재 참가 기록으로 팀원이 채워진다 (RISK-13)."""
-    current = Participation(1, 1, 7, 1, TeamSide.B, T0)
-    ended = Participation(2, 1, 8, 2, TeamSide.A, T0, left_at=at(5))
+    current = Participation(1, 7, 1, TeamSide.B, T0)
+    ended = Participation(1, 8, 2, TeamSide.A, T0, left_at=at(5))
     room = Room(1, RoomTitle("방"), 7, 2, T0, None, None, two_teams(), [current, ended])
     assert room.team(TeamSide.B).members == [current]
     assert room.team(TeamSide.A).members == []

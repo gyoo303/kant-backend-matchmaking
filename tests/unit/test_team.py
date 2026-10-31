@@ -12,7 +12,7 @@ T0 = datetime(2026, 10, 28, tzinfo=UTC)
 
 
 def member(user_id: int, side: TeamSide = TeamSide.A) -> Participation:
-    return Participation(None, 1, user_id, user_id, side, T0)
+    return Participation(1, user_id, user_id, side, T0)
 
 
 def test_inv_01_team_capacity_is_two():
