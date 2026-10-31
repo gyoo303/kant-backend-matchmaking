@@ -15,7 +15,7 @@
 | EV-05 | 스키마 검증·라우터, 예외 → HTTP | PM → ARCH → BE | 표현 | REJ-01~32, 전체 AC, NFR-02 | `04-interfaces-api.md` §4(API-AUTH-01~04, API-ROOM-01~12)·§5·§6, ADR-004, D-015 / `schemas.py`, `router.py`, `/docs` | **정의됨** (거부 조건), **설계됨(ARCH)** |
 | EV-06 | OAuth2·JWT 블랙리스트 | PM → ARCH → BE | 인증·보안 | US-08~11, AC-08~11, NFR-03, SCR-01·02 | ADR-002, `04-interfaces-api.md` SEQ-01~04, `03-db-schema.md` §3.2 / `src/auth/` | **정의됨** (흐름·AC), **설계됨(ARCH)** |
 | EV-07 | 미들웨어(CORS·로깅) | ARCH → BE | 웹·미들웨어 | REQ-T15 | `05-structure-conventions.md` CONV-07·10·11 / `src/main.py`, `src/logging_middleware.py` | **설계됨(ARCH)** |
-| EV-08 | Jinja2·정적 파일 웹 화면 | PM → ARCH → FE | 웹·미들웨어 | US-15~17, SCR-01~06 (핵심 SCR-03·04·05, D-012), NFR-08 | `07-screens.md`, `04-interfaces-api.md` §7(PAGE-01~06), SEQ-13 / `src/templates/`, `src/static/` | **정의됨** (화면), **설계됨(ARCH)** (데이터 계약) |
+| EV-08 | Jinja2·정적 파일 웹 화면 | PM → ARCH → FE | 웹·미들웨어 | US-15~17, SCR-01~06 (핵심 SCR-03·04·05, D-012), NFR-08 | `07-screens.md`, `04-interfaces-api.md` §7(PAGE-01~06), SEQ-13(수동 새로고침), ADR-012 / `src/templates/`, `src/static/` | **정의됨** (화면), **설계됨(ARCH)** (데이터 계약) |
 | EV-09 | 예외 방어(400/404), `.gitignore` | PM → ARCH → QA | 표현, 환경·형상 관리 | REJ-07~09·19·27, AC-02-3·02-6·06-5·14-2, NFR-02·09 | `04-interfaces-api.md` §6, GATE-06, `.gitignore` | **정의됨** (거부 시나리오), **설계됨(ARCH)** |
 | EV-10 | README, 최종 시연·발표 | PM → ARCH → FE / 사람 | 문서화·발표 | `07-screens.md` §5, NFR-01 | `HANDOFF.md` §2(README 목차), GATE-01, TKT-FE-M7-01 / README.md, 발표 | **정의됨** (시연 흐름), **설계됨(ARCH)** (README 목차), 발표는 사람 |
 
