@@ -133,9 +133,9 @@ presentation ──▶ application ──▶ domain
 | ID | 대상 | 주의 |
 |---|---|---|
 | STK-01 | import 경로 | 실행이 `--app-dir src`라서 import는 `src.` 없이 쓴다(`from rooms.domain.room import Room`). pytest도 같게 하려고 `pyproject.toml`에 `[tool.pytest.ini_options] pythonpath = ["src"]`를 둔다. |
-| STK-02 | 비동기 lazy loading | AsyncSession에서 관계 속성을 지연 로딩하면 `MissingGreenlet` 오류가 난다(교안 5장 2강). `RoomModel.participations`·`ParticipationModel.room`은 쿼리에 `options(selectinload(...))`를 붙여 **미리** 읽는다. 세션에 이미 있는 객체에는 연쇄 `selectinload`가 안 채워질 수 있으므로 다른 기능의 모델(회원 닉네임)은 `session.get`으로 읽는다. |
+| STK-02 | 비동기 lazy loading | AsyncSession에서 관계 속성을 지연 로딩하면 `MissingGreenlet` 오류가 난다(교안 5장 2강). `RoomModel.participations`·`ParticipationModel.room`·`ParticipationLogModel.room`은 쿼리에 `options(selectinload(...))`를 붙여 **미리** 읽는다. 세션에 이미 있는 객체에는 연쇄 `selectinload`가 안 채워질 수 있으므로 다른 기능의 모델(회원 닉네임)은 `session.get`으로 읽는다. |
 | STK-03 | `FOR UPDATE`와 조인 (도전 A) | PostgreSQL은 outer join의 nullable 쪽에 `FOR UPDATE`를 걸 수 없다. `find_by_id_for_update`는 `select(RoomModel).where(...).with_for_update()`로 방 행만 잠그고, 참가자는 별도 쿼리로 읽는다. |
-| STK-04 | 부분 유니크 인덱스 (도전 A) | `Index("uq_participations_user_current", ParticipationModel.user_id, unique=True, postgresql_where=text("left_at IS NULL"))`. `create_all`은 이미 있는 테이블에 인덱스·제약을 추가하지 않으므로 개발 DB를 지우고 다시 만든다. |
+| STK-04 | 복합 PK·현재 참가 삭제 (ADR-011) | `participations`는 `room_id`·`user_id` 두 컬럼에 `primary_key=True`를 주고 `user_id`에 `unique=True`를 더한다. `RoomModel.participations`는 `cascade="all, delete-orphan"`이라 목록에서 `remove`하면 flush 때 행이 지워진다(로그 INSERT를 먼저 `session.add`). `create_all`은 이미 있는 테이블을 고치지 않으므로 개발 DB를 지우고 다시 만든다. |
 | STK-05 | 제목 검색 | 목록을 읽은 뒤 파이썬에서 `keyword.lower() in title.lower()`로 거른다(교안 2·3장, D-020). `%`·`_`도 일반 글자로 비교된다. |
 | STK-06 | 시각 | 컬럼은 `DateTime(timezone=True)`이고 읽으면 UTC aware 값이다. 비교·저장하는 값도 `datetime.now(UTC)`(aware)만 쓴다. naive 값과 섞으면 오류가 난다. |
 | STK-07 | bcrypt | passlib 1.7.4는 bcrypt 4.1 이상에서 버전 감지 경고, 5.x에서 오류가 난다. `bcrypt==4.0.1`을 바꾸지 않는다(ADR-002). |

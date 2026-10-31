@@ -3,6 +3,7 @@
 - 관련 계층: [모듈 협력 구조] [인프라]
 - 근거: D-018(D-002 번복), RISK-03~05, ARCH-Q-02, INV-02~08, REQ-098~104, REQ-107, NFR-04, AC-18-*, CH-A
 - 대체: ADR-006
+- 일부 대체됨: 한 회원 한 방 부분 유니크 인덱스(`uq_participations_user_current`) → ADR-011의 `participations.user_id` `unique=True`. 도전 A에 남은 범위는 방 행 잠금, `IntegrityError` → `AlreadyParticipatingError` 변환, 재현 테스트다
 
 ## 맥락
 사용자가 동시 요청 무결성을 필수에서 빼고 도전 A로 옮기기로 했다(D-018). 방 행 잠금과 한 회원 한 방 부분 유니크 인덱스도 도전 A에 포함한다. 필수 범위에서 무엇이 남고, 도전 A가 무엇을 추가하는지 경계를 다시 정해야 한다.

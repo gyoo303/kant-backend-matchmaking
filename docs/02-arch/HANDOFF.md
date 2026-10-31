@@ -1,6 +1,6 @@
 # HANDOFF — 하위 에이전트 티켓 (A8)
 
-- 입력: `01-drivers.md`~`06-quality-gates.md`, ADR-001~005·007~010(Accepted, ADR-006은 ADR-009로 대체), `docs/01-pm/04-scope.md` 마일스톤(D-001)
+- 입력: `01-drivers.md`~`06-quality-gates.md`, ADR-001~005·007~011(Accepted, ADR-006은 ADR-009로 대체, ADR-009의 부분 유니크 인덱스는 ADR-011로 대체), `docs/01-pm/04-scope.md` 마일스톤(D-001)
 - **진행 원칙(D-018)**: DB·BE·FE·QA는 필수 티켓(M2~M5, M7)만 차례로 진행한다. M6 도전 티켓("요청 시" 표시)은 필수 완료 뒤 **사용자가 티켓 ID를 지정해 요청할 때만** 착수한다. 선행 점검이 READY여도 요청 없이 시작하지 않는다.
 - 모든 티켓 공통으로 먼저 읽는다: `AGENTS.md`, `docs/02-arch/05-structure-conventions.md`(CONV·금지 패턴, **§8 교안 수준 규칙**), `docs/02-arch/06-quality-gates.md`
 - **교안 수준 규칙(D-020)**: 모든 DB·BE·FE 티켓은 교안 1~6장 수준으로 구현한다. 인증·보안은 교안 6장 1강(ADR-002, D-021). 완료된 M2·M3 티켓 코드는 2026-10-28에 이 규칙으로 고쳤다(아래 표의 완료 티켓 설명은 작성 당시 기준이며, 현재 기준은 `03-db-schema.md`·`04-interfaces-api.md`).
@@ -33,7 +33,7 @@
 | TKT-FE-M5-04 | FE | M5 (10) | SCR-04 방 상세(현황 대시보드): 팀 구성, 팀 이동·나가기·제목 변경·게임 시작, 410/404/401 분기 | `07-screens.md` §3 SCR-04, `04-interfaces-api.md` PAGE-04·API-ROOM-03~08 | `src/templates/rooms/detail.html`, `src/static/js/rooms.js`, `docs/05-frontend/briefing-TKT-FE-M5-04.md` | AC-16-1~7 | TKT-FE-M5-03 |
 | TKT-FE-M5-05 | FE | M5 (10) | SCR-05 내 기록(목록), SCR-06 보관 정보 | `07-screens.md` §3 SCR-05·§4, `04-interfaces-api.md` PAGE-05·06 | `src/templates/rooms/history.html`, `src/templates/rooms/archived.html`, `docs/05-frontend/briefing-TKT-FE-M5-05.md` | AC-17-2~4, AC-14-3 | TKT-FE-M5-01 |
 | TKT-QA-M5-01 | QA | M5 (10) | 목록·이력·보관 정보 통합 테스트 AC-12~14, NFR-02·06·07, 화면 수동 점검표 AC-15~17·NFR-08 | `06-acceptance-criteria.md` US-12~17·NFR, `06-quality-gates.md` §2 | `tests/integration/test_history_api.py`, `tests/integration/test_rooms_api.py`, `docs/06-qa/briefing-TKT-QA-M5-01.md` | GATE-01~08, 필수 AC 전부 통과 (필수 100%) | TKT-FE-M5-02, TKT-FE-M5-04, TKT-FE-M5-05 |
-| TKT-DB-M6-01 | DB | M6 (11, Should, 요청 시) | 도전 A: 부분 유니크 인덱스 `uq_participations_user_current` 추가, `RoomRepository.find_by_id_for_update`(방 행 `FOR UPDATE`), `save`의 `IntegrityError` → `AlreadyParticipatingError` 변환. 기존 개발 DB는 `create_all`이 인덱스를 만들지 않으므로 브리핑에 DB 재생성 방법을 적는다 | ADR-009, `03-db-schema.md` §3.4·§5 | `src/rooms/infrastructure/models.py`, `src/rooms/infrastructure/repositories.py`, `docs/03-db/briefing.md` | 인덱스 이름이 문서와 같음, GATE-08 | TKT-QA-M5-01 |
+| TKT-DB-M6-01 | DB | M6 (11, Should, 요청 시) | 도전 A: `RoomRepository.find_by_id_for_update`(방 행 `FOR UPDATE`), `save`의 `IntegrityError`(`participations` PK·`user_id` unique 위반, ADR-011) → `AlreadyParticipatingError` 변환 | ADR-009, ADR-011, `03-db-schema.md` §3.4·§5 | `src/rooms/infrastructure/models.py`, `src/rooms/infrastructure/repositories.py`, `docs/03-db/briefing.md` | GATE-08, 같은 회원 동시 생성이 400 | TKT-QA-M5-01 |
 | TKT-BE-M6-00 | BE | M6 (11, Should, 요청 시) | 도전 A: `RoomApplicationService`의 참가·제목·팀·나가기·게임 시작 조회를 `find_by_id_for_update`로 교체 | ADR-009, `04-interfaces-api.md` §9(SEQ-06~09), CONV-08 | `src/rooms/application/service.py`, `docs/04-backend/briefing.md` | GATE-09 | TKT-DB-M6-01 |
 | TKT-QA-M6-01 | QA | M6 (11, Should, 요청 시) | 도전 A: 동시 요청 재현 테스트 AC-18-1~5 | ADR-009, `06-acceptance-criteria.md` US-18 | `tests/concurrency/test_room_concurrency.py`, `docs/06-qa/briefing-TKT-QA-M6-01.md` | AC-18-1~5 통과 | TKT-BE-M6-00 |
 | TKT-BE-M6-01 | BE | M6 (11, Could, 요청 시) | 도전 B: 게임 시작 후 `BackgroundTasks` 해산 로그, API-ROOM-12 CSV 스트리밍 | `04-interfaces-api.md` §4.2·§9(SEQ-14) | `src/rooms/presentation/router.py`, `src/rooms/application/queries.py`, `src/rooms/infrastructure/repositories.py`(스트리밍 조회 메서드 추가는 BE가 DB 브리핑에 기록), `docs/04-backend/briefing.md` | AC-19-1·2 | TKT-QA-M6-01 |
@@ -44,14 +44,18 @@
 | TKT-BE-M8-01 | BE | M8 (14, 튜터 피드백) | 도메인 `Team`(`team.py`: `CAPACITY`, `members`, `add`, `remove`), `Room`이 팀 2개를 갖도록(`__init__(…, teams, participations)`, `team(side)`, `create`가 팀 2개 생성), 참가 배정 A팀 우선(D-024), `change_team`·`leave`·`start_game`이 `Team`을 통해 검사. `application/`·`presentation/`은 바뀌지 않음 | ADR-010, `04-interfaces-api.md` §2.3~§2.5, D-023·D-024, AC-02-1·2·9 | `src/rooms/domain/team.py`, `src/rooms/domain/room.py`, `docs/04-backend/briefing.md` | GATE-02·05·07, 도메인이 `Team.add`로 팀 정원 거부 | TKT-QA-M7-01 |
 | TKT-DB-M8-01 | DB | M8 (14, 튜터 피드백) | `TeamModel`(`teams`), `ParticipationModel.team` → `team_id` FK·`team` 관계, `RoomModel.teams`. `RoomRepository`(새 방이면 팀 2행, `TeamSide` ↔ `TeamModel` 연결, `selectinload`에 팀 추가), `RoomQueryRepository` 상세 정렬. 시드 결과(팀 16행) 확인. 기존 개발 DB 재생성 방법을 브리핑에 적는다 | ADR-010, `03-db-schema.md` §1·§2·§3.4·§3.5·§5·§6 | `src/rooms/infrastructure/models.py`, `src/rooms/infrastructure/repositories.py`, `src/seed.py`, `docs/03-db/briefing.md` | GATE-01·02·08, 시드 `teams=16` | TKT-BE-M8-01 |
 | TKT-QA-M8-01 | QA | M8 (14, 튜터 피드백) | 팀 엔티티·A팀 우선 배정 검증: 단위 테스트(`Team`, `Room` 배정·이동·시작), 통합 테스트 기대값 갱신(AC-02-1·9, 테이블 목록, 시드 건수), 팀 연결 통합 테스트(RISK-13), GATE 전체·시연 리허설 | ADR-010, `06-acceptance-criteria.md` US-02, `06-quality-gates.md` | `tests/unit/test_team.py`, `tests/unit/test_room.py`, `tests/integration/test_rooms_api.py`, `tests/conftest.py`, `docs/06-qa/briefing-TKT-QA-M8-01.md` | GATE-01~08, AC-02-1~9 통과 | TKT-DB-M8-01 |
+| TKT-BE-M9-01 | BE | M9 (15, D-025) | `Participation`에서 `id` 제거(식별 = `room_id`+`user_id`), `Room.create`·`Room.join`의 생성 호출 수정. 읽기 모델 `HistoryItem`·응답 `HistoryItemResponse`에서 `participation_id` 제거. 그 밖의 도메인 규칙·서비스 흐름은 바뀌지 않음 | ADR-011, `04-interfaces-api.md` §2.3·§2.5·§5, D-025, AC-13-5 | `src/rooms/domain/participation.py`, `src/rooms/domain/room.py`, `src/rooms/application/read_models.py`, `src/rooms/presentation/schemas.py`, `docs/04-backend/briefing.md` | GATE-02·05·07 | TKT-QA-M8-01 |
+| TKT-DB-M9-01 | DB | M9 (15, D-025) | `ParticipationModel`을 복합 PK(`room_id`+`user_id`)·`user_id` unique·`left_at` 없음으로, `ParticipationLogModel`(`participation_logs`) 추가, `RoomModel.participations`에 `cascade="all, delete-orphan"`. `RoomRepository`(`find_current_participation`, `save`의 짝짓기·로그 이동), `RoomQueryRepository`(현재 인원, `list_history` 합치기, `get_archived_room` 로그만). 시드: 현재 11 + 로그 10(D2 재입장 예시). 기존 개발 DB 재생성 방법을 브리핑에 적는다 | ADR-011, `03-db-schema.md` §1·§2·§3.3·§3.4·§3.6·§5·§6, STK-04 | `src/rooms/infrastructure/models.py`, `src/rooms/infrastructure/repositories.py`, `src/seed.py`, `docs/03-db/briefing.md` | GATE-01·02·08, 시드 `participations=11 participation_logs=10 total=59` | TKT-BE-M9-01 |
+| TKT-QA-M9-01 | QA | M9 (15, D-025) | 현재 참가·이용 로그 분리 검증: 단위 테스트(`Participation` 생성 인자), 통합 테스트(AC-02-8 재입장 → 로그, AC-13-1·3·5 이력 합치기·기록 ID 없음, AC-14-1 보관 정보, 퇴장·해산 후 `participations` 0행·로그 건수(RISK-14), 테이블 목록·시드 건수), GATE 전체·시연 리허설 | ADR-011, `06-acceptance-criteria.md` US-02·05·06·13·14, `06-quality-gates.md` | `tests/unit/test_participation.py`, `tests/unit/test_room.py`, `tests/integration/test_rooms_api.py`, `tests/integration/test_history_api.py`, `tests/conftest.py`, `docs/06-qa/briefing-TKT-QA-M9-01.md` | GATE-01~08, AC-02·05·06·13·14 통과 | TKT-DB-M9-01 |
 
 - M6 티켓은 사용자가 요청할 때만 착수하고, 11일차가 끝나면 남은 것을 중단한다(D-002, D-018). 요청 순서 기준: 도전 A(TKT-DB-M6-01 → TKT-BE-M6-00 → TKT-QA-M6-01) → 도전 B(TKT-BE-M6-01) → 도전 C(TKT-BE-M6-02) → TKT-QA-M6-02. 사용자가 일부만 요청하면 그 티켓과 선행만 진행한다.
 - M7 티켓(TKT-FE-M7-01, TKT-QA-M7-01)은 M6 진행 여부와 상관없이 필수 완료(TKT-QA-M5-01) 뒤에 진행한다.
 - M8 티켓(TKT-BE-M8-01 → TKT-DB-M8-01 → TKT-QA-M8-01)은 튜터 피드백 반영(D-023·D-024, ADR-010)이다. 도메인 `Team`이 레포지토리보다 먼저 필요하므로 BE가 먼저다. 기존 DB(`matchmaking` 등)는 지우고 다시 만든다.
-- 마일스톤별 티켓 수: M2 2 · M3 9 · M4 4 · M5 7 · M6 6(요청 시) · M7 2 · M8 3 = 33
+- M9 티켓(TKT-BE-M9-01 → TKT-DB-M9-01 → TKT-QA-M9-01)은 현재 참가와 이용 로그 분리(D-025, ADR-011)다. 도메인 `Participation` 시그니처가 레포지토리보다 먼저 필요하므로 BE가 먼저다. 기존 DB는 지우고 다시 만든다.
+- 마일스톤별 티켓 수: M2 2 · M3 9 · M4 4 · M5 7 · M6 6(요청 시) · M7 2 · M8 3 · M9 3 = 36
 
 ### 공통 "하지 말 것"
-- 사용자 요청 없이 M6 도전 티켓을 착수하거나, 필수 티켓에 도전 범위(잠금·부분 유니크 인덱스·캐시·CSV·백그라운드 로그)를 미리 넣지 않는다(D-018).
+- 사용자 요청 없이 M6 도전 티켓을 착수하거나, 필수 티켓에 도전 범위(잠금·`IntegrityError` 400 변환·캐시·CSV·백그라운드 로그)를 미리 넣지 않는다(D-018). `participations`의 PK·unique는 필수 스키마다(ADR-011).
 - 스키마·API·도메인 시그니처를 임의로 바꾸지 않는다. 바꿔야 하면 멈추고 Architect에 질문한다.
 - 담당 구역(`AGENTS.md` 단계 표) 밖 파일을 쓰지 않는다. 예외는 표의 "산출" 열에 적힌 파일뿐이다.
 - 게임 결과·승패 관련 코드를 만들지 않는다(INV-09, GATE-07).
@@ -81,7 +85,7 @@
 | IC-05 | 명명 규칙 | CONV-01, `03-db-schema.md` §3, `06-quality-gates.md` §3 |
 | IC-06 | 에러 모델, 응답 필드 표기 | `04-interfaces-api.md` §1·§5(snake_case)·§6 |
 | IC-07 | 트랜잭션 확정 위치, 세션 수명, 저장소 모델 경계 | `04-interfaces-api.md` §8, `03-db-schema.md` §5, GATE-08 |
-| IC-08 | 스키마 반영 방식, 기존 DB 처리 | `03-db-schema.md` 머리말(create_all), STK-04, TKT-DB-M6-01 |
+| IC-08 | 스키마 반영 방식, 기존 DB 처리 | `03-db-schema.md` 머리말(create_all), STK-04, TKT-DB-M9-01 |
 | IC-09 | 인증·권한 확인 위치·비밀값·비노출 필드 | ADR-002, ADR-003, `04-interfaces-api.md` §4.3·§6, CONV-07·09 |
 | IC-10 | 화면 기술, 데이터 계약, 스타일 기준, 상태 변경 방식 | `04-interfaces-api.md` §7(PAGE), `05-structure-conventions.md` §6, CONV-09·12, D-019 |
 | IC-11 | 실행·검증 명령, 테스트 DB | `06-quality-gates.md` §1·§2, STK-10~12 |

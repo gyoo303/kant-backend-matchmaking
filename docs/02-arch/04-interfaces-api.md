@@ -131,7 +131,7 @@ class Room:
         # 전원 end(now), 두 팀 members 비움 → _soft_delete(GAME_STARTED, now). 결과 데이터 없음 (INV-09)
     def _soft_delete(self, reason: DeleteReason, now: datetime) -> None
 ```
-- `participations`에는 레포지토리가 읽은 현재 참가 기록과, 이번 요청에서 새로 생기거나 종료된 기록이 들어 있다. 레포지토리 `save`는 이 목록 전체를 저장한다.
+- `participations`에는 레포지토리가 읽은 현재 참가 기록과, 이번 요청에서 새로 생기거나 종료된 기록이 들어 있다. 레포지토리 `save`는 이 목록을 `user_id`로 짝지어 저장하고, 종료된 기록은 `participation_logs`로 옮긴다(ADR-011).
 - 거부 검사 순서는 위 주석 순서와 같다(테스트 기대값 고정).
 
 ### 2.4 `src/rooms/domain/team.py` (ADR-010)
@@ -156,13 +156,13 @@ class TeamSide(StrEnum): A = "A"; B = "B"
 
 @dataclass
 class Participation:
-    id: int | None
+    # 식별: (room_id, user_id). 별도 id 없음 (ADR-011)
     room_id: int | None     # 새 방 생성 시 None, save 후 채워짐
     user_id: int
     join_order: int         # >= 1 아니면 ValueError
     team: TeamSide          # 소속 팀의 편(종료 기록은 마지막 팀). Team.add가 바꾼다
     joined_at: datetime
-    left_at: datetime | None = None
+    left_at: datetime | None = None   # 이번 요청에서 끝나면 채워짐 → save가 participation_logs로 옮김
     is_current: bool        # 속성: left_at is None
     def change_team(self, team: TeamSide) -> None   # 종료 기록 → ParticipationAlreadyEndedError
     def end(self, now: datetime) -> None            # 종료 기록 → ParticipationAlreadyEndedError, now < joined_at → ValueError
@@ -221,7 +221,7 @@ class Participation:
 | API-ROOM-07 | DELETE | `/api/rooms/{room_id}/participants/me` | 필요 | `room_id` | — | `LeaveResponse` | 200 | 400 "이 방의 참가자가 아닙니다", 404 | US-05 / AC-05-1~5 |
 | API-ROOM-08 | POST | `/api/rooms/{room_id}/start` | 필요 | `room_id` | — | `GameStartResponse` | 200 | 400 "방장만 할 수 있습니다", 400 "A팀과 B팀이 각각 2명일 때만 시작할 수 있습니다", 400 "이미 삭제된 방입니다", 404 | US-06 / AC-06-1~6 |
 | API-ROOM-09 | GET | `/api/me/room` | 필요 | — | — | `CurrentRoomResponse` | 200 | 401 | US-07 / AC-07-2·3 |
-| API-ROOM-10 | GET | `/api/me/room-history` | 필요 | `page: int = 1 (>=1)`, `size: int = 10 (1~50)` | — | `HistoryListResponse` | 200 | 401, 422 | US-13 / AC-13-1~4 |
+| API-ROOM-10 | GET | `/api/me/room-history` | 필요 | `page: int = 1 (>=1)`, `size: int = 10 (1~50)` | — | `HistoryListResponse` | 200 | 401, 422 | US-13 / AC-13-1~5 |
 | API-ROOM-11 | GET | `/api/me/room-history/{room_id}` | 필요 | `room_id` | — | `ArchivedRoomResponse` | 200 | 404 "방을 찾을 수 없습니다" | US-14 / AC-14-1·2 |
 | API-ROOM-12 (CH-B) | GET | `/api/me/room-history.csv` | 필요 | — | — | `StreamingResponse(text/csv; charset=utf-8)` | 200 | 401 | US-19 / AC-19-2 |
 
@@ -272,8 +272,8 @@ class Participation:
 | `LeaveResponse` | `room_deleted`, `new_host_user_id` | `bool`, `int \| None` | Y | — | |
 | `GameStartResponse` | `room_id`, `dissolved_at`, `message` | `int`, `datetime`, `str` | Y | — | `message` = "게임이 시작되어 방이 해산되었습니다" |
 | `CurrentRoomResponse` | `room_id`, `title` | `int \| None`, `str \| None` | Y | — | 참가 중 아니면 둘 다 null |
-| `HistoryItemResponse` | `participation_id`, `room_id`, `room_title`, `joined_at`, `left_at`, `is_current`, `room_deleted` | `int`, `int`, `str`, `datetime`, `datetime \| None`, `bool`, `bool` | Y | — | |
-| `HistoryListResponse` | `items`, `total`, `page`, `size` | | Y | — | 정렬: `joined_at DESC, id DESC` (D-007) |
+| `HistoryItemResponse` | `room_id`, `room_title`, `joined_at`, `left_at`, `is_current`, `room_deleted` | `int`, `str`, `datetime`, `datetime \| None`, `bool`, `bool` | Y | — | 기록 ID 없음 (D-025, AC-13-5) |
+| `HistoryListResponse` | `items`, `total`, `page`, `size` | | Y | — | 정렬: 현재 참가 + 로그를 합쳐 `joined_at DESC`, 같으면 로그 `id DESC` (D-007, ADR-011) |
 | `MyRecordResponse` | `joined_at`, `left_at` | `datetime`, `datetime \| None` | Y | — | |
 | `ArchivedRoomResponse` | `room_id`, `title`, `capacity`, `created_at`, `deleted_at`, `my_records` | `int`, `str`, `int`, `datetime`, `datetime`, `list[MyRecordResponse]` | Y | — | 다른 회원 정보 없음 (D-009) |
 
@@ -343,25 +343,25 @@ router: `token = Depends(oauth2_scheme)`, `Depends(get_current_user)`(유효한 
 `refresh(refresh_token)`: 블랙리스트에 있음 → `AuthenticationError("로그아웃 처리되어 사용할 수 없는 토큰입니다")` → `decode_token` 실패 → `AuthenticationError("리프레시 토큰이 만료되었습니다. 다시 로그인하세요")` → `token_type != "refresh"` → 같은 401 → `create_access_token({"sub": sub})` → `AccessTokenResponse`.
 
 ### SEQ-05 방 생성 (API-ROOM-02)
-`create_room` → `RoomRepository.find_current_participation(user_id)` → `Room.create(title, user_id, current, now)` → `RoomRepository.save(room)` (방 insert → 팀 A·B insert → 참가 insert(`team_id` = A팀). 도전 A 적용 후에는 `uq_participations_user_current` 위반 → `AlreadyParticipatingError`) → commit → 캐시 clear(CH-C) → router가 `RoomQueryService.get_room_detail(room.id, user_id)`로 응답.
+`create_room` → `RoomRepository.find_current_participation(user_id)` → `Room.create(title, user_id, current, now)` → `RoomRepository.save(room)` (방 insert → 팀 A·B insert → 참가 insert(`team_id` = A팀). 같은 회원 동시 생성은 `participations.user_id` unique 위반 → 필수 범위 500, 도전 A 적용 후 `AlreadyParticipatingError`) → commit → 캐시 clear(CH-C) → router가 `RoomQueryService.get_room_detail(room.id, user_id)`로 응답.
 
 ### SEQ-06 방 참가 (API-ROOM-05)
 `join_room` → `find_current_participation(user_id)` → `find_by_id(room_id)` (없음 → `RoomNotFoundError`) → `room.join(user_id, current, now)` → `save` → commit → 캐시 clear → 상세 응답.
-- 도전 A(ADR-009): `find_by_id`를 `find_by_id_for_update`(방 행 잠금)로 바꾸고, `save`가 부분 유니크 위반을 `AlreadyParticipatingError`로 바꾼다. 잠금 후 도메인이 삭제 상태·정원을 다시 검사하므로 마지막 자리 동시 참가는 하나만 성공한다(AC-18-1).
+- 도전 A(ADR-009): `find_by_id`를 `find_by_id_for_update`(방 행 잠금)로 바꾸고, `save`가 `participations` PK·unique 위반을 `AlreadyParticipatingError`로 바꾼다(ADR-011). 잠금 후 도메인이 삭제 상태·정원을 다시 검사하므로 마지막 자리 동시 참가는 하나만 성공한다(AC-18-1).
 
 ### SEQ-07 제목 변경·팀 변경 (API-ROOM-04, API-ROOM-06)
 `find_by_id` (없음 → 404, 도전 A는 `find_by_id_for_update`) → `room.rename(...)` 또는 `room.change_team(...)` → `save` → commit → 캐시 clear → 상세 응답.
 
 ### SEQ-08 나가기 (API-ROOM-07)
-`find_by_id`(도전 A는 `find_by_id_for_update`) → 기존 방장 기억 → `room.leave(user_id, now)` → `save` → commit → 캐시 clear → `LeaveResult(room_deleted=not room.is_active, new_host_user_id=room.host_user_id if 방장이 바뀌었고 방이 활성 else None)`.
+`find_by_id`(도전 A는 `find_by_id_for_update`) → 기존 방장 기억 → `room.leave(user_id, now)` → `save`(나간 참가 → `participation_logs` insert + `participations` 행 delete) → commit → 캐시 clear → `LeaveResult(room_deleted=not room.is_active, new_host_user_id=room.host_user_id if 방장이 바뀌었고 방이 활성 else None)`.
 
 ### SEQ-09 게임 시작 (API-ROOM-08)
-`find_by_id`(도전 A는 `find_by_id_for_update`) → `room.start_game(user_id, now)` (삭제 → 400, 방장 아님 → 400, 구성 불일치 → 400) → `save`(방 `deleted_at`·`delete_reason`, 참가 4건 `left_at`) → commit → 캐시 clear → `GameStartResult` → (CH-B) `background_tasks.add_task(log_room_dissolved, room_id, dissolved_at)`.
+`find_by_id`(도전 A는 `find_by_id_for_update`) → `room.start_game(user_id, now)` (삭제 → 400, 방장 아님 → 400, 구성 불일치 → 400) → `save`(방 `deleted_at`·`delete_reason`, 참가 4건 → `participation_logs` insert + `participations` 행 delete) → commit → 캐시 clear → `GameStartResult` → (CH-B) `background_tasks.add_task(log_room_dissolved, room_id, dissolved_at)`.
 - 반복 요청(순차): 두 번째 요청은 삭제된 방을 읽어 `RoomDeletedError`(400). 해산은 한 번뿐이다(AC-06-5).
 - 도전 A: 동시 반복 요청은 잠금을 기다린 뒤 같은 결과가 된다(AC-18-4). 시작과 나가기 경합도 같은 방 행 잠금으로 순서가 정해져 AC-18-5의 두 결과 중 하나만 생긴다.
 
 ### SEQ-10 공개 방 목록 (API-ROOM-01)
-router가 쿼리를 `RoomListCondition`으로 묶음(keyword strip, 빈 문자열 → None) → `RoomQueryService.list_rooms` → (CH-C) 캐시 조회 → `RoomQueryRepository.list_active_rooms`: `select(RoomModel).where(deleted_at IS NULL).options(selectinload(participations)).order_by(created_at, id 정렬)` → 파이썬에서 방마다 현재 인원(`left_at is None` 개수) 계산 → `keyword.lower() in title.lower()`·`available_only`(인원 < 4)로 거름 → `total = len(목록)` → `목록[(page-1)*size : page*size]` → `RoomPage` (교안 2·3장 방식, D-020).
+router가 쿼리를 `RoomListCondition`으로 묶음(keyword strip, 빈 문자열 → None) → `RoomQueryService.list_rooms` → (CH-C) 캐시 조회 → `RoomQueryRepository.list_active_rooms`: `select(RoomModel).where(deleted_at IS NULL).options(selectinload(participations)).order_by(created_at, id 정렬)` → 파이썬에서 방마다 현재 인원(`len(participations)`, 현재 참가만 들어 있음) 계산 → `keyword.lower() in title.lower()`·`available_only`(인원 < 4)로 거름 → `total = len(목록)` → `목록[(page-1)*size : page*size]` → `RoomPage` (교안 2·3장 방식, D-020).
 
 ### SEQ-11 화면 렌더링 (PAGE-03 예)
 page_router → `templates.TemplateResponse(request, "rooms/list.html", {"cond": …, "notice": …})`(인증 없음) → 브라우저에서 `api.js`가 토큰 확인(없으면 `/login`) → API-AUTH-04·ROOM-01·09를 불러 화면을 채운다.
@@ -377,7 +377,7 @@ page_router → `templates.TemplateResponse(request, "rooms/list.html", {"cond":
 
 ### SEQ-14 도전 B
 - 해산 로그: `log_room_dissolved(room_id, dissolved_at)`가 `logger.info("room dissolved room_id=%s at=%s", …)`. 예외는 잡아 `logger.exception`으로만 남기고 응답에는 영향 없음.
-- CSV: `iter_history_csv(user_id)`가 헤더 1줄 후 `stream_scalars`(yield_per 500)로 본인 기록을 한 줄씩 생성, router가 `StreamingResponse(..., media_type="text/csv; charset=utf-8", headers={"Content-Disposition": "attachment; filename=room-history.csv"})`.
+- CSV: `iter_history_csv(user_id)`가 헤더 1줄, 현재 참가 1줄(있으면, `left_at` 빈 칸) 후 `stream_scalars`(yield_per 500)로 본인 `participation_logs`를 한 줄씩 생성, router가 `StreamingResponse(..., media_type="text/csv; charset=utf-8", headers={"Content-Disposition": "attachment; filename=room-history.csv"})`.
 
 ## 10. 상태 머신
 
@@ -387,12 +387,12 @@ page_router → `templates.TemplateResponse(request, "rooms/list.html", {"cond":
 | 활성 | `Room.join` | 활성 | 회원 | 참가 중 아님(같은 방이면 변화 없음) | 참가 1건(A팀 우선, 없으면 B), `last_join_order`+1 |
 | 활성 | `Room.rename` | 활성 | 방장 | 방장 | 제목 변경 |
 | 활성 | `Room.change_team` | 활성 | 참가자 | 본인 | 원래 팀에서 빠지고 대상 팀에 들어감 |
-| 활성 | `Room.leave` (남은 사람 있음) | 활성 | 참가자 | 본인 | `left_at`, 방장이면 위임 |
-| 활성 | `Room.leave` (마지막) | 삭제됨(EMPTY) | 참가자 | 본인 | `left_at`, `deleted_at` |
-| 활성 (A2·B2) | `Room.start_game` | 삭제됨(GAME_STARTED) | 방장 | 방장 | 전원 `left_at`, `deleted_at` |
+| 활성 | `Room.leave` (남은 사람 있음) | 활성 | 참가자 | 본인 | 참가 → 로그(`left_at`), 방장이면 위임 |
+| 활성 | `Room.leave` (마지막) | 삭제됨(EMPTY) | 참가자 | 본인 | 참가 → 로그(`left_at`), `deleted_at` |
+| 활성 (A2·B2) | `Room.start_game` | 삭제됨(GAME_STARTED) | 방장 | 방장 | 전원 참가 → 로그(`left_at`), `deleted_at` |
 | 삭제됨 | 모든 행위 메서드 | — | — | — | `RoomDeletedError` |
 
-참가: `참가 중 --change_team--> 참가 중`, `참가 중 --end--> 종료`, `종료 --*--> ParticipationAlreadyEndedError`.
+참가: `참가 중 --change_team--> 참가 중`, `참가 중 --end--> 종료(participation_logs로 이동)`, `종료 --*--> ParticipationAlreadyEndedError`.
 
 ## 11. 중복 요청·응답 유실 (ARCH-Q-06)
 

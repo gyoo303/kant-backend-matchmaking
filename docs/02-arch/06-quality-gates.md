@@ -53,7 +53,7 @@ grep -rniE "winner|loser|game_result" src/
 grep -rn "find_by_id(" src/rooms/application/service.py
 
 # GATE-08: ORM 모델 이름(03-db-schema.md §5)·infrastructure.models 경로로 찾는다. 모델을 추가하면 이름도 넣는다 (D-022)
-grep -rnE "\b(UserModel|TokenBlacklistModel|RoomModel|TeamModel|ParticipationModel)\b|infrastructure\.models" src/*/application src/*/presentation
+grep -rnE "\b(UserModel|TokenBlacklistModel|RoomModel|TeamModel|ParticipationModel|ParticipationLogModel)\b|infrastructure\.models" src/*/application src/*/presentation
 ```
 
 - 게이트 실패 시 구현 에이전트는 오류 요약만 브리핑에 남기고 수정을 반복한다. 같은 게이트를 3회 연속 실패하면 설계 문제로 보고 Architect에 질문한다.
