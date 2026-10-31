@@ -17,11 +17,11 @@
 
 | 담당 | 역할 | 맡는 파일 | 작업량(가중) | 난이도 |
 |---|---|---|---|---|
-| **A** | 공통 기반·앱 조립 | `pyproject.toml`, `.env.example`, `src/config.py`, `src/database.py`, `src/exceptions.py`, `src/logging_middleware.py`, `src/main.py`, `src/seed.py`, `templates/base.html`, `templates/partials/*`, `static/css/app.css`, `static/js/polling.js`, 모든 `__init__.py` | ≈ 610 | 중 |
+| **A** | 공통 기반·앱 조립 | `pyproject.toml`, `.env.example`, `src/config.py`, `src/database.py`, `src/exceptions.py`, `src/logging_middleware.py`, `src/main.py`, `src/seed.py`, `templates/base.html`, `templates/partials/*`, `static/css/app.css`, 모든 `__init__.py` | ≈ 545 | 중 |
 | **B** | 인증 전체 | `src/auth/` 전부(domain·infrastructure·application·presentation), `templates/auth/login.html`·`signup.html`, `static/js/api.js` | ≈ 670 | 중~상 |
 | **C** | 방 도메인·변경 서비스 | `src/rooms/domain/`(`room.py`, `team.py`, `participation.py`, `exceptions.py`), `src/rooms/application/service.py`, `src/rooms/presentation/pages.py`, `templates/rooms/history.html`·`archived.html` | ≈ 665 | 상 |
 | **D** | 방 DB·조회 | `src/rooms/infrastructure/models.py`·`repositories.py`, `src/rooms/application/queries.py`·`read_models.py` | ≈ 640 | 상 |
-| **E** | 방 API·메인/상세 화면 | `src/rooms/presentation/router.py`·`schemas.py`, `templates/rooms/list.html`·`detail.html`, `static/js/rooms.js` | ≈ 690 | 중~상 |
+| **E** | 방 API·메인/상세 화면 | `src/rooms/presentation/router.py`·`schemas.py`, `templates/rooms/list.html`·`detail.html`, `static/js/rooms.js` | ≈ 695 | 중~상 |
 
 - A는 양이 조금 적어요. 대신 앱 전체를 조립해요. D는 ORM 관계·팀 연결에 더해 현재 참가 ↔ 이용 로그 이동까지 맡아 가장 어려워요.
 
@@ -42,7 +42,6 @@
   - 삭제 방 D2 "아무도 없음"은 재입장 예시: seed12가 방을 만들고 seed13 참가 → seed12 나감 → 다시 들어옴 → 나감 → seed13 나감(빈 방 삭제). 마지막 1명이 나가면 방이 삭제되므로 2명이 필요해요
   - 끝난 참가는 D의 `RoomRepository.save`가 로그로 넣어 줘요. 시드는 도메인 메서드로 방을 만들고 `save`만 불러요
 - 화면 공통 틀(`base.html`, 안내·페이지 이동 조각), 공통 CSS
-- 1초 폴링 유틸(`polling.js`): 요청이 겹치지 않게, 탭이 숨으면 멈춤
 
 ### B — 인증 전체
 - 도메인: `User`(아이디·닉네임·비밀번호 규칙 검사), `TokenBlacklist`, 인증 예외
@@ -90,8 +89,10 @@
 - `schemas.py`: 요청·응답 스키마(필드 description, 422 검증). 이용 기록 항목(`HistoryItemResponse`)에는 기록 ID(`participation_id`)를 넣지 않아요(D-025)
 - 메인(공개 방 목록)·방 상세 화면 템플릿
 - `rooms.js`
-  - 목록 1초 갱신, 방 만들기·참가
+  - 목록·상세 [새로고침] 버튼: 화면 진입·클릭 때만 조회, 조회 중에는 버튼을 막아요(자동 조회 없음, D-026)
+  - 방 만들기·참가
   - 상세의 팀 구성 표시, 팀 이동·나가기·제목 변경·게임 시작 버튼
+  - 변경이 거부되면 사유를 보이고 상세를 한 번 다시 불러와요. 해산된 방이면 410이 와서 목록으로 가요
   - 해산·404·401 처리
 
 ## 4. 서로 맞출 곳
