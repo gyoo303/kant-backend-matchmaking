@@ -121,7 +121,8 @@
 - 되돌리기 비용: 낮음 (`Room`의 배정 메서드 하나)
 - 추천: A
 
-### D-025: participations 복합 PK와 이용 로그 테이블   [PENDING]
+### D-025: participations 복합 PK와 이용 로그 테이블   [APPROVED by user, 2026-10-31]
+- 결과: B 선택 — `participations`는 현재 참가만(PK `room_id`+`user_id`), 끝난 이용은 `participation_logs`에 1건씩 쌓는다. 이력 응답의 `participation_id`는 뺀다(사용자 결정). 기술 설계는 ADR-011
 - 요청: 같은 회원이 같은 방에 다시 들어온 것을 DB에서 확인할 수 있어야 한다. `participations`의 PK를 자체 `id`에서 `(room_id, user_id)` 복합키로 바꾸고, 재입장 이력은 로그 테이블에 남긴다(사용자 요청, 2026-10-31). 기존 방식(자체 `id`, 로그 테이블 없음, 재입장마다 새 행)을 대체한다
 - 근거: REQ-045·046, INV-04·10·11, ARCH-Q-03, 분석 전문 `docs/01-pm/D-025-participations-composite-pk.md`
 - 관련 계층: [모듈 협력 구조] [레이어]

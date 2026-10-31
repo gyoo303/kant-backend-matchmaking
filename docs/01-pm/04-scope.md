@@ -13,9 +13,9 @@
   - `User`(login_id·nickname·비밀번호 해시, `validate_raw_password()`), `TokenBlacklist.is_blocked()`
   - `Room`: `create()`, `rename()`, `join()`, `change_team()`, `leave()`, `start_game()`, `is_active`, `is_full`, `available_seats` / 값 객체 `RoomTitle` / `TeamSide`(A·B) / `DeleteReason`(GAME_STARTED·EMPTY)
   - `Participation`: `end()`, `is_current`, `join_order`
-- **상태**: 방 = 활성 → 삭제됨(EMPTY | GAME_STARTED), 되돌릴 수 없음 / 참가 = 참가 중 → 종료, 재입장은 새 기록 (`03-domain.md` §5)
+- **상태**: 방 = 활성 → 삭제됨(EMPTY | GAME_STARTED), 되돌릴 수 없음 / 참가 = 참가 중 → 종료(이용 로그로 보관), 재입장은 새 기록 (`03-domain.md` §5, D-025)
 - **불변 규칙**: INV-01~15 (`03-domain.md` §6). 필수 범위는 순차 요청 기준으로 지킨다(NFR-04). 동시 요청 보장은 도전 A(D-018)
-- **핵심 결정**: 방장만 시작(Q-01), 본인 팀만 변경(Q-02), 자동 팀 배정 — A팀 우선, 자리가 없으면 B(Q-03, D-024), 팀은 도메인 엔티티 `Team`(D-023), 아이디+닉네임+비밀번호 가입(Q-04), 3화면 = 방 목록/내 기록/방 상세(D-012), 성공 200(D-013), 동시 요청 무결성은 도전 A·도전은 요청 시에만 착수(D-018)
+- **핵심 결정**: 방장만 시작(Q-01), 본인 팀만 변경(Q-02), 자동 팀 배정 — A팀 우선, 자리가 없으면 B(Q-03, D-024), 팀은 도메인 엔티티 `Team`(D-023), 아이디+닉네임+비밀번호 가입(Q-04), 3화면 = 방 목록/내 기록/방 상세(D-012), 성공 200(D-013), 동시 요청 무결성은 도전 A·도전은 요청 시에만 착수(D-018), 현재 참가와 이용 로그 분리·이력 응답에 기록 ID 없음(D-025)
 - **→ARCH 질문**: ARCH-Q-01(권한·규칙 위반 코드), ARCH-Q-02(동시성 제약·잠금·트랜잭션), ARCH-Q-03(참가/이력 테이블·소프트 삭제 필드), ARCH-Q-04(해산 vs 접근 불가 응답 계약), ARCH-Q-05(JWT 보관·CSRF), ARCH-Q-06(응답 유실 재조회), ARCH-Q-07(`%`·`_` 검색) — `02-assumptions-questions.md` §→ARCH 이관
 - **문서별 읽을 곳**
   - `03-domain.md` §4·§6: 도메인 클래스·DB 제약 설계
