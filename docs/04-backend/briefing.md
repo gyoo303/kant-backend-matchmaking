@@ -1,6 +1,6 @@
 ---
 stage: BE
-tickets: [TKT-BE-M2-01, TKT-BE-M3-01, TKT-BE-M3-02, TKT-BE-M3-03, TKT-BE-M3-04, TKT-BE-M3-05, TKT-BE-M4-01, TKT-BE-M4-02, TKT-BE-M4-03, TKT-BE-M5-01, TKT-BE-M8-01]
+tickets: [TKT-BE-M2-01, TKT-BE-M3-01, TKT-BE-M3-02, TKT-BE-M3-03, TKT-BE-M3-04, TKT-BE-M3-05, TKT-BE-M4-01, TKT-BE-M4-02, TKT-BE-M4-03, TKT-BE-M5-01, TKT-BE-M8-01, TKT-BE-M9-01]
 status: done
 inputs_read: [AR-MAP, AR-HAND, AR-SYS, AR-API, AR-CONV, AR-GATE, AR-ADR, DB-BRIEF, PM-DOMAIN, PM-AC, PM-DEC]
 next_readers: [DB, FE, QA]
@@ -40,9 +40,18 @@ next_readers: [DB, FE, QA]
 | | 로그아웃한 access 토큰 401 | 충족(가짜 레포지토리) | 블랙리스트에 넣은 access 토큰으로 `GET /api/rooms` → 401. 실제 DB 위 확인은 못 함 |
 | | AC-02-3·06-5 수동 curl 확인 | 부분 충족 | 실제 DB 대신 가짜 서비스로 400(정원 마감·삭제된 방) 응답 형식 확인. 실제 데이터 흐름은 미확인 |
 | TKT-BE-M8-01 | GATE-02·05·07 | 충족 | 명령 그대로 실행, 출력 0줄 / `ruff check src` 통과, `ruff format --check src` 40 files |
+| TKT-BE-M9-01 | GATE-02·05·07 | 충족 | 명령 그대로 실행, 출력 0줄 / `ruff check src tests` 통과, `ruff format --check src tests` 49 files |
+| | 도메인 규칙 변화 없음 | 충족 | `Participation`에서 `id`만 빠짐, `Room` 메서드 본문 변경은 생성 호출 2곳뿐 |
 | | 팀 정원을 `Team.add`가 거부 | 충족 | 임시 스크립트: 4명 방에서 A팀 이동 → `TeamFullError`, 참가 순서별 팀 A·A·B·B, 나가기·이동 후 팀 인원 갱신 |
 
 ## 만든 것
+### TKT-BE-M9-01 (D-025, ADR-011)
+- `src/rooms/domain/participation.py`: `Participation`에서 `id` 필드를 뺐다. 식별은 (`room_id`, `user_id`)다. `left_at`은 그대로이며, 레포지토리 `save`가 이 값을 보고 끝난 참가를 `participation_logs`로 옮긴다(TKT-DB-M9-01)
+- `src/rooms/domain/room.py`: `create`·`join`의 `Participation(...)` 생성에서 `id=None`을 뺐다. 규칙·검사 순서는 그대로다
+- `src/rooms/application/read_models.py`: `HistoryItem.participation_id` 제거
+- `src/rooms/presentation/schemas.py`: `HistoryItemResponse.participation_id` 제거(AC-13-5). API-ROOM-10 응답 필드는 `room_id`·`room_title`·`joined_at`·`left_at`·`is_current`·`room_deleted`
+- 서비스(`service.py`·`queries.py`)·라우터는 바뀌지 않았다
+
 ### TKT-BE-M8-01 (D-023·D-024, ADR-010)
 - `src/rooms/domain/team.py`(신규): `Team(id, side, members)`, `CAPACITY = 2`, 속성 `count`·`is_full`, `add(participation)`(2명이면 `TeamFullError`, 참가 기록의 편을 이 팀으로), `remove(participation)`
 - `src/rooms/domain/room.py`: 생성자에 `teams: list[Team]` 추가(A·B 하나씩 아니면 `ValueError`, 팀원 목록을 현재 참가로 다시 채움), `self.teams = {side: Team}`, `team(side)`. `create`가 팀 2개를 만든다. `join`은 `_team_to_join()`(A팀에 자리가 있으면 A, 없으면 B)으로 배정, `change_team`은 대상 팀 `add` → 원래 팀 `remove`, `leave`는 소속 팀 `remove`, `start_game`은 두 팀 `is_full`일 때만 시작하고 팀원을 비운다. `TEAM_CAPACITY`·`team_count`·`_team_with_fewer_members`는 없앴다(`Team.CAPACITY`·`team(side).count`)
@@ -173,12 +182,14 @@ next_readers: [DB, FE, QA]
 - 필요한 환경변수: `.env.example` 참고
 
 ## 임시 코드
+- TKT-BE-M9-01: 없음
 - TKT-BE-M8-01: 없음
 - TKT-BE-M4-03 기준: **남은 임시 코드 없음.** `X-Debug-User-Id`는 `src/`에서 지웠다(grep 0줄). 테스트(`tests/integration/*`)에는 아직 남아 있어 TKT-QA-M4-01에서 실제 토큰으로 바꿔야 한다
 - TKT-BE-M4-02 기준 현황(지난 기록): rooms API는 아직 `X-Debug-User-Id` 헤더로 회원을 받는다. auth API(`/me`·`/logout`)만 실제 Bearer 토큰을 쓴다. TKT-BE-M4-03에서 `get_current_user_id`를 `get_current_user` 기반으로 바꾸고 헤더 코드를 지운다
 - TKT-BE-M3-04: `src/auth/presentation/dependencies.py`의 `X-Debug-User-Id` 헤더 인증(`TODO(TKT-BE-M4-03)` 주석). TKT-BE-M4-03에서 SEQ-03(JWT·쿠키·블랙리스트)으로 바꾸고 `grep -rn "X-Debug-User-Id" src/` 0줄을 확인한다
 
 ## 프론트엔드에게 전달할 것
+- TKT-BE-M9-01: 이용 이력 응답 항목에서 `participation_id`가 빠졌다. 현재 템플릿(`history.html`)은 이 필드를 쓰지 않아 바꿀 것이 없다
 - TKT-BE-M8-01: 없음. 응답의 `team`·`my_team`은 그대로 `"A"`·`"B"`다. 두 번째 참가자가 이제 A팀이다(D-024)
 - TKT-BE-M5-01: **템플릿 6개를 이 경로·이름으로 만든다**: `src/templates/auth/signup.html`, `auth/login.html`, `rooms/list.html`, `rooms/detail.html`, `rooms/history.html`, `rooms/archived.html`. 서버가 넘기는 값: login → `notice`(문자열 또는 None) / list → `cond`(dict: `keyword` 문자열, `available_only` bool, `sort` 문자열, `page` int), `notice`(문자열 또는 None) / detail·archived → `room_id`(int) / history → `page`(int) / signup → 없음. 정적 파일은 `src/static/` 아래에 두고 템플릿에서 `url_for('static', path='css/app.css')` 또는 `/static/css/app.css`로 부른다. `src/static/` 폴더가 생기기 전에는 `/static/…` 요청이 500이다
 - TKT-BE-M4-03: rooms API도 모두 `Authorization: Bearer <access_token>`으로 부른다(TKT-BE-M4-02 안내와 같음)
@@ -327,6 +338,7 @@ next_readers: [DB, FE, QA]
 - trade-off: A — 일부 테스트만 다른 루프 범위가 필요하면 그 테스트에서 따로 지정해야 한다. B — 모듈마다 같은 줄을 반복하고 빠뜨리면 루프 불일치 오류가 난다.
 
 ## 설계와 다르게 한 것 / 질문 / DB 에이전트에게 요청
+- TKT-BE-M9-01: DB 에이전트에게 요청 — `RoomRepository._participation_to_domain`이 `id`를 넘기지 않고, `save`가 `participation.id` 대신 `user_id`로 기존 행을 짝지어야 한다(TKT-DB-M9-01). `RoomQueryRepository.list_history`도 `HistoryItem(participation_id=…)`를 쓰지 않아야 한다. 그 전까지 레포지토리를 쓰는 코드·통합 테스트는 실패한다. 단위 테스트 14개는 `Participation(1, …)`처럼 첫 인자로 `id`를 넘겨 실패한다 — TKT-QA-M9-01 범위
 - TKT-BE-M8-01: DB 에이전트에게 요청 — `RoomRepository._to_domain`이 `Room(…, teams=[Team(id, side) …], participations=…)`로 만들어야 한다(TKT-DB-M8-01). 그 전까지 레포지토리를 쓰는 통합 테스트·시드는 실패한다
 - TKT-BE-M5-01: CONV-07의 `user_id=5` 필드는 넣지 않았다. 이 값을 채울 `request.state.user_id`를 정하는 곳이 설계에 없다(인증 의존성은 `request`를 받지 않음). 로그에 회원 ID가 필요하면 ARCH가 설정 위치를 정해 주세요
 - TKT-BE-M5-01: 로깅 미들웨어를 함수로 만들었다(위 자율 결정). ARCH에 CONV-07·11의 `RequestLoggingMiddleware` 표기를 `log_requests`로 갱신 요청
@@ -346,6 +358,11 @@ next_readers: [DB, FE, QA]
 - pytest는 `tests/`가 없어 "No files were found in testpaths" 경고를 낸다. QA가 `tests/`를 만들면 사라진다(정상).
 
 ## 검증 결과
+
+### TKT-BE-M9-01
+- GATE-02·07: 명령 그대로 0줄 / GATE-05: `ruff check src tests` 통과, `ruff format --check src tests` 49 files already formatted
+- `uv run pytest -q tests/unit`: 62 passed, 14 failed — 모두 테스트가 `Participation`에 `id`를 첫 위치 인자로 넘겨 생긴 `TypeError`(TKT-QA-M9-01에서 고침). 도메인 규칙 실패는 없음
+- 확인하지 못함: 레포지토리·통합 테스트(TKT-DB-M9-01·TKT-QA-M9-01 뒤)
 
 ### TKT-BE-M8-01
 - GATE-02·07: 명령 그대로 0줄 / GATE-05: `ruff check src` 통과, `ruff format --check src` 40 files already formatted

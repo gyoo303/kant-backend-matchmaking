@@ -87,7 +87,6 @@ class Room:
             raise AlreadyParticipatingError()
         room_title = RoomTitle.of(title)
         creator = Participation(
-            id=None,
             room_id=None,
             user_id=creator_id,
             join_order=1,
@@ -154,7 +153,6 @@ class Room:
         team = self._team_to_join()
         self.last_join_order += 1
         participation = Participation(
-            id=None,
             room_id=self.id,
             user_id=user_id,
             join_order=self.last_join_order,

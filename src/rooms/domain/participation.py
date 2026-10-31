@@ -12,9 +12,11 @@ class TeamSide(StrEnum):
 
 @dataclass
 class Participation:
-    """한 회원이 한 방에 한 번 입장한 기록. left_at이 없으면 참가 중 (INV-10·11)."""
+    """한 회원이 한 방에 한 번 입장한 기록. left_at이 없으면 참가 중 (INV-10·11).
 
-    id: int | None
+    별도 id 없이 (room_id, user_id)로 구분한다. 끝난 기록은 저장 때 이용 로그로 옮겨진다 (ADR-011).
+    """
+
     room_id: int | None
     user_id: int
     join_order: int

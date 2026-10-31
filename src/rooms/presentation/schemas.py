@@ -79,7 +79,6 @@ class CurrentRoomResponse(_Schema):
 
 
 class HistoryItemResponse(_Schema):
-    participation_id: int = Field(..., description="이용 기록 ID")
     room_id: int = Field(..., description="방 ID")
     room_title: str = Field(..., description="방 제목")
     joined_at: datetime = Field(..., description="입장 시각")

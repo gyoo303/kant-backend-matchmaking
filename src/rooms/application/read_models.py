@@ -56,7 +56,6 @@ class CurrentRoom:
 
 @dataclass(frozen=True)
 class HistoryItem:
-    participation_id: int
     room_id: int
     room_title: str
     joined_at: datetime
