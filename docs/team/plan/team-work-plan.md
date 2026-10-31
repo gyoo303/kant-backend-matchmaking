@@ -297,8 +297,8 @@ A①~④(반나절) → C① 껍데기(반나절) → D① read_models → D③�
 
 | 파일 | 내용 |
 |---|---|
-| `team-work-plan.md` | 이 문서 |
-| `work-plan-A.md` ~ `work-plan-E.md` | 파트별 계획표(단계별 할 일·참고·유의·완료 확인, §6 선후 관계 표) |
-| `db-table-creation-flow.md` | 앱 기동 때 테이블·시드가 만들어지는 과정 |
-| `team-dependency-diagram.html` | 선후 관계 도식(그림, 상자 클릭 시 연결 강조) |
-| `db-table-creation-slides.html` | 같은 내용의 발표용 슬라이드(브라우저로 열기, ←/→ 이동, P로 PDF 인쇄) |
+| `plan/team-work-plan.md` | 이 문서 |
+| `plan/team-dependency-diagram.html` | 선후 관계 도식(그림, 상자 클릭 시 연결 강조) |
+| `plan/work-plan-A.md` ~ `plan/work-plan-E.md` | 파트별 계획표(단계별 할 일·참고·유의·완료 확인, §6 선후 관계 표) |
+| `guide/db-table-creation-flow.md` | 앱 기동 때 테이블·시드가 만들어지는 과정 |
+| `guide/db-table-creation-slides.html` | 같은 내용의 발표용 슬라이드(브라우저로 열기, ←/→ 이동, P로 PDF 인쇄) |
