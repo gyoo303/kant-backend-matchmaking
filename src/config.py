@@ -27,6 +27,16 @@ class Settings(BaseSettings):
 
     db_pool_size: int = 10
     db_max_overflow: int = 10
+
+    # 수업 추가 내용: DB 커넥션 풀 관련 설정
+    db_pool_timeout: int = 30.0
+    db_pool_recycle: int = 1800
+    db_pool_pre_ping: bool = True
+
+    # 수업 추가 내용: DB 세션 관련 설정
+    db_session_autoflush: bool = False
+    db_session_expire_on_commit: bool = False    
+
     seed_user_password: str
 
 
