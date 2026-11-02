@@ -206,3 +206,185 @@ function initRoomListPage() {
   loadRoomList(cond);
 }
 
+// ------------------------------------------------------------------ 상세 (SCR-04)
+
+let detailRoomId = null;
+let lastDetail = null;
+// 변경 요청을 보내는 동안 모든 버튼을 잠근다. 조회가 다시 그려도 풀리지 않게 상태로 둔다.
+let detailBusy = false;
+
+function detailUrl(suffix) {
+  return "/api/rooms/" + detailRoomId + suffix;
+}
+
+function teamMembers(detail, side) {
+  // participants는 서버가 A팀 먼저, 팀 안에서 입장 순서로 정렬해 준다. 순서 번호는 보이지 않는다(REQ-045).
+  return detail.participants.filter((participant) => participant.team === side);
+}
+
+function renderTeam(side, members) {
+  const key = side.toLowerCase();
+  document.getElementById("team-" + key + "-count").textContent = members.length + "/" + TEAM_SIZE;
+  const list = document.getElementById("team-" + key + "-members");
+  list.replaceChildren();
+  for (const member of members) {
+    const item = document.createElement("li");
+    item.textContent = member.is_host ? "★" + member.nickname + " (방장)" : member.nickname;
+    list.appendChild(item);
+  }
+  for (let seat = members.length; seat < TEAM_SIZE; seat += 1) {
+    const item = document.createElement("li");
+    item.className = "muted";
+    item.textContent = "(빈자리)";
+    list.appendChild(item);
+  }
+}
+
+function updateDetailButtons() {
+  if (lastDetail === null) {
+    return;
+  }
+  const isMember = lastDetail.my_team !== null;
+  document.getElementById("rename-box").hidden = !lastDetail.am_i_host;
+  document.getElementById("member-actions").hidden = !isMember;
+  document.getElementById("host-actions").hidden = !lastDetail.am_i_host;
+  document.getElementById("guest-actions").hidden = isMember;
+
+  const moveButton = document.getElementById("move-button");
+  if (isMember) {
+    moveButton.textContent = (lastDetail.my_team === "A" ? "B" : "A") + "팀으로 이동";
+  }
+  for (const button of document.querySelectorAll("#room button")) {
+    button.disabled = detailBusy;
+  }
+  const teamsReady =
+    teamMembers(lastDetail, "A").length === TEAM_SIZE &&
+    teamMembers(lastDetail, "B").length === TEAM_SIZE;
+  document.getElementById("start-button").disabled = detailBusy || !teamsReady;
+  document.getElementById("join-button").disabled = detailBusy || lastDetail.is_full;
+}
+
+function renderDetail(detail) {
+  lastDetail = detail;
+  document.getElementById("room").hidden = false;
+  document.getElementById("room-title").textContent = detail.title;
+  document.getElementById("room-count").textContent = detail.current_count + "/" + detail.capacity;
+  renderTeam("A", teamMembers(detail, "A"));
+  renderTeam("B", teamMembers(detail, "B"));
+  updateDetailButtons();
+}
+
+function handleDetailError(result) {
+  if (result.status === 401) {
+    return;
+  }
+  if (result.status === 410) {
+    location.href = DISSOLVED_URL;
+  } else if (result.status === 404) {
+    // 해산 안내와 다른 문구(AC-16-7)
+    document.getElementById("room").hidden = true;
+    showError(NOT_FOUND_TEXT);
+  } else if (isLoadFailure(result)) {
+    // 마지막으로 그린 정보는 그대로 두고 안내만 보인다(AC-16-5)
+    showLoadError();
+  } else {
+    showError(errorMessage(result));
+  }
+}
+
+async function loadRoomDetail() {
+  const result = await apiRequest("GET", detailUrl(""));
+  if (result.ok) {
+    renderDetail(result.data);
+    clearLoadError();
+  } else {
+    handleDetailError(result);
+  }
+}
+
+// 거부 사유를 보이고 상세를 1회 다시 읽는다. 해산된 방이면 400 뒤 조회가 410이라 목록으로 간다(AC-16-4).
+async function showChangeFailure(result) {
+  if (result.status === 401) {
+    return;
+  }
+  showError(errorMessage(result));
+  await loadRoomDetail();
+}
+
+// 변경 요청 하나. 성공하면 응답 data를, 실패하면 null을 돌려준다. 성공 뒤에는 다시 조회하지 않는다.
+async function sendDetailChange(method, url, body) {
+  if (detailBusy) {
+    return null;
+  }
+  detailBusy = true;
+  updateDetailButtons();
+  let result;
+  try {
+    result = await apiRequest(method, url, body);
+  } finally {
+    detailBusy = false;
+    updateDetailButtons();
+  }
+  if (!result.ok) {
+    await showChangeFailure(result);
+    return null;
+  }
+  hideNotice();
+  showingLoadError = false;
+  return result.data;
+}
+
+async function renameRoom(event) {
+  event.preventDefault();
+  const input = document.getElementById("rename-title");
+  const detail = await sendDetailChange("PATCH", detailUrl(""), { title: input.value });
+  if (detail) {
+    renderDetail(detail);
+    input.value = "";
+  }
+}
+
+async function moveTeam() {
+  const team = lastDetail.my_team === "A" ? "B" : "A";
+  const detail = await sendDetailChange("PATCH", detailUrl("/participants/me"), { team });
+  if (detail) {
+    renderDetail(detail);
+  }
+}
+
+async function joinFromDetail() {
+  const detail = await sendDetailChange("POST", detailUrl("/participants"));
+  if (detail) {
+    renderDetail(detail);
+  }
+}
+
+async function leaveRoom() {
+  if (await sendDetailChange("DELETE", detailUrl("/participants/me"))) {
+    location.href = "/";
+  }
+}
+
+async function startGame() {
+  if (await sendDetailChange("POST", detailUrl("/start"))) {
+    location.href = DISSOLVED_URL;
+  }
+}
+
+function initRoomDetailPage() {
+  if (!getAccessToken()) {
+    return;
+  }
+  detailRoomId = document.getElementById("room").dataset.roomId;
+  setupRefreshButton(() => {
+    hideNotice();
+    showingLoadError = false;
+    return loadRoomDetail();
+  });
+  document.getElementById("rename-form").addEventListener("submit", renameRoom);
+  document.getElementById("move-button").addEventListener("click", moveTeam);
+  document.getElementById("join-button").addEventListener("click", joinFromDetail);
+  document.getElementById("leave-button").addEventListener("click", leaveRoom);
+  document.getElementById("start-button").addEventListener("click", startGame);
+  loadRoomDetail();
+}
