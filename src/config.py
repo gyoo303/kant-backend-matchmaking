@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     db_max_overflow: int = 10
 
     # 수업 추가 내용: DB 커넥션 풀 관련 설정
-    db_pool_timeout: int = 30.0
+    db_pool_timeout: int = 30
     db_pool_recycle: int = 1800
     db_pool_pre_ping: bool = True
 
