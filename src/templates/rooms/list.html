@@ -1,1 +1,86 @@
-{# 공개 방 목록(메인): [새로고침], 내가 참가 중인 방, 방 만들기, 검색·정렬, 목록, 페이지 이동 #}
+{% extends "base.html" %}
+{# 공개 방 목록(메인), SCR-03 / PAGE-03 #}
+{# 서버 컨텍스트: cond(keyword·available_only·sort·page). 해산 안내 notice는 base.html의 #notice가 보여 준다. #}
+{# 목록 행·현재 방·페이지 이동은 rooms.js가 API로 채운다. require_login은 base 기본값(true) 그대로 둔다. #}
+{% set available_only = cond.available_only in [True, "true"] %}
+
+{% block title %}공개 방 목록{% endblock %}
+
+{% block content %}
+{# [새로고침]을 누를 때만 다시 조회한다(SEQ-13, ADR-012) #}
+<div class="form-row">
+  <button type="button" id="refresh-button" class="secondary">새로고침</button>
+</div>
+<p id="current-room" class="card" hidden>
+  참가 중인 방: <a id="current-room-link" href="#"></a>
+</p>
+
+<section class="card" aria-labelledby="create-heading">
+  <h2 id="create-heading">방 만들기</h2>
+  <form id="create-form" class="form-row">
+    <div class="form-field">
+      <label for="create-room-title">제목</label>
+      <input id="create-room-title" name="title" maxlength="20" required>
+    </div>
+    <button type="submit" id="create-button">만들기</button>
+  </form>
+  <p class="muted">2vs2 · 4명 고정</p>
+</section>
+
+<section class="card" aria-labelledby="list-heading">
+  <h1 id="list-heading">공개 방 목록</h1>
+  {# 조건을 바꾸면 page 없이 GET 제출하므로 1페이지부터 본다(AC-15-4) #}
+  <form method="get" action="/" class="form-row">
+    <div class="form-field">
+      <label for="keyword">검색</label>
+      <input id="keyword" name="keyword" maxlength="50" value="{{ cond.keyword or '' }}">
+    </div>
+    <div class="form-field">
+      <label for="available_only">
+        <input type="checkbox" id="available_only" name="available_only" value="true"
+               {% if available_only %}checked{% endif %}>
+        빈자리 있는 방만
+      </label>
+    </div>
+    <div class="form-field">
+      <label for="sort">정렬</label>
+      <select id="sort" name="sort">
+        <option value="newest" {% if cond.sort != "oldest" %}selected{% endif %}>최신순</option>
+        <option value="oldest" {% if cond.sort == "oldest" %}selected{% endif %}>오래된순</option>
+      </select>
+    </div>
+    <button type="submit" class="secondary">찾기</button>
+  </form>
+
+  <div id="room-list"
+       data-keyword="{{ cond.keyword or '' }}"
+       data-available-only="{{ 'true' if available_only else 'false' }}"
+       data-sort="{{ cond.sort or 'newest' }}"
+       data-page="{{ cond.page or 1 }}">
+    <p id="room-total" class="muted"></p>
+    <p id="room-empty" hidden>조건에 맞는 방이 없습니다. 새 방을 만들어 보세요</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">제목</th>
+            <th scope="col" class="nowrap">인원</th>
+            <th scope="col" class="nowrap">생성 시각</th>
+            <th scope="col" class="nowrap">상태</th>
+            <th scope="col"><span class="muted">참가</span></th>
+          </tr>
+        </thead>
+        <tbody id="room-rows"></tbody>
+      </table>
+    </div>
+  </div>
+  {% include "partials/pagination.html" %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/rooms.js') }}"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", initRoomListPage);
+</script>
+{% endblock %}
