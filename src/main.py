@@ -73,7 +73,7 @@ app.middleware("http")(log_requests)
 #   CORS(Cross-Origin Resource Sharing) : 
 #   브라우저는 보안상 "다른 출처"(도메인/포트가 다른 곳)로 보내는 요청을 막는다.
 #   서버가 "이 출처는 허용해요"라고 응답 헤더에 넣어줘야 브라우저가 통과시킴
-app.middleware(
+app.add_middleware(
     CORSMiddleware,
 
     # 허용할 출처 목록 ㅡ .env의 CORS_ORIGINS 값 (예: ["http://localhost:8000"])
