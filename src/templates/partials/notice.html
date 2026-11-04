@@ -1,1 +1,6 @@
-{# 안내 문구 영역 #}
+{# 안내 한 줄 영역 (07-screens.md §2)
+   - 화면 라우트가 notice 값을 넘기면 처음부터 보이고, 없으면 hidden으로 숨긴다
+   - JS는 api.js의 showNotice()로 같은 자리에 문구를 쓴다
+   - role="status" + aria-live: 문구가 바뀌면 화면 낭독기가 읽어 준다
+   - {{ }}는 자동 이스케이프된다. |safe는 쓰지 않는다 (XSS 방지) #}
+<p id="notice" class="notice" role="status" aria-live="polite" {% if not notice %}hidden{% endif %}>{{ notice or "" }}</p>
