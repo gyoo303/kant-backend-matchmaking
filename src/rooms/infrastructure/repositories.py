@@ -381,7 +381,7 @@ class RoomQueryRepository:
                     joined_at = row.joined_at,
                     left_at = None, # 아직 안 나감
                     is_current = True,
-                    room_deleted = rw.room.deleted_at is not None,
+                    room_deleted = row.room.deleted_at is not None,
                 )
             )
 
