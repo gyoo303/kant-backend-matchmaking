@@ -56,6 +56,7 @@ class RoomRepository:
         model = await self._find_model(room_id) # 방 아이디로 조회
         if model is None:
             return None  # "없음"만 알려주고, 응답코드로 내보낼지 여부는 서비스가 정한다.
+        return self._to_domain(model)
 
     # 파일/클래스 안에서만 쓰는 메서드 -> _ 표시
     async def _find_model(self, room_id: int) -> RoomModel | None:
@@ -108,7 +109,7 @@ class RoomRepository:
             # DB - 문자열저장("EMPTY") -> 도메인 - Enum저장
             delete_reason = DeleteReason(model.delete_reason) if model.delete_reason else None,
             teams = teams,
-            participations = [self.participation_to_domain(row) for row in rows],
+            participations = [self._participation_to_domain(row) for row in rows],
         )
 
     def _participation_to_domain(self, row: ParticipationModel) -> Participation:
@@ -319,19 +320,20 @@ class RoomQueryRepository:
                 )
             )
 
-            current_count = len(model.participations)
-            return RoomDetail(
-                id = model.id,
-                title = model.title,
-                capacity = model.capacity,
-                current_count = current_count,
-                is_full = current_count >= model.capacity,
-                host_user_id = model.host_user_id,
-                participants = participants,
-                my_team = None, # 레포지토리는 "방에 입장한 어떤 유저가 보는지" 모른다 -> 서비스가 replace로 채운다.
-                am_i_host = False,
-                created_at = model.created_at,
-            )
+        current_count = len(model.participations)
+        
+        return RoomDetail(
+            id = model.id,
+            title = model.title,
+            capacity = model.capacity,
+            current_count = current_count,
+            is_full = current_count >= model.capacity,
+            host_user_id = model.host_user_id,
+            participants = participants,
+            my_team = None, # 레포지토리는 "방에 입장한 어떤 유저가 보는지" 모른다 -> 서비스가 replace로 채운다.
+            am_i_host = False,
+            created_at = model.created_at,
+        )
 
     ## `list_history`·`get_archived_room`
     ### 개념: 이력 = 두 테이블 합치기
