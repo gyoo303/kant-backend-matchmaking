@@ -1,1 +1,84 @@
-/* 공통 스타일 */
+/* 공통 스타일 — 색·간격은 :root 토큰으로만 정하고, 다른 곳에서는 var(--…)로만 써요 (D-019) */
+:root {
+  --color-bg: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-text: #1f2328;
+  --color-text-muted: #57606a;
+  --color-border: #d0d7de;
+  --color-primary: #1f5fbf;
+  --color-on-primary: #ffffff;
+  --color-danger: #b42318;
+  --color-success: #1a7f37;
+  --color-notice: #0b5cad;
+  --color-disabled: #e3e7eb;
+  --color-team-a: #e8f0fe;
+  --color-team-b: #fdeceb;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --radius: 6px;
+  --font-body: system-ui, "Malgun Gothic", sans-serif;
+  --font-size-sm: 14px;
+  --font-size-base: 16px;
+  --font-size-lg: 20px;
+  --focus-ring: 3px solid var(--color-notice);
+}
+
+/* hidden 속성은 항상 숨김 — api.js가 hidden을 켜고 끄며 요소를 보이고 숨겨요 */
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+}
+button, input, select { font: inherit; }   /* 버튼·입력칸도 본문 글자 크기로 */
+h1, h2 { font-size: var(--font-size-lg); }
+
+/* 레이아웃 */
+.container { max-width: 960px; margin: 0 auto; padding: var(--space-3); }
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+/* 표 — 좁은 화면에서는 .table-wrap 안에서만 가로 스크롤 */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: var(--space-2); border-bottom: 1px solid var(--color-border); }
+.cell-title { min-width: 8em; }      /* 제목 칸이 찌그러지지 않게 */
+.nowrap { white-space: nowrap; }     /* "3/4", 시각이 두 줄로 쪼개지지 않게 */
+.muted { color: var(--color-text-muted); font-size: var(--font-size-sm); }
+
+/* 폼 — .form-field는 세로로 쌓기, .form-row는 가로 한 줄 */
+.form-field { margin-bottom: var(--space-3); }
+.form-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2); }
+label { display: block; }
+
+/* 버튼 — 기본은 주요 버튼, .secondary는 보조 버튼 */
+button, .button {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  cursor: pointer;
+}
+button.secondary, .button.secondary { background: var(--color-surface); color: var(--color-primary); }
+button:disabled { background: var(--color-disabled); color: var(--color-text-muted); cursor: not-allowed; }
+
+/* 안내 영역 — api.js가 class에 error / success를 붙여 색을 바꿔요 */
+.notice { color: var(--color-notice); }
+.notice.error { color: var(--color-danger); }
+.notice.success { color: var(--color-success); }
+
+/* 페이지 이동 */
+.pagination { display: flex; justify-content: center; align-items: center; gap: var(--space-3); }
+
+/* 팀 영역 — 넓으면 두 칸 나란히, 좁으면 위아래 */
+.teams { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--space-3); }
+.team-a { background: var(--color-team-a); }
+.team-b { background: var(--color-team-b); }
