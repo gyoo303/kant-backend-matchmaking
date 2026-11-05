@@ -26,6 +26,15 @@ from sqlalchemy.orm import selectinload
 from rooms.domain.participation import Participation, TeamSide
 from rooms.domain.room import DeleteReason, Room, RoomTitle
 from rooms.domain.team import Team
+from rooms.application.read_models import (
+    ArchivedRoom,
+    HistoryItem,
+    MyRecord,
+    ParticipantView,
+    RoomDetail,
+    RoomListCondition,
+    RoomSummary
+)
 
 # v2에서 container로 의존성 분리한다.
 from rooms.infrastructure.models import (
@@ -34,6 +43,7 @@ from rooms.infrastructure.models import (
     RoomModel,
     TeamModel
 )
+from auth.infrastructure.models import UserModel
 
 # RoomRepository
 class RoomRepository:
@@ -217,10 +227,212 @@ class RoomRepository:
         # 서비스는 이 반환값을 받아 room.id 등을 읽는다.
         return self._to_domain(model)
 
-# RoomQueryRepository — 조회용, 읽기 모델로 반환
-#   - list_active_rooms
-#   - get_room_detail
-#   - list_history: 현재 참가 + 이용 로그를 합친다
-#   - get_archived_room: 이용 로그만 읽는다
+
+
+### 개념: 조회 전용 레포지토리 - 
+# "화면 or API 모양의" 읽기 모델을 돌려준다
+# 도메인 규칙이 필요없는 '보여주기' - 도메인 안 거치고 바로 만든다(단순+빠름)
+
+class RoomQueryRepository:
+    """
+    조회 전용 저장소. ORM 객체 -> 읽기 모델(frozen dataclass)로 바꿔준다.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def list_active_rooms(self, cond: RoomListCondition) -> tuple[list[RoomSummary], int]:
+        # 화면 -> 정렬 옵션 선택
+        # 정렬: 생성 시각이 같을 때를 대비해 id를 두 번째 기준으로 추가한다(보험)
+        if cond.sort == "newest":
+            order = (RoomModel.created_at.desc(), 
+                     RoomModel.id.desc())
+        else:
+            order = (RoomModel.created_at.asc(),
+                     RoomModel.id.asc())
+
+        stmt = (
+            select(RoomModel)
+            .where(RoomModel.deleted_at == None) # 삭제된 방은 제외
+            .options(selectinload(RoomModel.participations)) # 현재 인원 계산용
+            .order_by(*order) # 튜플을 풀어서 -> order_by(a, b)로 넘겨준다
+        )
+
+        result = await self.session.execute(stmt)
+
+        # scalars(): 행 대신 RoomModel 객체들만 꺼낸다.
+        models = result.scalars().all() 
+
+        summaries: list[RoomSummary] = []
+        for model in models:
+            # participations에는 현재 참가만 있다 -> 길이(len) = 인원(count)
+            current_count = len(model.participations)
+
+            # 검색어 필터 (keyword의 strip, 빈 문자열 처리 -> router에서 수행)
+            if cond.keyword is not None and cond.keyword.lower() not in model.title.lower():
+                continue # 조건에 안맞으면 건너뜀
+
+            # 빈자리 필터
+            if cond.available_only and current_count >= model.capacity:
+                continue
+
+            summaries.append(
+                RoomSummary(
+                    id = model.id,
+                    title = model.title,
+                    current_count = current_count,
+                    capacity = model.capacity,
+                    is_full = current_count >= model.capacity,
+                    created_at = model.created_at,
+                )
+            )
+
+        total = len(summaries) # 전체 페이지 숫자를 계산하기 전 총 갯수
+        start = (cond.page - 1) * cond.size 
+        return summaries[start : start + cond.size], total
+
+    async def get_room_detail(self, room_id: int) -> RoomDetail | None:
+        stmt = (
+            select(RoomModel)
+            .where(RoomModel.id == room_id, RoomModel.deleted_at == None) 
+            .options(selectinload(RoomModel.participations).selectinload(ParticipationModel.team))
+        )
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+        if model is None:
+            return None # 없는 방, 삭제된 방 -> 서비스에서 응답코드 결정한다.
+
+        # 정렬 : A팀 먼저, 같은 팀 안에서는 입장 순서대로.
+        rows = sorted(model.participations, key=lambda row: (row.team.side, row.join_order))
+
+        participants: list[ParticipantView] = []
+        for row in rows:
+            # session.get(모델, PK) : PK로 한 행 읽기
+            # 세션에 이미 있으면 SQL 안거치고 바로 돌려준다.
+            user = await self.session.get(UserModel, row.user_id)
+            participants.append(
+                ParticipantView(
+                    user_id = row.user_id,
+                    nickname = user.nickname if user is not None else "", # FK이므로 정상 시나리오에서 존재
+                    team = TeamSide(row.team.side),
+                    is_host = row.user_id == model.host_user_id, 
+                )
+            )
+
+            current_count = len(model.participations)
+            return RoomDetail(
+                id = model.id,
+                title = model.title,
+                capacity = model.capacity,
+                current_count = current_count,
+                is_full = current_count >= model.capacity,
+                host_user_id = model.host_user_id,
+                participants = participants,
+                my_team = None, # 레포지토리는 "방에 입장한 어떤 유저가 보는지" 모른다 -> 서비스가 replace로 채운다.
+                am_i_host = False,
+                created_at = model.created_at,
+            )
+
+    ## `list_history`·`get_archived_room`
+    ### 개념: 이력 = 두 테이블 합치기
+
+    # 현재 참가 (participations, 0~1건)   ─┐
+    #                                    ├─▶ HistoryItem 목록 → joined_at 최신순 정렬 → 페이지 자르기
+    # 끝난 기록 (participation_logs, N건) ─┘
+
+    ##### 여기서 잠깐: python - stable sort (안정 정렬)
+    # 정렬 기준값이 동일하면, 정렬 이전 원래 순서를 보존한다.
+    # SQL에서 joined_at desc, id desc로 미리 정렬 
+    #   -> 파이썬 최종 정렬 시 joined_at 기준으로만 정렬해도 id desc 정렬조건이 보존된다.
+
+    async def list_history(
+            self, user_id: int, page: int, size: int
+    ) -> tuple[list[HistoryItem], int]:
+        
+        # 현재 참가 (본인 것만)
+        # 방 제목, 삭제 여부를 읽으므로 .room을 미리 로딩한다
+        current_stmt = (
+            select(ParticipationModel)
+            .where(ParticipationModel.user_id == user_id)
+            .options(selectinload(ParticipationModel.room))
+        )
+        current_rows = (await self.session.execute(current_stmt)).scalars().all()
+
+        # 끝난 기록 (본인 것만)
+        # 최신순, 같으면 id 큰 것 먼저.
+        log_stmt = (
+            select(ParticipationLogModel)
+            .where(ParticipationLogModel.user_id == user_id)
+            .options(selectinload(ParticipationLogModel.room))
+            .order_by(ParticipationLogModel.joined_at.desc(),
+                      ParticipationLogModel.id.desc())
+        )
+
+        log_rows = (await self.session.execute(log_stmt)).scalars().all()
+
+        # 현재 참가(본인) + 끝난 참가(본인) 
+        # -> 둘다 HistoryItem으로 바꿔 리스트 하나에 담는다
+        items: list[HistoryItem] = []
+        for row in current_rows:
+            items.append(
+                HistoryItem(
+                    room_id = row.room_id,
+                    room_title = row.room.title,
+                    joined_at = row.joined_at,
+                    left_at = None, # 아직 안 나감
+                    is_current = True,
+                    room_deleted = rw.room.deleted_at is not None,
+                )
+            )
+
+        for log in log_rows:
+            items.append(
+                HistoryItem(
+                    room_id = log.room_id,
+                    room_title = log.room.title,
+                    joined_at = log.joined_at,
+                    left_at = log.left_at,
+                    is_current = False,
+                    room_deleted = log.room.deleted_at is not None,
+                )
+            )
+
+        # 현재기록, 끝난기록 합쳐서 최신순 정렬
+        # 안정 정렬이므로 기존 로그의 id 순서는 유지된다
+        items.sort(key=lambda item: item.joined_at, reverse=True)
+
+        total = len(items)
+        start = (page - 1) * size
+        return items[start : start + size], total
+
+
+    async def get_archived_room(self, room_id: int, user_id: int) -> ArchivedRoom | None:
+        # 관계를 안 읽는다, selectinload 없이 PK 조회로 충분하다.
+        room = await self.session.get(RoomModel, room_id)
+        if room is None or room.deleted_at is None:
+            return None # 없는 방, 또는 아직 활성 상태인 방은 보관정보X -> 404 (NotFoundError)
+
+        stmt = (
+            select(ParticipationLogModel)
+            .where(
+                ParticipationLogModel.room_id == room_id,
+                ParticipationLogModel.user_id == user_id,
+            )
+            .order_by(ParticipationLogModel.joined_at,
+                      ParticipationLogModel.id) # 오래된 순
+        )
+
+        logs = (await self.session.execute(stmt)).scalars().all() # 객체 형태로 모두 꺼내기
+        if not logs:
+            return None # 이 방에 참가한 적이 없으면 NotFoundError 404
+
+        return ArchivedRoom(
+            room_id = room.id,
+            title = room.title,
+            capacity = room.capacity,
+            created_at = room.created_at,
+            deleted_at = room.deleted_at,
+            my_records = [MyRecord(joined_at=log.joined_at, left_at=log.left_at) for log in logs]
+        )
 
 
