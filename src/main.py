@@ -9,9 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware # 다른 출처(도메인/포
 from fastapi.responses import JSONResponse # 상태코드/헤더를 직접 정해서 JSON 응답을 만드는 클래스
 from fastapi.staticfiles import StaticFiles # CSS, JS 등 파일을 그대로 내려주는 기능
 
-from rooms.presentation.router import rooms_router
+from rooms.presentation.router import router as rooms_router
 from rooms.presentation.pages import page_router as rooms_page_router
-from auth.presentation.router import auth_router
+from auth.presentation.router import router as auth_router
 from auth.presentation.pages import page_router as auth_page_router
 from config import get_settings
 from exceptions import AuthenticationError, DomainRuleError, GoneError, NotFoundError
