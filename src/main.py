@@ -9,6 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware # 다른 출처(도메인/포
 from fastapi.responses import JSONResponse # 상태코드/헤더를 직접 정해서 JSON 응답을 만드는 클래스
 from fastapi.staticfiles import StaticFiles # CSS, JS 등 파일을 그대로 내려주는 기능
 
+from rooms.presentation.router import rooms_router
+from rooms.presentation.pages import page_router as rooms_page_router
+from auth.presentation.router import auth_router
+from auth.presentation.pages import page_router as auth_page_router
 from config import get_settings
 from exceptions import AuthenticationError, DomainRuleError, GoneError, NotFoundError
 from logging_middleware import log_requests
@@ -222,9 +226,10 @@ async def handle_unexpected_error(request: Request, exc: Exception) -> JSONRespo
         
 # 라우터 등록: auth API, rooms API, 화면 라우트
 #   다른 파트 작업 끝나면 진행
-# app.include_router(auth_router)
-# app.include_router(rooms_router)
-# app.include_router(screen_router)
+app.include_router(auth_router)
+app.include_router(rooms_router)
+app.include_router(auth_page_router)
+app.include_router(rooms_page_router)
 
 # /static 마운트
 # 경로는 Path(__file__) 기준
