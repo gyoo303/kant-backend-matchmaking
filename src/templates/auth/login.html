@@ -1,1 +1,93 @@
-{# 로그인 화면: 아이디, 비밀번호 폼 #}
+{% extends "base.html" %}
+
+{# 로그인 화면의 제목과 접근 설정 #}
+{% block title %}로그인 · 2vs2 매치메이킹{% endblock %}
+{% block require_login %}false{% endblock %}
+
+{# 로그인 입력 영역 #}
+{% block content %}
+<section class="card">
+  <h1>로그인</h1>
+
+  <form id="login-form" action="/api/auth/token" method="post">
+    <div class="form-field">
+      <label for="login_id">아이디</label>
+      <input
+        type="text"
+        id="login_id"
+        name="username"
+        autocomplete="username"
+        required
+      >
+      <p class="muted">영문 소문자·숫자 4~20자</p>
+    </div>
+
+    <div class="form-field">
+      <label for="password">비밀번호</label>
+      <input
+        type="password"
+        id="password"
+        name="password"
+        autocomplete="current-password"
+        required
+      >
+      <p class="muted">8자 이상</p>
+    </div>
+
+    <button type="submit" id="login-button">로그인</button>
+  </form>
+
+  {# 회원가입 화면으로 이동할 링크 #}
+  <p><a href="/signup">회원가입</a></p>
+</section>
+{% endblock %}
+{# 로그인 폼의 제출 동작을 연결 #}
+{% block scripts %}
+<script>
+  // 로그인에 사용할 입력 요소와 버튼을 준비
+  const loginForm = document.getElementById("login-form");
+  const loginIdInput = document.getElementById("login_id");
+  const passwordInput = document.getElementById("password");
+  const loginButton = document.getElementById("login-button");
+
+  // 폼 제출 시 로그인 요청을 처리
+  loginForm.addEventListener("submit", async function (event) {
+    // 브라우저의 기본 폼 제출을 차단
+    event.preventDefault();
+
+    // 처리 중인 요청이 있으면 중복 제출을 차단
+    if (loginButton.disabled) {
+      return;
+    }
+
+    // 이전 안내를 숨김
+    hideNotice();
+
+    // 요청이 끝날 때까지 제출 버튼을 비활성화
+    loginButton.disabled = true;
+
+    try {
+      // 공통 로그인 함수로 요청과 토큰 저장을 처리
+      const result = await loginWithPassword(
+        loginIdInput.value,
+        passwordInput.value
+      );
+
+      // 로그인에 성공하면 메인 화면으로 이동
+      if (result.ok) {
+        location.href = "/";
+        return;
+      }
+
+      // 로그인 실패 사유를 표시
+      showNotice(errorMessage(result), "error");
+
+      // 실패하면 비밀번호만 비움
+      passwordInput.value = "";
+    } finally {
+      // 요청 처리가 끝나면 제출 버튼을 활성화
+      loginButton.disabled = false;
+    }
+  });
+</script>
+{% endblock %}
