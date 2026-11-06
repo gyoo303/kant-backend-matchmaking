@@ -76,7 +76,7 @@ async def session_scope() -> AsyncIterator[AsyncSession]:
             raise
 
 
-# get_db(): 요청마다 세션 하나 (commit은 서비스가 한다)
+# get_db(): 요청마다 세션 하나
 # 요청이 들어올 때마다 세션을 뿌려준다.
 async def get_db() -> AsyncIterator[AsyncSession]:
     """

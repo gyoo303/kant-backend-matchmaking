@@ -43,7 +43,7 @@ router = APIRouter(prefix="/api")
 # ---------------------------------------------------------------- 서비스 조립 (CONV-04)
 
 def get_room_service(db: DbSession) -> RoomApplicationService:
-#     """변경 서비스. 현재 시각은 서비스가 clock으로 한 번 얻어 쓴다(§8)."""
+    """변경 서비스. 현재 시각은 서비스가 clock으로 한 번 얻어 쓴다."""
     return RoomApplicationService(db, clock=lambda: datetime.now(UTC))
 
 # def get_room_service(db: AsyncSession = Depends(get_db)) -> RoomApplicationService:
