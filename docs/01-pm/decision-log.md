@@ -184,6 +184,22 @@
 - 되돌리기 비용: 낮음 (파일 이동만, 다른 모듈 변경은 주석의 경로 표기뿐)
 - 추천: A
 
+### D-029: 트랜잭션 확정을 요청 단위 `get_db`로 일원화   [APPROVED by user, 2026-11-06]
+- 결과: A 선택 — `database.session_scope()`가 정상 종료 시 commit, 예외(commit 실패 포함) 시 rollback 후 raise한다. `get_db`는 이를 감싸고, 모든 라우터·의존성은 `DbSession = Annotated[AsyncSession, Depends(get_db, scope="function")]`로 세션을 받는다. 서비스의 commit(auth 2곳, rooms 6곳)과 `RoomApplicationService.list_cache`를 제거하고, 레포지토리는 필요한 지점(DB 생성값, 같은 요청의 후속 조회)에서만 flush한다
+- 요청: 서비스마다 commit이 흩어져 트랜잭션 경계가 서비스에 묶여 있다. `get_db()`에서 yield 후 commit 한 번, flush는 필요한 지점에서, 서비스 계층 commit 삭제(사용자 요청, 2026-11-06, 리팩토링 2단계 `refactor/request-scoped-commit`)
+- 근거: `04-interfaces-api.md` §8, ADR-007(캐시 clear 시점), 금지 패턴 5, RISK-08, FastAPI 0.162 yield 의존성 실행 순서(`fastapi/routing.py`의 request·function exit stack, `dependencies/models.py`의 캐시 키)
+- 관련 계층: [레이어] [모듈 협력 구조]
+| 옵션 | 내용 | 장점 | 단점 | AI 부채 영향 | 평가표 영향 |
+|---|---|---|---|---|---|
+| A | `get_db`(scope="function")에서 commit 1회, `DbSession` 별칭으로 통일 | 확정 위치가 한 곳, 서비스를 이어 불러도 중간 확정 없음, 응답 전송 전에 commit해 실패가 500으로 드러남 | 웹 의존성(`fastapi.Depends`)이 `database.py`에 들어옴(3단계에서 container로 이동 예정) | 낮음 | 충족 |
+| B | `get_db`에서 commit, 기본 scope(request) | 코드가 가장 짧음 | commit이 응답 전송 후에 실행 → commit이 실패해도 클라이언트는 200 | 높음 — 데이터·응답 불일치 | 위험 |
+| C | 명시적 UoW 클래스가 commit 담당 | 트랜잭션 경계가 코드에 드러남 | 이 요청(get_db commit)과 확정 주체가 둘로 갈림, 지금은 한 요청이 aggregate 하나만 바꿔 이점이 적음 | 중 | 충족 |
+- 계층 관점 설명: [레이어] 서비스는 "무엇을 바꿀지"만 정하고, 트랜잭션 확정은 요청 경계(presentation 진입점의 의존성)가 맡는다. [모듈 협력 구조] FastAPI 의존성 캐시 키에 scope가 포함되므로 scope가 다른 `get_db`가 섞이면 한 요청에 세션이 2개 생긴다 → `DbSession` 별칭 하나만 허용(CONV-04, 금지 패턴 14, GATE-07)
+- 확인: `matchmaking_test` DB에서 회원가입·로그인·방 생성·같은 회원 재생성(400)·제목 변경·나가기·로그아웃을 요청해, 모든 요청이 세션 1개를 쓰고 COMMIT/ROLLBACK이 응답 시작보다 먼저 일어남을 확인했다. 400 요청은 rollback되어 DB에 남지 않았다
+- 감수할 점: 목록 캐시(CH-C) 비우기는 commit 이후 지점으로 옮겨야 한다(ADR-007 보완). 백그라운드 작업·시드는 요청 세션이 아니라 `session_scope()`를 따로 연다
+- 되돌리기 비용: 낮음
+- 추천: A
+
 ## 자율 결정
 
 사용자 확인 기준(범위·평가표·일정·보안·되돌리기 비용이 큰 결정)에 해당하지 않아 에이전트가 정한 결정이다. 사용자에게 묻지 않고 정했으므로, 팀원이 맥락을 알 수 있게 선택지·권장 이유·trade-off를 함께 적는다. 바꾸고 싶으면 해당 D-ID를 지정해 결정 카드로 다시 올린다.
