@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 import auth.infrastructure.models  # noqa: F401
 import rooms.infrastructure.models  # noqa: F401
 from database import AsyncSessionLocal, Base, close_db, engine
-from seed import seed_initial_data
+# from seed import seed_initial_data
 from rooms.presentation.router import router as rooms_router
 from rooms.presentation.pages import page_router as rooms_page_router
 from auth.presentation.router import router as auth_router
