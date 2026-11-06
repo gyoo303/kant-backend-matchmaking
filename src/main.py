@@ -9,6 +9,13 @@ from fastapi.middleware.cors import CORSMiddleware # 다른 출처(도메인/포
 from fastapi.responses import JSONResponse # 상태코드/헤더를 직접 정해서 JSON 응답을 만드는 클래스
 from fastapi.staticfiles import StaticFiles # CSS, JS 등 파일을 그대로 내려주는 기능
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+import auth.infrastructure.models  # noqa: F401
+import rooms.infrastructure.models  # noqa: F401
+from database import AsyncSessionLocal, Base, close_db, engine
+from seed import seed_initial_data
 from rooms.presentation.router import router as rooms_router
 from rooms.presentation.pages import page_router as rooms_page_router
 from auth.presentation.router import router as auth_router
@@ -16,6 +23,37 @@ from auth.presentation.pages import page_router as auth_page_router
 from config import get_settings
 from exceptions import AuthenticationError, DomainRuleError, GoneError, NotFoundError
 from logging_middleware import log_requests
+
+
+# lifespan
+# @asynccontextmanager: yield 하나로 "앞부분=시작시, 뒷부분=종료시"를 구분해 주는 데코레이터
+# FastAPI : 서버가 요청 받기 전에 yield 앞까지 실행한다
+# 서버가 종료 신호를 받으면 yield 뒤를 실행한다
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    settings = get_settings()
+
+    # 1) 테이블 생성 (SEQ-12)
+    #   engine.begin(): 커넥션 하나 + 트랜잭션 열고 블록이 끝나면 자동 commit
+    #   create_all -> "동기" 함수, async 커넥션에서 바로 부를 수 없다
+    #   -> run_sync가 동기 함수를 비동기 커넥션 위에서 대신 실행 (교안 5강 1장)
+    #   이미 있는 테이블은 건너뛴다 + 컬럼 변경은 반영하지 않는다 (모델 바뀌면 DB 지우고 재생성 필요)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    # 2) 시드 (한 세션 = 한 트랜잭션)
+    #   seed_initial_data -> flush만 하고, commit은 여기서 딱 한 번.
+    #   중간에 예외발생시 commit 없이 블록 이탈 -> 아무것도 저장X
+    async with AsyncSessionLocal() as session:
+        await seed_initial_data(session, settings)
+        await session.commit()
+
+    yield # 걸려있는 동안 서버가 요청을 처리한다.
+
+    # 3) 종료: 커넥션 풀의 연결을 모두 닫는다 (database.close_db = engine.dispose)
+    await close_db()
+
+
 
 # 로그 기본설정 - 앱 전체에서 딱 한번 호출 (가장 먼저)
 logging.basicConfig(level=logging.INFO)
@@ -40,28 +78,8 @@ app = FastAPI(
     title = "2vs2 매치메이킹", # /docs 화면 맨 위 제목
     description = "2vs2 공개 방을 만들거나 참가하고, 방장이 게임을 시작하거나 인원수가 0이 되면 방이 해산된다",
     version = "0.1.0", # /docs 화면 표시, API 버전
-    # v2에서 lifespan 추가 --- lifespan: 테이블 생성 → 시드 → 종료 시 엔진 정리
+    lifespan = lifespan,
 )
-
-# lifespan 예시코드
-##################
-# @asynccontextmanager
-# async def lifespan(app: FastAPI):
-#     # 서버 시작 시 실행
-#     from database import Base, engine, close_db
-#     from services.seed import seed_data
-
-#     # 1) 테이블 생성
-#     async with engine.begin() as conn:
-#         await conn.run_sync(Base.metadata.create_all)
-
-#     # 2) 시드 데이터 생성
-#     await seed_data()
-
-#     yield # 여기서 멈추고 FastAPI가 라우터를 실행한다
-
-#     # 서버 종료 시 실행
-#     await close_db()
 
 
 # 미들웨어: 요청 로깅, CORS
