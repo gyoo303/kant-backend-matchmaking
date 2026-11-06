@@ -4,9 +4,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from auth.domain.token_blacklist import TokenBlacklist
 from auth.domain.user import User
 from auth.infrastructure.models import TokenBlacklistModel, UserModel
+from auth.application.repository import TokenBlacklistRepository, UserRepository
 
 # 회원의 DB처리와 도메인 객체 변환을 담당
-class UserRepository:
+# class UserRepository:
+class SqlAlchemyUserRepository(UserRepository):
     # 호출부가 전달한 세션을 보관
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -103,7 +105,8 @@ class UserRepository:
         )
 
 # 토큰 차단 기록의 DB 조회와 저장을 담당
-class TokenBlacklistRepository:
+# class TokenBlacklistRepository:
+class SqlAlchemyTokenBlacklistRepository(TokenBlacklistRepository):
     # 호출부가 전달한 세션을 보관
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
