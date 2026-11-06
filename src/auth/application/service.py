@@ -24,7 +24,7 @@ BLACKLISTED_REFRESH_MESSAGE = '로그아웃 처리되어 사용할 수 없는 �
 EXPIRED_REFRESH_MESSAGE = '리프레시 토큰이 만료되었습니다. 다시 로그인하세요'
 INVALID_TOKEN_MESSAGE = '인증 토큰이 올바르지 않거나 로그인이 만료되었습니다'
 
-# 인증 처리의 순서와 확정을 담당
+# 인증 처리의 순서를 정의한다
 class AuthApplicationService:
     def __init__(self, db: AsyncSession) -> None:
         # 세션은 repository에만 넘긴다

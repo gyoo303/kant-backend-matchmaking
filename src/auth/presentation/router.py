@@ -14,7 +14,7 @@ from auth.presentation.schemas import (
     UserResponse,
 )
 # from database import get_db
-from database import DbSession 
+from database import DbSession
 
 # 인증 API의 공통 경로와 문서 분류를 지정
 router = APIRouter(prefix="/api/auth", tags=["auth"])

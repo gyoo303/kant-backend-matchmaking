@@ -33,7 +33,7 @@ class RoomApplicationService:
         db: AsyncSession,
         clock: Callable[[], datetime] = _utc_now,
     ) -> None:
-        self.db = db
+        # self.db = db
         self.clock = clock
         self.rooms = RoomRepository(db)
 
