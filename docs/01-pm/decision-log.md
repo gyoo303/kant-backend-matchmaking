@@ -200,27 +200,28 @@
 - 되돌리기 비용: 낮음
 - 추천: A
 
-### D-030: 저장소·외부 도구 계약을 application 계층에 ABC로 정의   [APPROVED by user, 2026-11-06]
-- 결과: A 선택 — 저장소 계약(`UserRepository`, `TokenBlacklistRepository`, `RoomRepository`, `RoomQueryRepository`)은 `src/<기능>/application/repository.py`, 외부 도구 계약(`PasswordHasher`, `TokenProvider`)은 `src/auth/application/ports.py`에 `abc.ABC` + `@abstractmethod`로 정의한다. infrastructure는 `SqlAlchemy…Repository`, `BcryptPasswordHasher`, `JwtTokenProvider`로 이 계약을 상속해 구현하고, 서비스는 생성자에서 계약 타입만 받는다
-- 요청: `infrastructure/repositories.py`에 대한 추상 계약을 application 계층의 `repository.py`에 정의하고, 계층 간 의존성을 단방향으로 정리한다(사용자 요청, 2026-11-06, 리팩토링 3단계 `refactor/ddd-ports-container`). 계약 위치를 domain이 아닌 application으로 둔 근거를 옵션 비교로 남긴다(사용자 요청)
-- 근거: `05-structure-conventions.md` §2 의존 방향·CONV-02·금지 패턴 1·11, GATE-02, ADR-001, D-029
+### D-030: 저장소 계약(`repository.py`)은 domain에, 구현(`repositories.py`)은 infrastructure에 ABC로 둔다   [APPROVED by user, 2026-11-06]
+- 결과: A 선택 — aggregate 저장소 계약(`UserRepository`, `TokenBlacklistRepository`, `RoomRepository`)은 `src/<기능>/domain/repository.py`, 구현(`SqlAlchemyUserRepository`, `SqlAlchemyTokenBlacklistRepository`, `SqlAlchemyRoomRepository`)은 `src/<기능>/infrastructure/repositories.py`에 둔다. 계약은 `abc.ABC` + `@abstractmethod`로 정의하고 구현이 상속한다. 단, application의 읽기 모델을 반환하는 조회 저장소 계약 `RoomQueryRepository`는 `src/rooms/application/query_repository.py`, 외부 도구 계약(`PasswordHasher`, `TokenProvider`)은 `src/auth/application/ports.py`에 둔다(위치 규칙: 계약은 인자·반환 타입이 속한 가장 안쪽 계층에). 서비스는 생성자에서 계약 타입만 받는다
+- 요청: `infrastructure/repositories.py`에 대한 추상 계약을 domain 계층의 `repository.py`에 정의하고, 계층 간 의존성을 단방향으로 정리한다(사용자 요청, 2026-11-06, 리팩토링 3단계)
+- 변경 이력: 2026-11-06 최초 승인안(모든 계약을 `application/repository.py`에 둠, 현재 표의 B)을 사용자 요청으로 domain 위치(A)로 수정. `7cd07ca`에서 만든 `src/auth/application/repository.py`는 `src/auth/domain/repository.py`로, `src/rooms/application/repository.py`는 `RoomRepository`를 `src/rooms/domain/repository.py`로 옮기고 남은 `RoomQueryRepository`만 `query_repository.py`로 이름을 바꿔 둔다
+- 근거: `05-structure-conventions.md` §2 의존 방향·CONV-02·금지 패턴 1·2·11, GATE-02, ADR-001, D-029
 - 관련 계층: [레이어] [모듈 협력 구조]
 | 옵션 | 내용 | 장점 | 단점 | AI 부채 영향 | 평가표 영향 |
 |---|---|---|---|---|---|
-| A | 모든 계약을 application에: 저장소 계약은 `application/repository.py`, 외부 도구 계약은 `application/ports.py` | 계약을 정의하는 계층 = 계약을 쓰는 계층(서비스)으로 일치, 읽기 모델을 반환하는 `RoomQueryRepository`도 같은 곳에 둘 수 있음, "바깥 세상과 맞닿는 계약은 모두 application"이라는 한 줄 규칙, domain은 동기·표준 라이브러리만 쓰는 순수 규칙 계층으로 유지 | 고전 DDD(Evans)의 "저장소는 도메인 개념" 관점과 다름, 도메인 서비스가 저장소를 써야 하면 옮겨야 함 | 낮음 | 충족 |
-| B | 고전 DDD: aggregate 저장소(`RoomRepository`·`UserRepository`·`TokenBlacklistRepository`)는 domain, 조회 저장소·외부 도구 계약은 application | aggregate 단위 저장이 도메인 모델의 일부로 드러남, 도메인 서비스가 저장소에 바로 기댈 수 있음 | 계약 위치 규칙이 둘로 갈림, domain에 async I/O 계약이 들어와 CONV-02(도메인 메서드는 동기)·금지 패턴 11의 취지와 어긋남, 지금은 저장소를 쓰는 도메인 코드가 없음 | 중 — 위치 판단을 계약마다 다시 해야 함 | 충족 |
-| C | 모든 계약을 domain에 | 계약이 한 곳 | `RoomQueryRepository`가 application의 읽기 모델(`RoomSummary` 등)을 반환하므로 domain → application 역참조가 생김(금지 패턴 2) | 높음 — 의존 방향 위반 | 위험 |
+| A (채택) | 고전 DDD: aggregate 저장소 계약은 `domain/repository.py`, 조회 저장소 계약은 `application/query_repository.py`, 외부 도구 계약은 `application/ports.py` | 저장소 = "aggregate를 넣고 꺼내는 컬렉션"이라는 도메인 개념이 코드 위치로 드러남, 계약의 인자·반환이 모두 domain 타입이라 domain 안에서 완결, 도메인 서비스가 생겨도 저장소 계약을 옮길 필요 없음 | 계약 위치가 두 계층으로 나뉨(위치 규칙 한 줄로 보완), domain에 `async def` 추상 메서드가 들어옴(엔티티 메서드는 동기 유지 — CONV-02 단서 필요) | 낮음 | 충족 |
+| B | 모든 계약을 application에: `application/repository.py`, `application/ports.py` (최초 승인안) | 계약을 쓰는 계층(서비스)과 정의 계층이 일치, 규칙 한 줄 | 저장소가 도메인 개념으로 드러나지 않음, 요청과 다름 | 낮음 | 충족 |
+| C | `RoomQueryRepository`까지 모든 계약을 domain에 | 계약이 한 곳 | `RoomQueryRepository`가 application의 읽기 모델(`RoomSummary` 등)을 반환하므로 domain → application 역참조(금지 패턴 2) | 높음 — 의존 방향 위반 | 위험 |
 | D | 계약 없이 현재 유지(서비스가 infrastructure를 직접 생성) | 변경 없음 | application → infrastructure 의존이 남아 DB·JWT 라이브러리 교체가 업무 흐름 코드에 번짐, 테스트에서 가짜 구현을 넣을 수 없음 | 중 | 충족 |
 
 - 계약 표기 방식 비교 (A 안에서):
 | 옵션 | 내용 | 장점 | 단점 |
 |---|---|---|---|
-| A1 (채택) | `abc.ABC` + `@abstractmethod`, 구현이 명시적으로 상속 | 계약과 구현의 연결이 코드에 보임, 메서드를 빠뜨린 구현은 객체를 만들 때 `TypeError` | infrastructure가 application의 계약 모듈을 import해야 함(바깥 → 안쪽이라 허용되는 방향) |
+| A1 (채택) | `abc.ABC` + `@abstractmethod`, 구현이 명시적으로 상속 | 계약과 구현의 연결이 코드에 보임, 메서드를 빠뜨린 구현은 객체를 만들 때 `TypeError`(요청마다 만드는 Factory이므로 첫 요청·단위 테스트에서 드러남) | infrastructure가 domain·application의 계약 모듈을 import해야 함(바깥 → 안쪽이라 허용되는 방향) |
 | A2 | `typing.Protocol`(구조적 타입) | 상속 없이 메서드 모양만 맞으면 됨 | 연결이 코드에 드러나지 않고, 구현 누락은 타입 검사기를 돌려야 발견 |
 
-- 계층 관점 설명: [레이어] 의존성 역전에서 계약은 그 기능이 필요한 쪽이 정의한다. 이 프로젝트에서 저장소를 부르는 곳은 응용 서비스(`AuthApplicationService`, `RoomApplicationService`, `RoomQueryService`)뿐이고, 도메인 객체는 저장소를 부르지 않는다(서비스가 조회해 `Room.create(title, user_id, current, now)`처럼 인자로 넘김). 그래서 계약을 application에 두면 의존 방향이 presentation → application ← infrastructure, application → domain으로 정리되고, application은 sqlalchemy·jwt·passlib·infrastructure를 import하지 않는다. [모듈 협력 구조] 계약과 구현을 잇는 일은 container(D-031)만 한다. `RoomQueryRepository` 구현이 닉네임 조회를 위해 `auth.infrastructure.models.UserModel`을 읽는 기능 간 결합은 읽기 전용이고 infrastructure 안의 결합이라 유지한다
-- 다시 검토할 조건: 도메인 규칙이 저장소를 직접 조회해야 하는 도메인 서비스가 생기면(예: 중복 검사를 도메인 서비스로 옮길 때) aggregate 저장소 계약만 domain으로 옮긴다(B)
-- 바뀌는 규칙: CONV-01 이름(계약 `<Entity>Repository`, 구현 `SqlAlchemy<Entity>Repository`), GATE-02에 "application → infrastructure·sqlalchemy·jwt·passlib import 0줄" 추가
+- 계층 관점 설명: [레이어] 의존성 역전에서 계약은 안쪽 계층이 정의하고 바깥쪽(infrastructure)이 상속해 구현한다. aggregate 저장소 계약은 domain 객체(`User`, `TokenBlacklist`, `Room`, `Participation`)만 주고받으므로 domain에 두고, import는 표준 라이브러리(`abc`)와 같은 기능의 domain만 쓴다. 의존 방향은 presentation → application → domain ← infrastructure, infrastructure → application(조회 계약·읽기 모델·포트)으로 정리되고, application과 domain은 sqlalchemy·jwt·passlib·infrastructure를 import하지 않는다. 계약은 `async def` 추상 메서드지만 저장소를 호출하는 곳은 응용 서비스(`AuthApplicationService`, `RoomApplicationService`, `RoomQueryService`)뿐이고 엔티티 메서드는 부르지 않으므로(서비스가 조회해 `Room.create(title, user_id, current, now)`처럼 인자로 넘김) 금지 패턴 11의 취지는 유지된다. [모듈 협력 구조] 계약과 구현을 잇는 일은 container(D-031)만 한다. `RoomQueryRepository` 구현이 닉네임 조회를 위해 `auth.infrastructure.models.UserModel`을 읽는 기능 간 결합은 읽기 전용이고 infrastructure 안의 결합이라 유지한다
+- 다시 검토할 조건: 조회 저장소의 반환 타입이 도메인 객체로 바뀌거나 읽기 모델을 domain으로 옮기게 되면 `RoomQueryRepository`도 domain으로 옮긴다(C의 위반이 사라지는 경우)
+- 바뀌는 규칙: CONV-01 이름(계약 `<Entity>Repository`는 domain, 구현 `SqlAlchemy<Entity>Repository`는 infrastructure), CONV-02 단서("엔티티·값 객체 메서드는 동기, `domain/repository.py`의 계약은 `async def` 추상 메서드"), GATE-02에 "application·domain → infrastructure·sqlalchemy·jwt·passlib import 0줄" 추가
 - 되돌리기 비용: 낮음 (계약 파일 위치 이동과 import 경로 수정)
 - 추천: A (A1)
 
