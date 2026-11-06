@@ -57,6 +57,7 @@ class UserRepository:
         return bool(result)
 
     # 회원을 저장하고 DB의 값을 반영한 도메인 객체를 반환
+    # 같은 요청의 다음 조회와 DB 생성값(id, created_at)을 위해 flush. 확정은 get_db
     async def save(self, user: User) -> User:
         if user.id is None:
             # 새 회원의 ORM 객체를 세션에 등록
@@ -117,6 +118,7 @@ class TokenBlacklistRepository:
         return bool(result)
     
     # 토큰 차단 기록을 저장
+    # 같은 요청의 다음 조회와 DB 생성값(id, created_at)을 위해 flush. 확정은 get_db
     async def save(self, entry: TokenBlacklist) -> None:
         # 도메인 객체의 토큰으로 ORM 객체를 만듦
         model = TokenBlacklistModel(token=entry.token)

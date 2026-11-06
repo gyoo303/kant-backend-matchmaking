@@ -1,22 +1,25 @@
 # DB 연결 — AsyncEngine과 세션
 ###### 실행흐름 ######
-# 1. 라우터에서 db: AsyncSession = Depends(get_db) 호출로 실행된다.
-# 2. yield에서 멈추고 세션을 라우터에게 다시 넘긴다
-# 3. 요청 처리가 끝나면 yield 다음 코드를 진행한다
-# 4. async with 블록 실행 완료 -> 세션 close -> 커넥션을 pool에 반납한다.
-
-###### 예외처리 #######
-# 작업 중 변경사항을 rollback으로 되돌린다.
-# 그다음 raise로 오류를 발생시켜 bootstrap/error_handlers.py의 전역 예외 핸들러가
-# 응답을 만들도록 한다 (400, 404 등)
+# 1. 라우터/의존성이 db: DbSession 선언 -> FastAPI가 get_db() 실행
+# 2. get_db() -> session_scope()로 세션 열고, yield에서 멈춰 세션을 넘긴다.
+# 3. 라우터 함수가 끝나면 (scope="function") yield 다음으로 복귀
+#   - 정상종료 -> commit (요청 하나 = 트랜잭션 하나)
+#   - 예외발생 -> rollback 후 raise -> bootstrap/error_handlers.py가 응답 생성
+# 4. async with 블록 종료 -> 세션 클로즈 -> 커넥션을 pool에 반납한다
+# 5. 최종적으로 응답이 클라이언트로 전송
 
 ###### 알아둘 것 #######
-# commit(처리내용 확정)은 여기서 처리하지 않는다.
-# 실제 작업요청을 처리하는 개별 서비스에서 마지막에 await self.db.commit() 호출한다.
+# commit(처리내용 확정) - 여기서만 수행
+# 서비스, 저장소는 commit하지 않음
+# 저장소는 필요 지점에서 flush만 한다
+# (DB 생성값 id 필요할 때 & 같은 요청의 다음 조회가 봐야 할 때)
 
 
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Annotated
 
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -57,6 +60,22 @@ class Base(DeclarativeBase):
     """모든 ORM 모델의 부모"""
 
 
+@asynccontextmanager
+async def session_scope() -> AsyncIterator[AsyncSession]:
+    """
+    블록 정상 종료 -> commit
+    예외 발생 -> rollback 후 raise
+    """
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            # 블록 안의 예외 + commit 자체 실패를 모두 여기서 잡는다
+            await session.rollback()
+            raise
+
+
 # get_db(): 요청마다 세션 하나 (commit은 서비스가 한다)
 # 요청이 들어올 때마다 세션을 뿌려준다.
 async def get_db() -> AsyncIterator[AsyncSession]:
@@ -65,13 +84,18 @@ async def get_db() -> AsyncIterator[AsyncSession]:
     - 예외 발생 시 작업 중 변경사항 rollback 후 raise
       -> bootstrap/error_handlers.py 전역 예외 핸들러
     """
+    async with session_scope() as session:
+        yield session
 
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        except Exception:
-            await session.rollback()
-            raise
+# DbSession: 모든 라우터, 의존성이 "같은 방식"으로 세션을 받기 위한 별칭
+# scope = "function"의 의미와 목적
+#   - 기본값(request) -> yield 뒤 commit이 "응답 전송 후"에 실행
+#   -> commit 실패해도 클라이언트는 이미 200을 받는다 (데이터와 응답 불일치)
+#   - function이면 라우터 함수가 끝난 직후, "응답 전송 전"에 commit한다
+#   -> commit 실패 = 500응답
+# 반드시 이 별칭만 사용: Depends(get_db)를 따로 쓰면 scope가 달라 캐시 키가 갈리고,
+# 한 요청에 세션이 2개 (= 트랜잭션 2개) 생김
+DbSession = Annotated[AsyncSession, Depends(get_db, scope="function")]
 
 
 ############

@@ -17,7 +17,7 @@
 #         .selectinload(ParticipationModel.team),       #        → 각 참가의 팀 (체인)
 # )
 
-# rooms 저장소 (flush만, commit은 서비스)
+# rooms 저장소 (flush만, commit은 get_db에서 수행한다.)
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -149,7 +149,12 @@ class RoomRepository:
     async def save(self, room: Room) -> Room:
         """
         도메인 Room 상태를 DB에 반영하고, flush 후 id가 채워진 Room을 돌려준다.
-        commit은 하지 않는다. 서비스가 한 요청의 마지막에 1회만 commit 수행한다.
+        commit은 하지 않는다. 요청이 끝날 때 database.get_db가 1회만 commit 수행한다.
+
+        flush를 RoomRepository.save에서 수행하는 이유
+        1) 새 방, 팀, 로그의 id(DB 자동생성값)이 필요 -> 라우터가 room.id로 상세정보를 읽는다
+        2) autoflush=False -> flush 없으면 같은 요청의 다음 조회(SELECT)가 방금 바꾼 내용을 보지 못함
+        3) unique 위반 같은 제약 오류가 commit 때가 아니라 "저장 지점"에서 드러난다
         """
 
         # 1. 방 ORM 객체 준비
