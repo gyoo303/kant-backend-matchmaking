@@ -2,7 +2,7 @@
 # exception.py = domain/ 계층이 import하는 파일 = 여기 의존성은 domain 의존성 추가로 이어진다.
 # -> 여기에 fastapi가 들어가면 도메인이 간접적으로 웹 프레임워크에 묶여서 GATE-02 위반
 # -> 그래서 HTTP 상태 코드(HTTPException)도 이 파일에 적지 않는다:
-#    "이 예외는 404" 연결은 main.py의 핸들러가 수행.
+#    "이 예외는 404" 연결은 bootstrap/error_handlers.py의 핸들러가 수행.
 
 ###### 1. 순수 파이썬 클래스 작성 ######
 ###### 2. 오류 응답형식 {"detail":...} ######
@@ -20,7 +20,8 @@ class DomainError(ValueError):
     def __init__(self, message: str) -> None:
         super().__init__(message)
 
-        # self.message -> main.py 핸들러가 {"detail": exc.message}를 만들 때 가져오는 속성값
+        # self.message -> bootstrap/error_handlers.py 핸들러가
+        #   {"detail": exc.message}를 만들 때 가져오는 속성값
         self.message = message
 
 
@@ -28,7 +29,7 @@ class DomainError(ValueError):
 # DomainRuleError   → 400
 class DomainRuleError(DomainError):
     """
-    - HTTP 400 (main.py 메인 핸들러가 상태코드 연결)
+    - HTTP 400 (bootstrap/error_handlers.py 전역 핸들러가 상태코드 연결)
     - 도메인 규칙 위반 (+서비스 이용 권한 포함)
     - 입력 규칙 위반, 정원 마감, 삭제된 방 변경요청, 방장/참가자 아닌데 요청 등
     ** HTTP 403(방장/참가자 권한오류)에 대응하는 클래스는 구현하지 않고 HTTP 400에 포함시킨다.

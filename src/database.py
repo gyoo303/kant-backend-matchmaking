@@ -7,7 +7,8 @@
 
 ###### 예외처리 #######
 # 작업 중 변경사항을 rollback으로 되돌린다.
-# 그다음 raise로 오류를 발생시켜 main.py의 전역 예외 핸들러가 응답을 만들도록 한다 (400, 404 등)
+# 그다음 raise로 오류를 발생시켜 bootstrap/error_handlers.py의 전역 예외 핸들러가
+# 응답을 만들도록 한다 (400, 404 등)
 
 ###### 알아둘 것 #######
 # commit(처리내용 확정)은 여기서 처리하지 않는다.
@@ -27,7 +28,7 @@ _settings = get_settings()
 
 # engine
 # DB 클라이언트 객체는 앱 전체에서 딱 하나만 만든다.
-# main.py - engine.begin()으로 접속한다.
+# bootstrap/lifespan.py - engine.begin()으로 접속한다.
 engine = create_async_engine(
     _settings.database_url,
     pool_size=_settings.db_pool_size,  # 평소에 유지하는 연결
@@ -51,7 +52,7 @@ AsyncSessionLocal = async_sessionmaker(engine,
 # Base: 모든 ORM 모델의 부모, 교안 5-1
 # 클래스 내부 정의 필요X - 상속만 하면 빈 테이블 목록 생성 (Base.metadata)
 # 작업분담 B, D파트가 class UserModel(Base)처럼 상속 -> 해당 모델이 목록에 등록된다.
-# 나중에 main.py에서 create_all 호출 -> 목록에 올라간 테이블 전체를 생성한다.
+# 나중에 bootstrap/lifespan.py에서 create_all 호출 -> 목록에 올라간 테이블 전체를 생성한다.
 class Base(DeclarativeBase):
     """모든 ORM 모델의 부모"""
 
@@ -61,7 +62,8 @@ class Base(DeclarativeBase):
 async def get_db() -> AsyncIterator[AsyncSession]:
     """
     - 요청 하나에 세션 하나
-    - 예외 발생 시 작업 중 변경사항 rollback 후 raise -> main.py 전역 예외 핸들러
+    - 예외 발생 시 작업 중 변경사항 rollback 후 raise
+      -> bootstrap/error_handlers.py 전역 예외 핸들러
     """
 
     async with AsyncSessionLocal() as session:

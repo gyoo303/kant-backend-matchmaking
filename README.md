@@ -64,6 +64,7 @@ git checkout -b <브랜치명>
 ```
 src/
   main.py  config.py  database.py  exceptions.py  seed.py  logging_middleware.py
+  bootstrap/  앱 조립 부품: lifespan, 미들웨어, 전역 예외 핸들러, 라우터 등록
   auth/    회원가입, 로그인(JWT), 로그아웃
   rooms/   방 만들기, 참가, 팀 변경, 나가기, 게임 시작, 조회
     domain/          순수 파이썬 도메인

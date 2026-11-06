@@ -169,6 +169,21 @@
 - 되돌리기 비용: 중 (다른 파트가 오류 처리를 짜기 전에 바꾸면 낮음)
 - 추천: A
 
+### D-028: `main.py`를 책임별 `bootstrap/` 모듈로 분리   [APPROVED by user, 2026-11-06]
+- 결과: A 선택 — `main.py`는 `create_app()`에서 앱을 만들고 등록 함수만 부른다. lifespan·미들웨어·전역 예외 핸들러·라우터 등록은 `src/bootstrap/` 아래 파일 4개로 나눈다. 동작(라우트·OpenAPI·예외 응답·미들웨어 순서)은 바꾸지 않는다
+- 요청: `main.py`(253줄)에 시작·종료 처리, 미들웨어, 예외 변환, 라우터 등록이 한 파일에 섞여 있어 길고 변경 이유가 여러 개다(사용자 요청, 2026-11-06, 리팩토링 1단계 `refactor/split-main`)
+- 근거: `05-structure-conventions.md` §1·CONV-11·금지 패턴 10(기능 변경과 구조 리팩토링 분리), ADR-004, D-027
+- 관련 계층: [레이어] [모듈 협력 구조]
+| 옵션 | 내용 | 장점 | 단점 | AI 부채 영향 | 평가표 영향 |
+|---|---|---|---|---|---|
+| A | `src/bootstrap/` 패키지: `lifespan.py`, `middleware.py`(`register_middleware`), `error_handlers.py`(`register_exception_handlers`), `routing.py`(`register_routes`). `main.py`는 `create_app()` + `app = create_app()` | 파일마다 바뀌는 이유가 하나, `main.py`만 읽으면 조립 순서가 보임, `create_app()`으로 테스트에서 앱을 새로 만들 수 있음, `uvicorn main:app` 그대로 | 파일 수 +5, 핸들러 등록이 데코레이터에서 `add_exception_handler` 호출로 바뀜 | 낮음 | 충족 |
+| B | `src/` 바로 아래에 `lifespan.py`·`error_handlers.py`·`routing.py`를 평평하게 둠 | 패키지 추가 없음 | `config.py`·`database.py` 등 공통 모듈과 앱 조립 부품이 섞임 | 낮음 | 충족 |
+| C | `main.py` 유지, 주석으로 구역만 나눔 | 변경 없음 | 요청과 다름 | 낮음 | 충족 |
+- 계층 관점 설명: [레이어] `bootstrap/`은 4계층 밖의 조립(composition) 영역이다. 기능 모듈의 `presentation`(라우터)을 import하는 것은 `bootstrap/routing.py`뿐이고, 기능 모듈은 `bootstrap/`을 import하지 않는다. 예외 → HTTP 변환은 여전히 한 파일(`error_handlers.py`)에서만 한다(D-027·ADR-004). [모듈 협력 구조] import 시점에 실행되던 `get_settings()`·`logging.basicConfig`는 `create_app()` 안으로 옮겼다
+- 확인: 기존·새 앱의 라우트 표와 OpenAPI 스키마가 같고, 401·422·500·정적 파일·화면·CORS preflight 응답이 같다(시드 함수는 검증 때만 가짜로 넣음, `seed.py` 미구현은 별도 작업)
+- 되돌리기 비용: 낮음 (파일 이동만, 다른 모듈 변경은 주석의 경로 표기뿐)
+- 추천: A
+
 ## 자율 결정
 
 사용자 확인 기준(범위·평가표·일정·보안·되돌리기 비용이 큰 결정)에 해당하지 않아 에이전트가 정한 결정이다. 사용자에게 묻지 않고 정했으므로, 팀원이 맥락을 알 수 있게 선택지·권장 이유·trade-off를 함께 적는다. 바꾸고 싶으면 해당 D-ID를 지정해 결정 카드로 다시 올린다.
