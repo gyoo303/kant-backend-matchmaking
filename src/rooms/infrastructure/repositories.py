@@ -35,6 +35,7 @@ from rooms.application.read_models import (
     RoomListCondition,
     RoomSummary
 )
+from rooms.application.repository import RoomQueryRepository, RoomRepository
 
 # v2에서 container로 의존성 분리한다.
 from rooms.infrastructure.models import (
@@ -46,7 +47,8 @@ from rooms.infrastructure.models import (
 from auth.infrastructure.models import UserModel
 
 # RoomRepository
-class RoomRepository:
+# class RoomRepository:
+class SqlAlchemyRoomRepository(RoomRepository):
     def __init__(self, session: AsyncSession) -> None:
         # 동일 요청 안에서는 서비스, 레파지토리가 세션 하나를 함께 쓴다.
         self.session = session
@@ -239,7 +241,9 @@ class RoomRepository:
 # "화면 or API 모양의" 읽기 모델을 돌려준다
 # 도메인 규칙이 필요없는 '보여주기' - 도메인 안 거치고 바로 만든다(단순+빠름)
 
-class RoomQueryRepository:
+
+# class RoomQueryRepository:
+class SqlAlchemyRoomQueryRepository(RoomQueryRepository):
     """
     조회 전용 저장소. ORM 객체 -> 읽기 모델(frozen dataclass)로 바꿔준다.
     """
