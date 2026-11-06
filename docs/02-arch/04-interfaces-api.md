@@ -16,7 +16,7 @@
 | `GoneError` | `DomainError` | 410 | 게임 시작으로 해산된 방 상세 조회 (ARCH-Q-04) |
 | `AuthenticationError` | `Exception` | 401 | 토큰 없음·무효·만료·블랙리스트, 로그인 실패. 응답 헤더 `WWW-Authenticate: Bearer` |
 
-- 전역 핸들러(`src/main.py`)는 위 4개 부모 클래스만 등록한다. `detail = exc.message`. 403은 쓰지 않는다(D-015).
+- 전역 핸들러(`src/bootstrap/error_handlers.py`, D-028)는 위 4개 부모 클래스만 등록한다. `detail = exc.message`. 403은 쓰지 않는다(D-015).
 
 ### 1.2 기능별 예외
 

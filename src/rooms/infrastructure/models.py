@@ -9,7 +9,7 @@ from database import Base # ORM 모델의 부모 클래스 (공통요소)
 
 ### 개념: ORM 모델 = 테이블 설계도
 # `class RoomModel(Base)` 처럼 `Base`를 상속하면 `Base.metadata`라는 "테이블 목록"에 자동 등록
-#   - 나중에 A의 `main.py`가 `create_all`을 부르면 목록에 있는 테이블을 실제로 생성함
+#   - 나중에 A의 `bootstrap/lifespan.py`가 `create_all`을 부르면 목록에 있는 테이블을 실제로 생성함
 # `Mapped[int]` = "이 속성은 int 컬럼"이라는 타입 표시, `mapped_column(...)` = 컬럼 옵션(PK, FK, 길이 등).
 # `Mapped[datetime | None]` 처럼 `| None`을 붙이면 NULL 허용 컬럼
 # `relationship(...)` = 컬럼이 아니라 **"연결된 다른 객체로 가는 길"** 

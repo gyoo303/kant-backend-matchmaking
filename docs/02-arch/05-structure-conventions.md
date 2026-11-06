@@ -14,7 +14,13 @@ kant-ubuntu-books-claude1/
 ├── README.md                   # (FE)
 ├── src/
 │   ├── __init__.py
-│   ├── main.py                 # 앱 생성, lifespan(create_all·seed), 미들웨어, 전역 예외 핸들러, 라우터·StaticFiles 등록
+│   ├── main.py                 # create_app(): 앱 생성과 bootstrap/ 등록 함수 호출만 (D-028)
+│   ├── bootstrap/              # 앱 조립 부품 (D-028)
+│   │   ├── __init__.py
+│   │   ├── lifespan.py         # lifespan: create_all·seed·close_db
+│   │   ├── middleware.py       # register_middleware(): 요청 로깅 → CORS 순서 (CONV-11)
+│   │   ├── error_handlers.py   # register_exception_handlers(): 400/401/404/410/422/500 → {"detail"}
+│   │   └── routing.py          # register_routes(): API·화면 라우터, /static 마운트
 │   ├── config.py               # Settings(BaseSettings), get_settings()
 │   ├── database.py             # engine, AsyncSessionLocal, Base, get_db()
 │   ├── exceptions.py           # DomainError, DomainRuleError, NotFoundError, GoneError, AuthenticationError
@@ -64,6 +70,8 @@ presentation ──▶ application ──▶ domain
          rooms.infrastructure.repositories(RoomQueryRepository) ──▶ auth.infrastructure.models (UserModel: 닉네임 조회)
          auth ──▶ rooms : 금지
 공통:    모든 계층 ──▶ src/exceptions.py, domain 제외 모든 계층 ──▶ config.py, database.py
+조립:    main.py ──▶ bootstrap/ ──▶ 각 기능 presentation(라우터)·infrastructure.models(create_all)
+         기능 모듈(auth·rooms) ──▶ bootstrap/ : 금지 (D-028)
 ```
 
 - `domain/`은 표준 라이브러리(`dataclasses`, `datetime`, `enum`, `re`, `typing`)와 `exceptions`, 같은 기능의 `domain`만 import한다.
@@ -83,7 +91,7 @@ presentation ──▶ application ──▶ domain
 | CONV-08 | (도전 A 적용 후) 방을 바꾸는 서비스 메서드(참가·제목·팀·나가기·게임 시작)는 반드시 `RoomRepository.find_by_id_for_update`로 방을 읽는다(ADR-009). 필수 범위에서는 `find_by_id`를 쓴다. |
 | CONV-09 | 인증은 `Authorization: Bearer` 헤더만 쓴다(쿠키 없음, ADR-002·D-021). 화면 JS는 access·refresh 토큰을 `localStorage`에 두고 `api.js`로만 API를 부른다. 상태 변경은 JSON `fetch`로만 보낸다. |
 | CONV-10 | CORS: `CORSMiddleware(allow_origins=settings.cors_origins, allow_credentials=True, allow_methods=["GET","POST","PATCH","DELETE"], allow_headers=["Authorization","Content-Type"])`. 와일드카드 `*` 금지. |
-| CONV-11 | 미들웨어 등록 순서(`main.py`): `RequestLoggingMiddleware` 다음 `CORSMiddleware`를 `add_middleware`(마지막에 추가한 CORS가 가장 바깥). |
+| CONV-11 | 미들웨어 등록 순서(`bootstrap/middleware.py`, D-028): `RequestLoggingMiddleware` 다음 `CORSMiddleware`를 `add_middleware`(마지막에 추가한 CORS가 가장 바깥). |
 | CONV-12 | 템플릿: `Jinja2Templates(directory=<src>/templates)`, 정적 `app.mount("/static", StaticFiles(directory=<src>/static))`. 경로는 `Path(__file__).parent` 기준. 템플릿은 자동 이스케이프를 끄지 않는다. |
 | CONV-13 | 커밋: 한 커밋에 한 티켓, 메시지 `feat(<stage>): <요약> (TKT-…)`. |
 

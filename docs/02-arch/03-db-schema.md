@@ -193,7 +193,7 @@ erDiagram
 
 ## 6. 시드 계획
 
-- 위치: `src/seed.py`의 `async def seed_initial_data(session: AsyncSession, settings: Settings) -> None`. `src/main.py` lifespan이 `create_all` 직후 호출한다.
+- 위치: `src/seed.py`의 `async def seed_initial_data(session: AsyncSession, settings: Settings) -> None`. `src/bootstrap/lifespan.py`의 lifespan이 `create_all` 직후 호출한다.
 - 중복 방지: `users`에 `login_id = 'seed01'`이 있으면 아무것도 넣지 않고 반환한다. 전체를 한 트랜잭션으로 넣는다(RISK-12, NFR-06).
 - 비밀번호: 모든 시드 회원은 `settings.seed_user_password`(환경변수 `SEED_USER_PASSWORD`)를 bcrypt로 해시해 넣는다. 값은 `.env.example`과 README에만 적는다(D-014).
 - 시각: 기준 시각 `base = 서버 시작 시각`에서 분 단위로 빼서 생성 시각 순서를 만든다.

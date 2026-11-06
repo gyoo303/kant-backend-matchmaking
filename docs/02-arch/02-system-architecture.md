@@ -11,7 +11,7 @@ flowchart LR
         WEB["Jinja2 화면 + api.js·rooms.js"]
         SW["Swagger UI /docs"]
     end
-    subgraph App["FastAPI (src/main.py)"]
+    subgraph App["FastAPI (src/main.py + src/bootstrap/)"]
         MW["미들웨어: CORS → 요청 로깅·처리 시간"]
         EH["전역 예외 핸들러"]
         subgraph AUTH["auth"]
