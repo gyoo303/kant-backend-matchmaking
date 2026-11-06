@@ -13,10 +13,11 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
+# from sqlalchemy.ext.asyncio import AsyncSession
 
+from database import DbSession
 from auth.presentation.dependencies import get_current_user_id
-from database import get_db
+# from database import get_db
 from rooms.application.queries import RoomQueryService
 from rooms.application.read_models import RoomListCondition
 from rooms.application.service import RoomApplicationService
@@ -41,15 +42,21 @@ router = APIRouter(prefix="/api")
 
 # ---------------------------------------------------------------- 서비스 조립 (CONV-04)
 
-
-def get_room_service(db: AsyncSession = Depends(get_db)) -> RoomApplicationService:
-    """변경 서비스. 현재 시각은 서비스가 clock으로 한 번 얻어 쓴다(§8)."""
+def get_room_service(db: DbSession) -> RoomApplicationService:
+#     """변경 서비스. 현재 시각은 서비스가 clock으로 한 번 얻어 쓴다(§8)."""
     return RoomApplicationService(db, clock=lambda: datetime.now(UTC))
 
+# def get_room_service(db: AsyncSession = Depends(get_db)) -> RoomApplicationService:
+#     """변경 서비스. 현재 시각은 서비스가 clock으로 한 번 얻어 쓴다(§8)."""
+#     return RoomApplicationService(db, clock=lambda: datetime.now(UTC))
 
-def get_query_service(db: AsyncSession = Depends(get_db)) -> RoomQueryService:
+def get_query_service(db: DbSession) -> RoomQueryService:
     """조회 서비스(commit 없음)."""
     return RoomQueryService(db)
+
+# def get_query_service(db: AsyncSession = Depends(get_db)) -> RoomQueryService:
+#     """조회 서비스(commit 없음)."""
+#     return RoomQueryService(db)
 
 
 # ---------------------------------------------------------------- rooms

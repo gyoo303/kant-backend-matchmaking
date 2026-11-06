@@ -13,8 +13,8 @@ from rooms.infrastructure.repositories import RoomRepository
 
 
 # 목록 캐시(도전 C)가 갖출 모양 약속 — 캐시 파일 없이도 타입을 적기 위해 Protocol로 둔다
-class ListCacheInvalidator(Protocol):
-    def clear(self) -> None: ...
+# class ListCacheInvalidator(Protocol):
+#     def clear(self) -> None: ...
 
 
 # 현재 시각의 기본값 — CONV-06: now()는 서비스의 clock에서만 부른다
@@ -24,15 +24,17 @@ def _utc_now() -> datetime:
 
 # 방을 바꾸는 흐름 (SEQ-05~09). 필수 범위는 잠금 없이 find_by_id로 읽는다(도전 A 제외)
 class RoomApplicationService:
+    # list_cache 매개변수 제거 (도전C 관련)
+    #   캐시 비우기 -> "commit 이후"여야 의미가 있다.
+    #   commit -> get_db에서 일괄 수행하도록 변경됨
+    #   도전C 진행시, get_db의 commit 뒤에서 비운다 (ADR-007)
     def __init__(
         self,
         db: AsyncSession,
         clock: Callable[[], datetime] = _utc_now,
-        list_cache: ListCacheInvalidator | None = None,
     ) -> None:
         self.db = db
         self.clock = clock
-        self.list_cache = list_cache
         self.rooms = RoomRepository(db)
 
     # 방 만들기 — 한 회원 한 방 판단은 도메인이 하므로 현재 참가를 먼저 읽어 넘긴다
@@ -40,7 +42,7 @@ class RoomApplicationService:
         current = await self.rooms.find_current_participation(user_id)
         room = Room.create(title, user_id, current, self.clock())
         saved = await self.rooms.save(room)  # id가 채워진 방 — 라우터가 saved.id로 상세를 읽는다
-        await self._commit()
+        # await self._commit()
         return saved
 
     # 참가 — 같은 방에 다시 요청하면 도메인이 기존 기록을 돌려주고 변화가 없다
@@ -49,7 +51,7 @@ class RoomApplicationService:
         room = await self._get_room(room_id)
         room.join(user_id, current, self.clock())
         saved = await self.rooms.save(room)
-        await self._commit()
+        # await self._commit()
         return saved
 
     # 제목 변경
@@ -57,7 +59,7 @@ class RoomApplicationService:
         room = await self._get_room(room_id)
         room.rename(user_id, title)
         saved = await self.rooms.save(room)
-        await self._commit()
+        # await self._commit()
         return saved
 
     # 팀 변경
@@ -65,7 +67,7 @@ class RoomApplicationService:
         room = await self._get_room(room_id)
         room.change_team(user_id, team)
         saved = await self.rooms.save(room)
-        await self._commit()
+        # await self._commit()
         return saved
 
     # 나가기 — leave 전에 방장을 기억해 둬야 위임이 있었는지 알 수 있다
@@ -74,7 +76,7 @@ class RoomApplicationService:
         previous_host = room.host_user_id
         room.leave(user_id, self.clock())
         await self.rooms.save(room)
-        await self._commit()
+        # await self._commit()
         host_changed = room.is_active and room.host_user_id != previous_host
         return LeaveResult(
             room_deleted=not room.is_active,
@@ -87,7 +89,7 @@ class RoomApplicationService:
         now = self.clock()
         room.start_game(user_id, now)
         await self.rooms.save(room)
-        await self._commit()
+        # await self._commit()
         return GameStartResult(room_id=room_id, dissolved_at=now)
 
     # 없으면 404 — 판단은 서비스, HTTP 변환은 전역 핸들러(CONV-05)
@@ -97,8 +99,8 @@ class RoomApplicationService:
             raise RoomNotFoundError()
         return room
 
-    # commit은 요청 끝에서 한 번만. 캐시가 있으면 목록을 비운다
-    async def _commit(self) -> None:
-        await self.db.commit()
-        if self.list_cache is not None:
-            self.list_cache.clear()
+    # # commit은 요청 끝에서 한 번만. 캐시가 있으면 목록을 비운다
+    # async def _commit(self) -> None:
+    #     await self.db.commit()
+    #     if self.list_cache is not None:
+    #         self.list_cache.clear()

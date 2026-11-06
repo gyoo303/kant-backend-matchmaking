@@ -27,8 +27,10 @@ INVALID_TOKEN_MESSAGE = '인증 토큰이 올바르지 않거나 로그인이 �
 # 인증 처리의 순서와 확정을 담당
 class AuthApplicationService:
     def __init__(self, db: AsyncSession) -> None:
-        # 같은 세션을 사용하는 저장소를 준비
-        self.db = db
+        # 세션은 repository에만 넘긴다
+        # 서비스는 트랜잭션을 확정하지 않는다 (D-029)
+        #   -> self.db 보관 필요X
+        # self.db = db
         self.users = UserRepository(db)
         self.blacklist = TokenBlacklistRepository(db)
 
@@ -59,10 +61,10 @@ class AuthApplicationService:
         user = User.register(login_id, nickname, passowrd_hash)
 
         # 회원을 저장하고 DB 생성값이 반영된 객체를 받음
-        saved = await self.users.save(user)
+        saved = await self.users.save(user) # flush/refresh -> id, created_at 채운다.
 
         # 회원가입의 DB 변경을 확정
-        await self.db.commit()
+        # await self.db.commit()
 
         return saved
 
@@ -123,7 +125,7 @@ class AuthApplicationService:
         await self.blacklist.save(TokenBlacklist(token=refresh_token))
 
         # 두 차단 기록의 저장을 함께 확정
-        await self.db.commit()
+        # await self.db.commit()
     
     # 토큰을 검증해 현재 회원을 반환
     async def authenticate(self, token: str) -> User:
