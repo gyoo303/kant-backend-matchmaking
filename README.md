@@ -117,6 +117,20 @@ docker info
 
 #### 3단계. 5432 포트가 비어 있는지 확인
 
+먼저 **다른 Docker 컨테이너**가 5432를 쓰고 있지 않은지 봐요. 다른 과제에서 만든 PostgreSQL 컨테이너가 켜져 있으면 포트가 충돌하거나, 그 서버에 잘못 접속해 `role "matchmaking" does not exist` 오류가 나요.
+
+```powershell
+docker ps
+```
+
+- `PORTS`에 `0.0.0.0:5432->5432/tcp`가 있는 다른 컨테이너(`matchmaking-db`가 아닌 것)가 `Up …` 상태면 멈춰요. `<컨테이너이름>`은 목록의 `NAMES` 값으로 바꿔요.
+
+```powershell
+docker stop <컨테이너이름>
+```
+
+다음으로 Windows에 설치된 PostgreSQL 같은 다른 프로그램이 포트를 쓰는지 확인해요.
+
 ```powershell
 netstat -ano | findstr :5432
 ```
@@ -144,6 +158,10 @@ docker run -d --name matchmaking-db -e POSTGRES_USER=matchmaking -e POSTGRES_PAS
 | `postgres:16` | 이미지. 처음 한 번은 내려받느라 시간이 조금 걸려요 |
 
 - Windows 방화벽 허용 창이 뜨면 **허용**을 눌러요.
+- `Conflict. The container name "/matchmaking-db" is already in use`가 나오면 이전 컨테이너가 남아 있는 거예요. `docker rm -f matchmaking-db` 후 다시 실행해요.
+- `port is already allocated`가 나오면 3단계로 돌아가 포트를 쓰는 쪽을 멈춰요.
+
+> ⚠️ `-e POSTGRES_USER/PASSWORD/DB`는 **볼륨(`matchmaking-pgdata`)이 비어 있을 때 딱 한 번만** 적용돼요. 같은 이름의 볼륨이 이미 있으면 이 값들은 무시되고 예전 계정이 그대로 쓰여요. 처음부터 새로 만들려면 `docker rm -f matchmaking-db` 다음에 `docker volume rm matchmaking-pgdata`까지 하고 이 단계를 다시 실행해요. 볼륨이 남아 있는지는 `docker volume ls`로 볼 수 있어요.
 
 #### 5단계. 제대로 떴는지 확인
 
@@ -168,13 +186,19 @@ docker exec matchmaking-db createdb -U matchmaking matchmaking_test
 #### 7단계. `.env` 값으로 실제 접속되는지 확인
 
 ```powershell
+docker exec -it matchmaking-db psql -U matchmaking -d matchmaking -c "\du"
+```
+
+- 역할(role) 목록에 `matchmaking`이 보여야 해요. `role "matchmaking" does not exist`가 나오면 "자주 막히는 점" 6번을 보세요.
+
+```powershell
 docker exec -it matchmaking-db psql -U matchmaking -d matchmaking -c "\l"
 ```
 
 - DB 목록에 `matchmaking`과 `matchmaking_test`가 보이면 성공이에요.
 - 아직 테이블은 없어요. 테이블은 나중에 앱이 처음 뜰 때 `create_all`이 만들어요.
 
-#### 8단계. `.env` 준비와 앱 실행 (코드가 채워진 뒤)
+#### 8단계. `.env` 준비와 앱 실행
 
 `.env`가 아직 없으면 저장소 루트에서 만들어요. `.env.example`에 아래 세 값이 이미 들어 있어서 복사만 하면 돼요.
 
@@ -188,7 +212,9 @@ JWT_SECRET_KEY=local-dev-jwt-secret-key-for-study-only-0001
 SEED_USER_PASSWORD=seedpass1234
 ```
 
-`config.py`, `database.py`, `main.py`가 구현되면 아래 순서로 실행해요.
+- `.env`가 이미 있으면 `DATABASE_URL`의 계정·비밀번호·DB 이름이 4단계 값(`matchmaking`)과 같은지 확인해요.
+
+저장소 루트에서 아래 순서로 실행해요.
 
 ```powershell
 uv sync --frozen
@@ -199,6 +225,8 @@ uv run uvicorn main:app --app-dir src --reload
 ```
 
 - `.env`는 실행한 위치를 기준으로 읽어요. 그래서 꼭 **저장소 루트**에서 실행해야 해요(STK-10).
+- `Application startup complete.`가 보이면 테이블 생성까지 끝난 거예요. 브라우저에서 http://localhost:8000/docs 를 열어 Swagger 화면이 나오면 성공이에요.
+- 지금은 `seed_initial_data`가 아직 구현되지 않아 시드 단계를 주석 처리해 두었어요(`src/bootstrap/lifespan.py`의 `TODO(seed)`). 그래서 DB에는 빈 테이블만 생겨요. 회원은 `/docs`에서 `POST /api/auth/signup`으로 직접 만들어요.
 
 #### 평소에 쓰는 명령
 
@@ -239,6 +267,9 @@ docker volume rm matchmaking-pgdata
 5. **Git Bash에서 실행했더니 볼륨 경로가 이상해지거나 `-it`에서 오류가 나요.** Git Bash가 `/`로 시작하는 경로를 Windows 경로로 바꾸는 문제예요. PowerShell에서 실행하는 게 가장 쉬워요. 꼭 Git Bash를 써야 하면 두 가지를 바꿔요.
    - 4단계 명령 앞에 `MSYS_NO_PATHCONV=1 `을 붙여요.
    - 7단계 명령 앞에 `winpty `를 붙여요.
+6. **`FATAL: role "matchmaking" does not exist` 오류가 나요.** 원인은 둘 중 하나예요.
+   - **예전 볼륨을 다시 쓴 경우:** `matchmaking-pgdata` 볼륨이 예전에 다른 계정(예: `postgres`)으로 이미 만들어져 있으면 4단계의 `-e` 값이 무시돼서 `matchmaking` 역할이 안 생겨요. `docker rm -f matchmaking-db`, `docker volume rm matchmaking-pgdata` 순서로 지우고 4단계부터 다시 해요. 볼륨을 지우면 그 안의 DB가 모두 사라져요.
+   - **다른 PostgreSQL에 접속한 경우:** 다른 Docker 컨테이너나 Windows PostgreSQL 서비스가 5432를 쓰고 있으면 앱이 그쪽에 접속해요. 3단계를 다시 확인해요.
 
 ## 테스트
 
