@@ -176,7 +176,7 @@ erDiagram
 
 ## 5. ORM ↔ 도메인 매핑
 
-모든 레포지토리는 `src/<기능>/infrastructure/repositories.py`에 있고 생성자에서 `AsyncSession`을 받는다. `commit`은 하지 않는다(`flush`만, 서비스가 commit).
+모든 레포지토리는 `src/<기능>/infrastructure/repositories.py`에 있고 생성자에서 `AsyncSession`을 받는다. `commit`은 하지 않는다(`flush`만). 확정은 요청이 끝날 때 `get_db`가 한 번 한다(D-029).
 
 | ORM 모델 | 도메인/읽기 모델 | 레포지토리 | 변환 | 메서드 시그니처 |
 |---|---|---|---|---|

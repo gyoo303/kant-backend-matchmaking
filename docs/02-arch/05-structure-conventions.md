@@ -22,7 +22,7 @@ kant-ubuntu-books-claude1/
 │   │   ├── error_handlers.py   # register_exception_handlers(): 400/401/404/410/422/500 → {"detail"}
 │   │   └── routing.py          # register_routes(): API·화면 라우터, /static 마운트
 │   ├── config.py               # Settings(BaseSettings), get_settings()
-│   ├── database.py             # engine, AsyncSessionLocal, Base, get_db()
+│   ├── database.py             # engine, AsyncSessionLocal, Base, session_scope(), get_db(), DbSession
 │   ├── exceptions.py           # DomainError, DomainRuleError, NotFoundError, GoneError, AuthenticationError
 │   ├── logging_middleware.py   # RequestLoggingMiddleware
 │   ├── seed.py                 # seed_initial_data() (DB)
@@ -84,7 +84,7 @@ presentation ──▶ application ──▶ domain
 | CONV-01 | 이름: 도메인 `<Entity>`, ORM `<Entity>Model`, 레포지토리 `<Entity>Repository`·`RoomQueryRepository`, 서비스 `<Feature>ApplicationService`·`RoomQueryService`, 요청 `<Action>Request`, 응답 `<Thing>Response`. 테이블 snake_case 복수형(`token_blacklist`만 예외, `03-db-schema.md`). |
 | CONV-02 | 비동기: DB 호출·레포지토리·서비스 메서드는 모두 `async def`, 호출은 `await`. 도메인 메서드는 동기. |
 | CONV-03 | 라우터: `router = APIRouter(prefix="/api/auth", tags=["auth"])`, `APIRouter(prefix="/api", tags=["rooms"])`(`/me/*`는 `tags=["me"]`), 화면은 `page_router = APIRouter(include_in_schema=False)`. 모든 API에 `summary`·`response_model`. |
-| CONV-04 | 의존성 조립: 라우터 파일 안의 팩토리 `def get_room_service(db=Depends(get_db)) -> RoomApplicationService`로 서비스를 만든다. 서비스는 요청마다 새로 만든다. |
+| CONV-04 | 의존성 조립: 라우터 파일 안의 팩토리 `def get_room_service(db: DbSession) -> RoomApplicationService`로 서비스를 만든다. 서비스는 요청마다 새로 만든다. 세션은 `database.DbSession` 별칭으로만 받는다(`Depends(get_db)` 직접 사용 금지, D-029). |
 | CONV-05 | 예외: 도메인·서비스는 `exceptions.py` 계층의 예외만 던진다. 라우터는 `try/except`로 HTTP 변환하지 않는다(전역 핸들러가 한다). |
 | CONV-06 | 시각: `datetime.now(UTC)`는 서비스의 `clock`과 `security.py`에서만 호출한다. |
 | CONV-07 | 로깅: `logging.getLogger(__name__)`. 미들웨어 한 줄 형식 `method=GET path=/api/rooms status=200 duration_ms=12.3 user_id=5`(user_id는 `request.state.user_id`가 있을 때만). 쿼리 문자열·본문·토큰·비밀번호는 남기지 않는다. |
@@ -110,6 +110,7 @@ presentation ──▶ application ──▶ domain
 11. 도메인 메서드 안에서 현재 시각·난수·DB·HTTP 직접 호출
 12. (도전 A 적용 후) 방 변경 요청에서 `find_by_id`(잠금 없음) 사용 (CONV-08)
 13. 게임 결과·승패를 저장하는 테이블·필드·API (INV-09)
+14. 서비스·레포지토리·라우터에서 `commit()` 호출, `Depends(get_db)` 직접 사용 (확정은 `get_db`만, 세션은 `DbSession`만 — D-029)
 
 ## 5. 디렉토리 지도
 저장소 지도는 §1 디렉토리 트리를 기준으로 한다.

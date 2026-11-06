@@ -14,6 +14,7 @@
 
 ## 계층 관점 설명
 [모듈 협력 구조] `RoomQueryService.list_rooms()`만 캐시를 읽는다. `RoomApplicationService`의 생성·참가·제목·팀·나가기·게임 시작 메서드는 `commit` 성공 후에만 `clear()`한다(실패 시 무효화 없음). 상세·이력 조회는 캐시하지 않는다.
+  - 보완(D-029, 2026-11-06): commit이 서비스에서 요청 단위 `get_db`로 옮겨졌다. 그래서 "commit 성공 후 clear"는 서비스 메서드가 아니라 commit 이후 지점(예: SQLAlchemy `after_commit` 이벤트, 또는 `get_db`의 commit 직후)에서 한다. `RoomApplicationService`의 `list_cache` 매개변수는 제거했다.
 
 ## 결정 / 추천
 결정: A — 의존성 없이 같은 동작을 만들고 무효화 규칙이 한 파일에 있다.

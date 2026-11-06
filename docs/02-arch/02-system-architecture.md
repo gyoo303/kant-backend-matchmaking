@@ -73,10 +73,11 @@ flowchart LR
 
 ```
 요청 → CORSMiddleware → RequestLoggingMiddleware
-     → presentation (router: 입력 검증, Depends(get_db), Depends(get_current_user_id))
-     → application (service: 조회 → 도메인 메서드 → save → commit)
+     → presentation (router: 입력 검증, DbSession(get_db), Depends(get_current_user_id))
+     → application (service: 조회 → 도메인 메서드 → save(flush))
          ├→ domain (Room·Participation·User: 규칙 검사, 위반 시 DomainRuleError)
          └→ infrastructure (repository: ORM ↔ 도메인 변환. 도전 A 적용 시 SELECT … FOR UPDATE)
+     → get_db 종료(라우터 함수 직후, 응답 전송 전): 정상 → commit / 예외 → rollback (D-029)
      → 응답 스키마(response_model) / 예외 → 전역 핸들러 → {"detail": "..."}
 ```
 

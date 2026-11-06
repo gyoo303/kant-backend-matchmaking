@@ -317,46 +317,50 @@ class Participation:
 
 ## 8. 트랜잭션 경계
 
-- 요청 하나 = `get_db()` 세션 하나. `get_db()`는 `async with AsyncSessionLocal() as session: try: yield session / except: await session.rollback(); raise`.
-- 변경 서비스 메서드는 마지막에 `await self.db.commit()`을 한 번만 한다. 레포지토리는 `flush`만 한다.
-- 조회 서비스는 commit하지 않는다.
+- 요청 하나 = 세션 하나 = 트랜잭션 하나 (D-029).
+- `database.session_scope()`: `async with AsyncSessionLocal() as session: try: yield session; await session.commit() / except Exception: await session.rollback(); raise`. 정상 종료면 commit, 예외(commit 실패 포함)면 rollback 후 다시 raise한다.
+- `get_db()`는 `session_scope()`를 감싸 `yield session`만 한다. 라우터·의존성은 `DbSession = Annotated[AsyncSession, Depends(get_db, scope="function")]`로만 세션을 받는다.
+  - `scope="function"`: yield 뒤(commit)가 라우터 함수 직후·**응답 전송 전**에 실행된다. 기본값 `request`면 응답을 보낸 뒤 commit해서, commit이 실패해도 클라이언트는 200을 받는다.
+  - FastAPI 의존성 캐시 키에 scope가 들어가므로 `Depends(get_db)`를 따로 쓰면 한 요청에 세션이 2개 생긴다. 그래서 별칭 하나만 쓴다.
+- 서비스(변경·조회 모두)는 commit하지 않는다. 레포지토리는 필요한 지점에서 `flush`만 한다: DB 생성값(id 등)이 필요할 때, 같은 요청의 다음 조회가 변경을 봐야 할 때(`autoflush=False`).
+- HTTP 요청이 아닌 작업(lifespan 시드, CH-B 백그라운드 작업)은 요청 세션을 쓰지 않고 `session_scope()`를 직접 연다.
 - 현재 시각은 서비스가 `self.clock()`으로 한 번 얻어 도메인 메서드에 넘긴다. 기본 `clock = lambda: datetime.now(UTC)`.
 
 ## 9. 시퀀스
 
 ### SEQ-01 회원가입 (API-AUTH-01)
-router → `AuthApplicationService.signup` → `User.validate_raw_password` → `UserRepository.exists_login_id` (참 → `DuplicateLoginIdError`) → `exists_nickname` (참 → `DuplicateNicknameError`) → `hasher.hash` → `User.register` → `UserRepository.save` → commit → `UserResponse`. (동시에 같은 아이디가 들어오는 경우는 다루지 않는다: DB `unique`가 막고 500, D-020)
+router → `AuthApplicationService.signup` → `User.validate_raw_password` → `UserRepository.exists_login_id` (참 → `DuplicateLoginIdError`) → `exists_nickname` (참 → `DuplicateNicknameError`) → `hasher.hash` → `User.register` → `UserRepository.save`(flush) → `UserResponse` → (get_db commit). (동시에 같은 아이디가 들어오는 경우는 다루지 않는다: DB `unique`가 막고 500, D-020)
 
 ### SEQ-02 로그인 (API-AUTH-02, 교안 6장 `/login`)
 router(`OAuth2PasswordRequestForm = Depends()`) → `login` → `find_by_login_id` (없음 → `AuthenticationError`) → `hasher.verify` (거짓 → 같은 `AuthenticationError`) → `create_access_token({"sub": login_id})`, `create_refresh_token({"sub": login_id})` → `TokenResponse`.
 
 ### SEQ-03 인증 의존성 (`src/auth/presentation/dependencies.py`, 교안 6장 `get_current_user`)
 1. `oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")` — 헤더 없으면 FastAPI가 401
-2. `get_current_user(token = Depends(oauth2_scheme), db = Depends(get_db)) -> User` → `AuthApplicationService(db).authenticate(token)`:
+2. `get_current_user(db: DbSession, token = Depends(oauth2_scheme)) -> User` → `AuthApplicationService(db).authenticate(token)`:
    `decode_token` (`ExpiredSignatureError`·`InvalidTokenError` → `AuthenticationError`) → `token_type == "refresh"` → `AuthenticationError` → `sub` 없음 → `AuthenticationError` → `TokenBlacklistRepository.exists(token)` 참 → `AuthenticationError` → `find_by_login_id(sub)` 없음 → `AuthenticationError` → `User`
 3. `get_current_user_id(user = Depends(get_current_user)) -> int` — rooms 라우터가 쓴다.
 
 ### SEQ-04 로그아웃 (API-AUTH-03)
-router: `token = Depends(oauth2_scheme)`, `Depends(get_current_user)`(유효한 access 토큰만), 본문 `RefreshRequest` → `logout(token, body.refresh_token)`: `decode_token(refresh)` 실패 → `InvalidRefreshTokenError`(400) → 블랙리스트에 refresh 있음 → `AlreadyLoggedOutError`(400) → `TokenBlacklistRepository.save(TokenBlacklist(access))`, `save(TokenBlacklist(refresh))` → commit → `MessageResponse("로그아웃되었습니다")`. 이후 그 access 토큰은 SEQ-03의 블랙리스트 확인에서 401(AC-10-2). 참가 상태는 건드리지 않는다(AC-10-3).
+router: `token = Depends(oauth2_scheme)`, `Depends(get_current_user)`(유효한 access 토큰만), 본문 `RefreshRequest` → `logout(token, body.refresh_token)`: `decode_token(refresh)` 실패 → `InvalidRefreshTokenError`(400) → 블랙리스트에 refresh 있음 → `AlreadyLoggedOutError`(400) → `TokenBlacklistRepository.save(TokenBlacklist(access))`, `save(TokenBlacklist(refresh))` → `MessageResponse("로그아웃되었습니다")` → (get_db commit: 두 기록이 함께 확정되거나 함께 취소). 이후 그 access 토큰은 SEQ-03의 블랙리스트 확인에서 401(AC-10-2). 참가 상태는 건드리지 않는다(AC-10-3).
 
 ### SEQ-04b 재발급 (API-AUTH-05, 교안 6장 `/refresh`)
 `refresh(refresh_token)`: 블랙리스트에 있음 → `AuthenticationError("로그아웃 처리되어 사용할 수 없는 토큰입니다")` → `decode_token` 실패 → `AuthenticationError("리프레시 토큰이 만료되었습니다. 다시 로그인하세요")` → `token_type != "refresh"` → 같은 401 → `create_access_token({"sub": sub})` → `AccessTokenResponse`.
 
 ### SEQ-05 방 생성 (API-ROOM-02)
-`create_room` → `RoomRepository.find_current_participation(user_id)` → `Room.create(title, user_id, current, now)` → `RoomRepository.save(room)` (방 insert → 팀 A·B insert → 참가 insert(`team_id` = A팀). 같은 회원 동시 생성은 `participations.user_id` unique 위반 → 필수 범위 500, 도전 A 적용 후 `AlreadyParticipatingError`) → commit → 캐시 clear(CH-C) → router가 `RoomQueryService.get_room_detail(room.id, user_id)`로 응답.
+`create_room` → `RoomRepository.find_current_participation(user_id)` → `Room.create(title, user_id, current, now)` → `RoomRepository.save(room)` (방 insert → 팀 A·B insert → 참가 insert(`team_id` = A팀). 같은 회원 동시 생성은 `participations.user_id` unique 위반 → 필수 범위 500, 도전 A 적용 후 `AlreadyParticipatingError`) → router가 같은 세션의 `RoomQueryService.get_room_detail(room.id, user_id)`로 응답(flush된 변경이 보임) → (get_db commit → CH-C 캐시 clear).
 
 ### SEQ-06 방 참가 (API-ROOM-05)
-`join_room` → `find_current_participation(user_id)` → `find_by_id(room_id)` (없음 → `RoomNotFoundError`) → `room.join(user_id, current, now)` → `save` → commit → 캐시 clear → 상세 응답.
+`join_room` → `find_current_participation(user_id)` → `find_by_id(room_id)` (없음 → `RoomNotFoundError`) → `room.join(user_id, current, now)` → `save` → 상세 응답 → (get_db commit → 캐시 clear).
 - 도전 A(ADR-009): `find_by_id`를 `find_by_id_for_update`(방 행 잠금)로 바꾸고, `save`가 `participations` PK·unique 위반을 `AlreadyParticipatingError`로 바꾼다(ADR-011). 잠금 후 도메인이 삭제 상태·정원을 다시 검사하므로 마지막 자리 동시 참가는 하나만 성공한다(AC-18-1).
 
 ### SEQ-07 제목 변경·팀 변경 (API-ROOM-04, API-ROOM-06)
-`find_by_id` (없음 → 404, 도전 A는 `find_by_id_for_update`) → `room.rename(...)` 또는 `room.change_team(...)` → `save` → commit → 캐시 clear → 상세 응답.
+`find_by_id` (없음 → 404, 도전 A는 `find_by_id_for_update`) → `room.rename(...)` 또는 `room.change_team(...)` → `save` → 상세 응답 → (get_db commit → 캐시 clear).
 
 ### SEQ-08 나가기 (API-ROOM-07)
-`find_by_id`(도전 A는 `find_by_id_for_update`) → 기존 방장 기억 → `room.leave(user_id, now)` → `save`(나간 참가 → `participation_logs` insert + `participations` 행 delete) → commit → 캐시 clear → `LeaveResult(room_deleted=not room.is_active, new_host_user_id=room.host_user_id if 방장이 바뀌었고 방이 활성 else None)`.
+`find_by_id`(도전 A는 `find_by_id_for_update`) → 기존 방장 기억 → `room.leave(user_id, now)` → `save`(나간 참가 → `participation_logs` insert + `participations` 행 delete) → `LeaveResult(room_deleted=not room.is_active, new_host_user_id=room.host_user_id if 방장이 바뀌었고 방이 활성 else None)` → (get_db commit → 캐시 clear).
 
 ### SEQ-09 게임 시작 (API-ROOM-08)
-`find_by_id`(도전 A는 `find_by_id_for_update`) → `room.start_game(user_id, now)` (삭제 → 400, 방장 아님 → 400, 구성 불일치 → 400) → `save`(방 `deleted_at`·`delete_reason`, 참가 4건 → `participation_logs` insert + `participations` 행 delete) → commit → 캐시 clear → `GameStartResult` → (CH-B) `background_tasks.add_task(log_room_dissolved, room_id, dissolved_at)`.
+`find_by_id`(도전 A는 `find_by_id_for_update`) → `room.start_game(user_id, now)` (삭제 → 400, 방장 아님 → 400, 구성 불일치 → 400) → `save`(방 `deleted_at`·`delete_reason`, 참가 4건 → `participation_logs` insert + `participations` 행 delete) → `GameStartResult` → (get_db commit → 캐시 clear) → (CH-B) `background_tasks.add_task(log_room_dissolved, room_id, dissolved_at)`.
 - 반복 요청(순차): 두 번째 요청은 삭제된 방을 읽어 `RoomDeletedError`(400). 해산은 한 번뿐이다(AC-06-5).
 - 도전 A: 동시 반복 요청은 잠금을 기다린 뒤 같은 결과가 된다(AC-18-4). 시작과 나가기 경합도 같은 방 행 잠금으로 순서가 정해져 AC-18-5의 두 결과 중 하나만 생긴다.
 
@@ -367,7 +371,7 @@ router가 쿼리를 `RoomListCondition`으로 묶음(keyword strip, 빈 문자�
 page_router → `templates.TemplateResponse(request, "rooms/list.html", {"cond": …, "notice": …})`(인증 없음) → 브라우저에서 `api.js`가 토큰 확인(없으면 `/login`) → API-AUTH-04·ROOM-01·09를 불러 화면을 채운다.
 
 ### SEQ-12 lifespan
-`create_all`(`run_sync(Base.metadata.create_all)`) → `async with AsyncSessionLocal() as s: await seed_initial_data(s, settings); await s.commit()` → yield → `engine.dispose()`.
+`create_all`(`run_sync(Base.metadata.create_all)`) → `async with session_scope() as s: await seed_initial_data(s, settings)`(정상 종료 시 commit, D-029. 현재 `seed_initial_data` 미구현으로 주석 처리 — `TODO(seed)`) → yield → `engine.dispose()`.
 
 ### SEQ-13 화면 새로고침 (`rooms.js`, ADR-012)
 - 자동 조회는 없다. 화면마다 조회 함수 하나를 두고 아래 때만 부른다. 조회 중에는 [새로고침] 버튼을 비활성화하고, 끝나면 다시 켠다(겹침 방지는 이것뿐).
