@@ -191,7 +191,7 @@
 - 관련 계층: [레이어] [모듈 협력 구조]
 | 옵션 | 내용 | 장점 | 단점 | AI 부채 영향 | 평가표 영향 |
 |---|---|---|---|---|---|
-| A | `get_db`(scope="function")에서 commit 1회, `DbSession` 별칭으로 통일 | 확정 위치가 한 곳, 서비스를 이어 불러도 중간 확정 없음, 응답 전송 전에 commit해 실패가 500으로 드러남 | 웹 의존성(`fastapi.Depends`)이 `database.py`에 들어옴(3단계에서 container로 이동 예정) | 낮음 | 충족 |
+| A | `get_db`(scope="function")에서 commit 1회, `DbSession` 별칭으로 통일 | 확정 위치가 한 곳, 서비스를 이어 불러도 중간 확정 없음, 응답 전송 전에 commit해 실패가 500으로 드러남 | 웹 의존성(`fastapi.Depends`)이 `database.py`에 들어옴 → 4단계에서 `container.py`로 이동 완료(D-031) | 낮음 | 충족 |
 | B | `get_db`에서 commit, 기본 scope(request) | 코드가 가장 짧음 | commit이 응답 전송 후에 실행 → commit이 실패해도 클라이언트는 200 | 높음 — 데이터·응답 불일치 | 위험 |
 | C | 명시적 UoW 클래스가 commit 담당 | 트랜잭션 경계가 코드에 드러남 | 이 요청(get_db commit)과 확정 주체가 둘로 갈림, 지금은 한 요청이 aggregate 하나만 바꿔 이점이 적음 | 중 | 충족 |
 - 계층 관점 설명: [레이어] 서비스는 "무엇을 바꿀지"만 정하고, 트랜잭션 확정은 요청 경계(presentation 진입점의 의존성)가 맡는다. [모듈 협력 구조] FastAPI 의존성 캐시 키에 scope가 포함되므로 scope가 다른 `get_db`가 섞이면 한 요청에 세션이 2개 생긴다 → `DbSession` 별칭 하나만 허용(CONV-04, 금지 패턴 14, GATE-07)
@@ -224,6 +224,24 @@
 - 바뀌는 규칙: CONV-01 이름(계약 `<Entity>Repository`는 domain, 구현 `SqlAlchemy<Entity>Repository`는 infrastructure), CONV-02 단서("엔티티·값 객체 메서드는 동기, `domain/repository.py`의 계약은 `async def` 추상 메서드"), GATE-02에 "application·domain → infrastructure·sqlalchemy·jwt·passlib import 0줄" 추가
 - 되돌리기 비용: 낮음 (계약 파일 위치 이동과 import 경로 수정)
 - 추천: A (A1)
+
+### D-031: 의존성 조립을 `src/container.py`(dependency-injector)로 일원화하고, presentation은 `Provide[Container.<service>.provider]`로 받는다   [APPROVED by user, 2026-11-07]
+- 결과: B 선택 — `Container`에 외부 도구(`BcryptPasswordHasher`, `JwtTokenProvider`)는 `Singleton`, 저장소·응용 서비스는 `Factory`로 등록한다. presentation의 의존성 함수는 `@inject` + `Depends(Provide[Container.<service>.provider])`로 설계도를 받아 `factory(<repo>__session=db)`로 이번 요청 서비스를 만든다. 세션 별칭 `DbSession`은 `container.py`에 두고 `database.py`는 fastapi를 import하지 않는다. `main.create_app()`이 컨테이너를 만들고 설정을 넣은 뒤 `app.state.container`에 둔다
+- 요청: container-wiring으로 domain·infrastructure 의존을 분리하고 4계층 단방향 의존을 구현한다(사용자 요청, 2026-11-06, 리팩토링 4단계 `refactor/ddd-step4-container-wiring`). presentation → container를 끊는 엄격한 방식(A)도 검토했으나, 운영 연결에 `dependency_overrides`를 쓰는 비관례적 구조와 관리 비용에 비해 얻는 이득이 작아 B를 유지한다(사용자 결정, 2026-11-07)
+- 근거: D-029(요청 하나 = 세션 하나), D-030(계약 위치), CONV-04, 금지 패턴 2·14·15, GATE-02
+- 관련 계층: [레이어] [모듈 협력 구조]
+| 옵션 | 내용 | 장점 | 단점 | AI 부채 영향 | 평가표 영향 |
+|---|---|---|---|---|---|
+| A | presentation은 몸통 없는 서비스 "자리"만 선언, bootstrap이 `dependency_overrides`로 연결 | presentation이 application 타입과 fastapi만 앎(완전 단방향) | 테스트용 기능을 운영 연결에 씀, `clear()` 한 번에 전체 500, 자리·등록표·연결 테스트 추가 | 중 | 충족 |
+| B (채택) | presentation이 `Provide[Container.x.provider]`와 `container.DbSession`을 import | dependency-injector 공식 FastAPI 예제와 같은 형태, 코드가 짧고 익숙함 | presentation → container → infrastructure 간접 의존, presentation이 세션 존재를 앎 | 낮음 — 핸들러는 계약 타입으로만 받고, GATE-02가 직접 import를 막음 | 충족 |
+| C | presentation에서 문자열 `Provide["x.provider"]` | container import가 사라짐 | `DbSession`·`dependency_injector` 의존은 남음, 오타가 실행 때만 드러남 | 중 | 충족 |
+| D | 세션을 container `Resource`로 | 세션까지 container가 관리 | `Provide`가 불릴 때마다 세션이 새로 생겨 한 요청에 트랜잭션 여러 개(D-029 위반) | 높음 | 위험 |
+| E | 요청마다 `container.session.override(db)` | 호출이 짧음 | override가 프로세스 전역 → 동시 요청끼리 세션이 섞임 | 높음 | 위험 |
+- 계층 관점 설명: [레이어] 의존 방향은 presentation → application → domain ← infrastructure, infrastructure → application(조회 계약·읽기 모델·포트). 예외로 presentation → container(조립 지점)를 허용한다. 이 허용은 `Container`·`DbSession` 두 이름의 import로 한정하고, presentation이 infrastructure·`database`·sqlalchemy를 직접 import하는 것은 금지한다(GATE-02). [모듈 협력 구조] wiring은 프로세스 전역이라 앱 하나에 Container 하나를 둔다. 저장소를 가짜로 바꾸는 테스트는 container `override`, DB를 바꾸는 테스트는 `dependency_overrides[get_db]`(자기 키만 pop)를 쓴다
+- 다시 검토할 조건: presentation을 다른 앱·CLI에서 재사용하거나, presentation 단위 테스트에서 infrastructure 로드를 피해야 할 때 A를 다시 검토한다. 요청 밖(백그라운드 작업·시드)에서 서비스를 만들어야 하면 `session_scope()`로 연 세션을 같은 `__session` 방식으로 넘긴다
+- 바뀌는 규칙: CONV-01·02·04, 금지 패턴 15 추가, GATE-02 명령 추가(허용 예외 확인 포함), GATE-07·08 주석 줄 제외, `05-structure-conventions.md` §1·§2
+- 되돌리기 비용: 중 (presentation 의존성 함수 3개와 main.py)
+- 추천: B
 
 ## 자율 결정
 

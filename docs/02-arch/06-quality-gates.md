@@ -8,7 +8,7 @@
 | GATE | 내용 | 통과 기준 | 근거 |
 |---|---|---|---|
 | GATE-01 | 기동 | 기동 오류 0, `/docs` 응답 200, 시드 로그 1회 | EV-10, RC-02, NFR-01 |
-| GATE-02 | 계층 격리 | 세 명령 모두 출력 0줄 | EV-01, RC-03·09, ADR-001 |
+| GATE-02 | 계층 격리 | 일곱 명령 모두 출력 0줄, 허용 예외 확인은 지정한 두 줄만 | EV-01, RC-03·09, ADR-001, D-030·031 |
 | GATE-03 | 패키지 `__init__.py` | 출력 0줄 | RC-02 |
 | GATE-04 | 테스트 | 실패 0 (통합·동시성은 `TEST_DATABASE_URL` 필요) | AC 전체 |
 | GATE-05 | 린트·포맷 | 오류 0 | ADR-005 |
@@ -27,6 +27,17 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8000/docs
 grep -rnE "^(from|import) (fastapi|sqlalchemy|pydantic|starlette|jwt|passlib)" src/*/domain/
 grep -rnE "^from (auth|rooms)\.presentation" src/*/application src/*/domain src/*/infrastructure
 grep -rnE "^(from|import) rooms" src/auth
+# 아래 4줄(D-030·031): application은 바깥 기술을 모른다.
+# presentation은 container(허용 예외)를 거칠 뿐, infra·DB 모듈·ORM·보안 라이브러리를 직접 import하지 않는다
+grep -rnE "^(from|import) (sqlalchemy|jwt|passlib|fastapi|starlette)|^from (auth|rooms)\.infrastructure" src/*/application
+grep -rnE "^(from|import) (database|sqlalchemy|jwt|passlib)|^from (auth|rooms)\.infrastructure" src/*/presentation
+grep -rnE "^(from|import) (fastapi|starlette)" src/database.py src/*/infrastructure
+grep -rnE "^(from|import) container" src/*/domain src/*/application src/*/infrastructure
+
+# GATE-02 허용 예외 확인 (D-031): 아래 두 줄만 나와야 한다
+#   src/auth/presentation/dependencies.py:…:from container import Container, DbSession
+#   src/rooms/presentation/router.py:…:from container import Container, DbSession
+grep -rnE "^(from|import) container" src/*/presentation
 
 # GATE-03
 for d in $(find src -type d -not -path "*/templates*" -not -path "*/static*" -not -name "__pycache__"); do [ -f "$d/__init__.py" ] || echo "$d"; done
@@ -45,17 +56,20 @@ grep -rnE "(SECRET|PASSWORD)\s*=\s*['\"][^'\"]+['\"]" src/
 # GATE-07
 grep -rn "except:" src/
 grep -rn "hashed_password" src/*/presentation/schemas.py
-grep -rnE "session\.execute|select\(" src/*/presentation src/*/application
-grep -rn "\.commit()" src/*/application src/*/infrastructure src/*/presentation
+# ^[^#]* : 줄 시작부터 #이 없는 경우만 = 주석 줄은 제외하고 실제 코드만 검사
+grep -rnE "^[^#]*(session\.execute|select\()" src/*/presentation src/*/application
+grep -rn "^[^#]*\.commit()" src/*/application src/*/infrastructure src/*/presentation
 grep -rn "Depends(get_db" src/*/presentation
 grep -rnE "datetime\.now|random\." src/*/domain/
 grep -rniE "winner|loser|game_result" src/
+# 금지 패턴 9(주석 처리된 옛 코드) 후보: 출력이 있으면 사람이 판단한다. 이유가 적힌 TODO는 허용
+grep -rnE "^\s*#\s*(from \S+ import|import \S+$|await |self\.\w+ = |def \w+\(|class \w+[:(]|return )" src
 
 # GATE-09 (도전 A 적용 후에만): 방 변경 서비스에서 잠금 없는 조회 0줄
 grep -rn "find_by_id(" src/rooms/application/service.py
 
 # GATE-08: ORM 모델 이름(03-db-schema.md §5)·infrastructure.models 경로로 찾는다. 모델을 추가하면 이름도 넣는다 (D-022)
-grep -rnE "\b(UserModel|TokenBlacklistModel|RoomModel|TeamModel|ParticipationModel|ParticipationLogModel)\b|infrastructure\.models" src/*/application src/*/presentation
+grep -rnE "^[^#]*\b(UserModel|TokenBlacklistModel|RoomModel|TeamModel|ParticipationModel|ParticipationLogModel)\b|^[^#]*infrastructure\.models" src/*/application src/*/presentation
 ```
 
 - 게이트 실패 시 구현 에이전트는 오류 요약만 브리핑에 남기고 수정을 반복한다. 같은 게이트를 3회 연속 실패하면 설계 문제로 보고 Architect에 질문한다.
@@ -73,7 +87,7 @@ grep -rnE "\b(UserModel|TokenBlacklistModel|RoomModel|TeamModel|ParticipationMod
 
 - **테스트 작성 담당**: `tests/` 아래 테스트 파일은 QA 티켓이 쓴다(티켓 "산출"에 테스트 경로가 있는 티켓만 테스트를 쓴다). DB·BE·FE 티켓은 테스트를 쓰지 않고, 완료 조건을 확인한 방법(curl·Swagger·브라우저·스크립트)과 결과를 브리핑에 적는다. 다른 단계가 테스트를 남기고 싶으면 브리핑에 제안으로 적고 QA가 옮긴다.
 - pytest 설정은 `05-structure-conventions.md` STK-01·STK-11대로 `pyproject.toml`에 둔다(TKT-BE-M2-01).
-- 테스트 DB: 환경변수 `TEST_DATABASE_URL`(별도 PostgreSQL DB). `tests/conftest.py`가 세션 시작 시 `drop_all`·`create_all`, 테스트마다 테이블을 `TRUNCATE … RESTART IDENTITY CASCADE`. 시드는 주입하지 않는다(테스트가 직접 만든다). 앱의 `get_db`는 `dependency_overrides[get_db]`로 테스트 세션 팩토리를 쓴다(`DbSession` 별칭이 아니라 `get_db` 함수를 키로 쓴다. 오버라이드도 정상 종료 시 commit·예외 시 rollback 규칙을 지킨다, D-029). 동시성 테스트는 요청마다 다른 세션이 필요하므로 오버라이드도 요청마다 새 세션을 연다.
+- 테스트 DB: 환경변수 `TEST_DATABASE_URL`(별도 PostgreSQL DB). `tests/integration/conftest.py`가 세션 시작 시 `drop_all`·`create_all`, 테스트마다 테이블을 `TRUNCATE … RESTART IDENTITY CASCADE`. 시드는 주입하지 않는다(테스트가 직접 만든다). 앱의 `get_db`는 `dependency_overrides[get_db]`로 테스트 세션 팩토리를 쓴다(`DbSession` 별칭이 아니라 `get_db` 함수를 키로 쓴다. 오버라이드도 정상 종료 시 commit·예외 시 rollback 규칙을 지킨다, D-029). 동시성 테스트는 요청마다 다른 세션이 필요하므로 오버라이드도 요청마다 새 세션을 연다. `TEST_DATABASE_URL`이 없으면 통합 테스트는 skip한다. 클라이언트 픽스처는 `app.state.container.wire()`로 wiring을 다시 연결하고(다른 테스트가 Container를 새로 만들면 연결이 넘어간다, D-031), 끝날 때 자기가 넣은 `get_db` 키만 `pop`한다. 저장소를 가짜로 바꾸는 테스트는 `tests/unit/`에서 container `override`로, 진짜 저장소와 테스트 DB를 쓰는 테스트는 `tests/integration/`에서 `dependency_overrides[get_db]`로 한다.
 - SQLite 대체 금지: `timestamptz`(시간대 보존), (도전 A의) 부분 유니크 인덱스·`FOR UPDATE`가 PostgreSQL 동작이다.
 - 도메인 테스트에 목(mock)이 필요하면 설계 결함으로 보고 A4·A5로 되돌린다.
 - 화면(US-15~17)의 갱신 동작(AC-15-2·5·6, AC-16-1·3~6)은 자동 테스트 대상이 아니다. QA가 브라우저 수동 점검 체크리스트로 확인한다. 자동 조회가 없음(NFR-08)은 개발자 도구 Network 탭에서 10초 동안 조작 없이 요청 0건으로 확인하고, `grep -rnE "setInterval|polling" src/static src/templates` 0줄로도 확인한다(ADR-012).
