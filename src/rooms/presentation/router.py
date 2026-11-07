@@ -9,25 +9,22 @@
 # - /me/room-history.csv(API-ROOM-12, 도전 B)는 필수 범위가 아니라 두지 않았다.
 #   넣을 때는 /me/room-history/{room_id}보다 먼저 등록해야 한다.
 
-from datetime import UTC, datetime
+# from datetime import UTC, datetime
+from collections.abc import Callable
 from typing import Literal
 
+from dependency_injector.wiring import Provide, inject
 from fastapi import APIRouter, Depends, Query
 # from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import DbSession
+# from database import DbSession
+from container import Container, DbSession
 from auth.presentation.dependencies import get_current_user_id
 # from database import get_db
 from rooms.application.queries import RoomQueryService
 from rooms.application.read_models import RoomListCondition
 from rooms.application.service import RoomApplicationService
 from rooms.domain.participation import TeamSide
-
-# [임시 조립 — 3단계] 4단계 container가 생기면 이 import와 아래 조립 코드를 지운다
-from rooms.infrastructure.repositories import (
-    SqlAlchemyRoomQueryRepository,
-    SqlAlchemyRoomRepository,
-)
 
 from rooms.presentation.schemas import (
     ArchivedRoomResponse,
@@ -48,33 +45,40 @@ router = APIRouter(prefix="/api")
 
 
 # ---------------------------------------------------------------- 서비스 조립 (CONV-04)
+# Provide[...provider] = container의 설계도
+# 요청 세션을 넣어 이번 요청 전용 서비스를 만든다
 
-def get_room_service(db: DbSession) -> RoomApplicationService:
-    """변경 서비스. 현재 시각은 서비스가 clock으로 한 번 얻어 쓴다."""
-    return RoomApplicationService(
-        rooms = SqlAlchemyRoomRepository(db),
-        clock=lambda: datetime.now(UTC)
-    )
+@inject
+def get_room_service(
+        db: DbSession,
+        factory: Callable[..., RoomApplicationService] = Depends(
+            Provide[Container.room_service.provider]
+        )
+    ) -> RoomApplicationService:
+    """변경 서비스. 현재 시각은 서비스의 기본 clock(now(UTC)을 쓴다)"""
+    # return RoomApplicationService(
+    #     rooms = SqlAlchemyRoomRepository(db),
+    #     clock=lambda: datetime.now(UTC)
+    # )
+    return factory(rooms__session=db)
 
-
-# def get_room_service(db: AsyncSession = Depends(get_db)) -> RoomApplicationService:
-#     """변경 서비스. 현재 시각은 서비스가 clock으로 한 번 얻어 쓴다(§8)."""
-#     return RoomApplicationService(db, clock=lambda: datetime.now(UTC))
-
-def get_query_service(db: DbSession) -> RoomQueryService:
+@inject
+def get_query_service(
+        db: DbSession,
+        factory: Callable[..., RoomQueryService] = Depends(
+            Provide[Container.room_query_service.provider]
+        ),
+    ) -> RoomQueryService:
     """
     조회 서비스(commit 없음).
     두 저장소에 같은 요청 세션을 넣는다
     """
-    return RoomQueryService(
-        room_repo = SqlAlchemyRoomRepository(db),
-        query_repo = SqlAlchemyRoomQueryRepository(db),
-    )
-
-# def get_query_service(db: AsyncSession = Depends(get_db)) -> RoomQueryService:
-#     """조회 서비스(commit 없음)."""
-#     return RoomQueryService(db)
-
+    # return RoomQueryService(
+    #     room_repo = SqlAlchemyRoomRepository(db),
+    #     query_repo = SqlAlchemyRoomQueryRepository(db),
+    # )
+    return factory(room_repo__session=db,
+                   query_repo__session=db)
 
 # ---------------------------------------------------------------- rooms
 

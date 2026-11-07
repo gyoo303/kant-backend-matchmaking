@@ -3,6 +3,7 @@
 #   bootstrap/middleware.py      요청 로깅, CORS
 #   bootstrap/error_handlers.py  전역 예외 핸들러 (400/401/404/410/422/500)
 #   bootstrap/routing.py         라우터, /static 마운트
+#   container.py                 의존성 조립 (D-031)
 # 실행: uv run uvicorn main:app --app-dir src
 import logging
 
@@ -13,6 +14,7 @@ from bootstrap.lifespan import lifespan
 from bootstrap.middleware import register_middleware
 from bootstrap.routing import register_routes
 from config import get_settings
+from container import Container
 
 
 def create_app() -> FastAPI:
@@ -20,6 +22,13 @@ def create_app() -> FastAPI:
     logging.basicConfig(level=logging.INFO)
 
     settings = get_settings()
+    
+    # 의존성 컨테이너 ㅡ 만드는 순간 wiring_config 모듈 연결
+    container = Container()
+    
+    #   설정값은 여기서 한 번 넣는다 (JwtTokenProvider 비밀키, 만료시간)
+    # pydantic Settings객체->dict->from_dict
+    container.config.from_dict(settings.model_dump()) 
 
     app = FastAPI(
         title="2vs2 매치메이킹",  # /docs 화면 맨 위 제목
@@ -30,6 +39,10 @@ def create_app() -> FastAPI:
         version="0.1.0",  # /docs 화면 표시, API 버전
         lifespan=lifespan,
     )
+    
+    # 테스트 목적 - FastAPI Starlette
+    app.state.container = container
+    
 
     register_middleware(app, settings)
     register_exception_handlers(app)

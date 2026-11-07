@@ -17,9 +17,6 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Annotated
-
-from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -86,16 +83,6 @@ async def get_db() -> AsyncIterator[AsyncSession]:
     """
     async with session_scope() as session:
         yield session
-
-# DbSession: 모든 라우터, 의존성이 "같은 방식"으로 세션을 받기 위한 별칭
-# scope = "function"의 의미와 목적
-#   - 기본값(request) -> yield 뒤 commit이 "응답 전송 후"에 실행
-#   -> commit 실패해도 클라이언트는 이미 200을 받는다 (데이터와 응답 불일치)
-#   - function이면 라우터 함수가 끝난 직후, "응답 전송 전"에 commit한다
-#   -> commit 실패 = 500응답
-# 반드시 이 별칭만 사용: Depends(get_db)를 따로 쓰면 scope가 달라 캐시 키가 갈리고,
-# 한 요청에 세션이 2개 (= 트랜잭션 2개) 생김
-DbSession = Annotated[AsyncSession, Depends(get_db, scope="function")]
 
 
 ############
