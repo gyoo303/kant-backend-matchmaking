@@ -10,10 +10,6 @@ from auth.domain.user import User
 
 # 계약(추상클래스)만 import - infrastructure, sqlalchemy, jwt import X
 from auth.domain.repository import TokenBlacklistRepository, UserRepository
-from auth.infrastructure.security import (
-    BcryptPasswordHasher,
-    JwtTokenProvider,
-)
 
 from auth.application.ports import (
     REFRESH_TOKEN_TYPE,
@@ -49,13 +45,6 @@ class AuthApplicationService:
         self.blacklist = blacklist
         self.hasher = hasher
         self.tokens = tokens
-
-        # 비밀번호 해시 도구를 준비
-        # self.hasher = PasswordHasher()
-        # 변수 타입은 계약(PasswordHasher, TokenProvider)으로 작성
-        #   -> 아래 메서드들은 "계약된 메서드"만 쓰게 된다
-        self.hasher: PasswordHasher = BcryptPasswordHasher()
-        self.tokens: TokenProvider = JwtTokenProvider.from_settings()
 
     # 입력 검사와 중복 확인을 거쳐 새 회원을 저장
     async def signup(
