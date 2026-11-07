@@ -36,11 +36,10 @@ class RoomRepository(ABC):
         -> 404 판단은 서비스가 한다.
         """
 
-
     @abstractmethod
     async def find_current_participation(self, user_id: int) -> Participation | None:
         """
-        이 회원의 현재 참가 (0-1건) 
+        이 회원의 현재 참가 (0-1건)
         **participations 테이블은 방에서 나가면 행 삭제(hard delete)
         """
 

@@ -28,7 +28,7 @@ from auth.domain.user import User
 from container import Container, DbSession
 
 # 요청 헤더에서 Bearer 토큰을 꺼낼 도구를 준비
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl='/api/auth/token')
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
 
 # container 설계도에 이번 요청 세션을 넣어 인증서비스 생성
@@ -40,8 +40,7 @@ def get_auth_service(
     ),
 ) -> AuthApplicationService:
     # users_session: auth_service 안의 users 저장소 provider에 session=db 전달
-    return factory(users__session=db,
-                   blacklist__session=db)
+    return factory(users__session=db, blacklist__session=db)
 
 
 # 요청의 토큰으로 현재 회원을 인증

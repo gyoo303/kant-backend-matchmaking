@@ -16,6 +16,7 @@ from auth.presentation.schemas import (
 # 인증 API의 공통 경로와 문서 분류를 지정
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
+
 # 회원가입 요청을 인증 서비스에 연결
 @router.post(
     "/signup",

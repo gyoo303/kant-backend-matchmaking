@@ -1,4 +1,3 @@
-
 # auth 외부 도구 구현(어댑터) — passlib(bcrypt), PyJWT
 #
 # [핵심 개념] 어댑터 = 포트(application/ports.py)를 상속해 실제 라이브러리로 구현한 클래스
@@ -38,13 +37,15 @@ from auth.application.ports import (
 # JWT 서명 알고리즘을 고정
 ALGORITHM = "HS256"
 
+
 # _ -> 클래스 안에서만 쓰는 함수명 관례
 def _utc_now() -> datetime:
     return datetime.now(UTC)
 
+
 class BcryptPasswordHasher(PasswordHasher):
     """bcrypt 해시 구현"""
-    
+
     def __init__(self) -> None:
         # CryptContext - 만들 때 비용이 크므로 객체 하나에 한 번만 생성
         # 이 클래스는 Singleton으로 등록(추후)
@@ -53,14 +54,15 @@ class BcryptPasswordHasher(PasswordHasher):
     def hash(self, raw: str) -> str:
         # bcrypt - 실행할 때마다 다른 salt를 붙인다, 같은 raw string도 해시값이 매번 달라진다
         return self._context.hash(raw)
-    
+
     def verify(self, raw: str, hashed: str) -> bool:
         # 해시에서 salt를 꺼낸다, 원문을 다시 해시하고 비교한다.
         return self._context.verify(raw, hashed)
 
+
 class JwtTokenProvider(TokenProvider):
     """PyJWT로 access/refresh 토큰을 발급하고 검증하는 구현"""
-    
+
     def __init__(
         self,
         secret_key: str,
@@ -69,11 +71,10 @@ class JwtTokenProvider(TokenProvider):
         clock: Callable[[], datetime] = _utc_now,
     ) -> None:
         self._secret_key = secret_key
-        self._access_ttl = timedelta(minutes = access_expire_minutes)
+        self._access_ttl = timedelta(minutes=access_expire_minutes)
         self._refresh_ttl = timedelta(days=refresh_expire_days)
         self._clock = clock
-        
-    
+
     # JwtTokenProvider는 "설정이 어디서 오는지" 모른다 — 생성자로 받은 값만 쓴다
     # 설정 파일 형식이 바뀌어도 container의 config 연결만 고치면 된다
 

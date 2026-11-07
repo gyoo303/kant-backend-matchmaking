@@ -59,10 +59,11 @@ class UserRepository(ABC):
         commit 안함
         """
 
+
 class TokenBlacklistRepository(ABC):
     """
     토큰 차단 기록 저장소 계약
-    """        
+    """
 
     @abstractmethod
     async def exists(self, token: str) -> bool:

@@ -19,7 +19,7 @@
 #   (추가 안하면 -> 500 에러)
 #   - DbSession(웹 요청 <-> 세션 연결)도 "조립 정보" -> container에 둔다
 #    database.py에서 fastapi 제거한다.
-#   - 순환 import 주의: presentation이 container를 import하므로, 
+#   - 순환 import 주의: presentation이 container를 import하므로,
 #     container는 presentation을 import하면 안 된다
 #     -> wiring_config에 모듈을 문자열로 적는 이유!
 
@@ -105,4 +105,3 @@ class Container(containers.DeclarativeContainer):
         room_repo=room_repository,
         query_repo=room_query_repository,
     )
-

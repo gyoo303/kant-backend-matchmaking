@@ -8,6 +8,7 @@ from auth.domain.exceptions import InvalidLoginIdError, InvalidNicknameError, In
 LOGIN_ID_PATTERN = re.compile(r"^[a-z0-9]{4,20}$")
 NICKNAME_PATTERN = re.compile(r"^[가-힣A-Za-z0-9]{2,12}$")
 
+
 @dataclass
 class User:
     id: int | None
@@ -24,7 +25,7 @@ class User:
         nickname: str,
         hashed_password: str,
     ) -> "User":
-    # 아이디 형식을 검사
+        # 아이디 형식을 검사
         if not LOGIN_ID_PATTERN.fullmatch(login_id):
             raise InvalidLoginIdError()
 
@@ -45,6 +46,6 @@ class User:
 
     # 원문 비밀번호의 최소 길이를 검사
     @staticmethod
-    def validate_raw_password(raw:str) -> None:
+    def validate_raw_password(raw: str) -> None:
         if len(raw) < 8:
             raise InvalidPasswordError()

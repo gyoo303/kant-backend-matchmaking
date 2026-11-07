@@ -43,29 +43,31 @@ router = APIRouter(prefix="/api")
 # Provide[...provider] = container의 설계도
 # 요청 세션을 넣어 이번 요청 전용 서비스를 만든다
 
+
 @inject
 def get_room_service(
-        db: DbSession,
-        factory: Callable[..., RoomApplicationService] = Depends(
-            Provide[Container.room_service.provider]
-        )
-    ) -> RoomApplicationService:
+    db: DbSession,
+    factory: Callable[..., RoomApplicationService] = Depends(
+        Provide[Container.room_service.provider]
+    ),
+) -> RoomApplicationService:
     """변경 서비스. 현재 시각은 서비스의 기본 clock(now(UTC)을 쓴다)"""
     return factory(rooms__session=db)
 
+
 @inject
 def get_query_service(
-        db: DbSession,
-        factory: Callable[..., RoomQueryService] = Depends(
-            Provide[Container.room_query_service.provider]
-        ),
-    ) -> RoomQueryService:
+    db: DbSession,
+    factory: Callable[..., RoomQueryService] = Depends(
+        Provide[Container.room_query_service.provider]
+    ),
+) -> RoomQueryService:
     """
     조회 서비스(commit 없음).
     두 저장소에 같은 요청 세션을 넣는다
     """
-    return factory(room_repo__session=db,
-                   query_repo__session=db)
+    return factory(room_repo__session=db, query_repo__session=db)
+
 
 # ---------------------------------------------------------------- rooms
 
