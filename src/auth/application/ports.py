@@ -23,6 +23,7 @@ from dataclasses import dataclass
 ACCESS_TOKEN_TYPE = "access"
 REFRESH_TOKEN_TYPE = "refresh"
 
+
 class TokenVerificationError(Exception):
     """
     서명 불일치, 만료, 형식 오류
@@ -32,7 +33,7 @@ class TokenVerificationError(Exception):
     """
 
 
-@dataclass(frozen = True)
+@dataclass(frozen=True)
 class TokenClaims:
     """
     검증된 토큰에서 서비스가 필요한 값만 꺼낸다
@@ -43,8 +44,9 @@ class TokenClaims:
        claims.sbu -> 바로 AttributeError 발생시킨다
     """
 
-    subject: str | None # 로그인 아이디 (JWT의 "sub")
-    token_type: str | None # ACCESS_TOKEN_TYPE 또는 REFRESH_TOKEN_TYPE
+    subject: str | None  # 로그인 아이디 (JWT의 "sub")
+    token_type: str | None  # ACCESS_TOKEN_TYPE 또는 REFRESH_TOKEN_TYPE
+
 
 class PasswordHasher(ABC):
     @abstractmethod
@@ -71,4 +73,3 @@ class TokenProvider(ABC):
         서명 만료를 검증하고 값을 꺼낸다
         실패 -> TokenVerificationError
         """
-

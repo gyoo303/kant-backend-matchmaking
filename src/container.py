@@ -9,7 +9,8 @@
 # [동작 방식] provider 종류와 수명 (scope)
 #   Singleton 서버 전체에서 객체 하나 (첫 요청때 생성 후 재사용)
 #     -> 상태가 없고 생성비용이 비싼 도구: 비밀번호 해시, 토큰 발급
-#   Factory 부를 때마다 새 객체 생성 -> 요청 세션에 할당되는 repository + 그 저장소를 쓰는 서비스 객체
+#   Factory 부를 때마다 새 객체 생성
+#     -> 요청 세션에 할당되는 repository + 그 저장소를 쓰는 서비스 객체
 #   Configuration 설정값 상자, main.py -> .env 값을 넣는다
 
 # [고려 사항]
@@ -18,7 +19,7 @@
 #   (추가 안하면 -> 500 에러)
 #   - DbSession(웹 요청 <-> 세션 연결)도 "조립 정보" -> container에 둔다
 #    database.py에서 fastapi 제거한다.
-#   - 순환 import 주의: presentation이 container를 import하므로, 
+#   - 순환 import 주의: presentation이 container를 import하므로,
 #     container는 presentation을 import하면 안 된다
 #     -> wiring_config에 모듈을 문자열로 적는 이유!
 
@@ -104,4 +105,3 @@ class Container(containers.DeclarativeContainer):
         room_repo=room_repository,
         query_repo=room_query_repository,
     )
-

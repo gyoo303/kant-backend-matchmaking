@@ -32,6 +32,7 @@ from abc import ABC, abstractmethod
 from auth.domain.token_blacklist import TokenBlacklist
 from auth.domain.user import User
 
+
 class UserRepository(ABC):
     """회원 저장소 contract 정의"""
 
@@ -58,10 +59,11 @@ class UserRepository(ABC):
         commit 안함
         """
 
+
 class TokenBlacklistRepository(ABC):
     """
     토큰 차단 기록 저장소 계약
-    """        
+    """
 
     @abstractmethod
     async def exists(self, token: str) -> bool:

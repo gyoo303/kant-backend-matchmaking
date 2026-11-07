@@ -63,7 +63,8 @@ git checkout -b <브랜치명>
 
 ```
 src/
-  main.py  config.py  database.py  exceptions.py  seed.py  logging_middleware.py
+  main.py  container.py  config.py  database.py  exceptions.py  seed.py  logging_middleware.py
+  container.py  의존성 조립: 어떤 계약에 어떤 구현을 넣을지 (D-031)
   bootstrap/  앱 조립 부품: lifespan, 미들웨어, 전역 예외 핸들러, 라우터 등록
   auth/    회원가입, 로그인(JWT), 로그아웃
   rooms/   방 만들기, 참가, 팀 변경, 나가기, 게임 시작, 조회
@@ -83,6 +84,16 @@ uv sync --frozen
 cp .env.example .env   # 로컬 학습용 예시 값이 들어 있어 그대로 써도 됩니다
 uv run uvicorn main:app --app-dir src --reload
 ```
+
+### 테스트
+
+```bash
+uv run pytest -q                       # 단위 테스트 (DB 불필요, 통합 테스트는 skip)
+docker exec matchmaking-db createdb -U matchmaking matchmaking_test   # 처음 한 번
+TEST_DATABASE_URL="postgresql+asyncpg://matchmaking:matchmaking@localhost:5432/matchmaking_test" uv run pytest -q
+```
+
+`TEST_DATABASE_URL`의 DB는 테스트마다 비워집니다. 개발용 DB(`matchmaking`)를 넣지 않습니다.
 
 ### 로컬 PostgreSQL 띄우기 (Docker Desktop, Windows 기준)
 

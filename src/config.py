@@ -35,7 +35,7 @@ class Settings(BaseSettings):
 
     # 수업 추가 내용: DB 세션 관련 설정
     db_session_autoflush: bool = False
-    db_session_expire_on_commit: bool = False    
+    db_session_expire_on_commit: bool = False
 
     seed_user_password: str
 

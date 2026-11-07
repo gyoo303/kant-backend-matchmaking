@@ -1,13 +1,13 @@
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from auth.domain.repository import TokenBlacklistRepository, UserRepository
 from auth.domain.token_blacklist import TokenBlacklist
 from auth.domain.user import User
 from auth.infrastructure.models import TokenBlacklistModel, UserModel
-from auth.domain.repository import TokenBlacklistRepository, UserRepository
+
 
 # 회원의 DB처리와 도메인 객체 변환을 담당
-# class UserRepository:
 class SqlAlchemyUserRepository(UserRepository):
     # 호출부가 전달한 세션을 보관
     def __init__(self, session: AsyncSession) -> None:
@@ -16,11 +16,11 @@ class SqlAlchemyUserRepository(UserRepository):
     # 기본 키로 회원을 조회
     async def find_by_id(self, user_id: int) -> User | None:
         model = await self.session.get(UserModel, user_id)
-    
+
         # 조회 결과가 없으면 None 반환
         if model is None:
             return None
-        
+
         # 조회한 모델을 도메인 객체로 변환
         return self._to_domain(model)
 
@@ -28,7 +28,7 @@ class SqlAlchemyUserRepository(UserRepository):
     async def find_by_login_id(self, login_id: str) -> User | None:
         # 로그인 아이디 조건을 가진 조회 구문을 만듦
         stmt = select(UserModel).where(UserModel.login_id == login_id)
-    
+
         # 조회를 실행하고 ORM 객체를 꺼냄
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
@@ -36,7 +36,7 @@ class SqlAlchemyUserRepository(UserRepository):
         # 조회 결과가 없으면 None을 반환
         if model is None:
             return None
-        
+
         # 조회한 모델을 도메인 객체로 변환
         return self._to_domain(model)
 
@@ -48,7 +48,7 @@ class SqlAlchemyUserRepository(UserRepository):
         # 조회 결과를 bool로 반환
         result = await self.session.scalar(stmt)
         return bool(result)
-    
+
     # 같은 닉네임의 회원이 있는지 검사
     async def exists_nickname(self, nickname: str) -> bool:
         # 닉네임의 존재 여부를 확인할 구문을 만듦
@@ -70,7 +70,7 @@ class SqlAlchemyUserRepository(UserRepository):
             model = await self.session.get(UserModel, user.id)
             if model is None:
                 raise ValueError(f"저장할 회원이 없습니다: id={user.id}")
-            
+
             # 기존 회원의 변경 값을 반영
             model.login_id = user.login_id
             model.nickname = user.nickname
@@ -88,7 +88,7 @@ class SqlAlchemyUserRepository(UserRepository):
     @staticmethod
     def _to_domain(model: UserModel) -> User:
         return User(
-            id= model.id,
+            id=model.id,
             login_id=model.login_id,
             nickname=model.nickname,
             hashed_password=model.hashed_password,
@@ -104,8 +104,8 @@ class SqlAlchemyUserRepository(UserRepository):
             hashed_password=user.hashed_password,
         )
 
+
 # 토큰 차단 기록의 DB 조회와 저장을 담당
-# class TokenBlacklistRepository:
 class SqlAlchemyTokenBlacklistRepository(TokenBlacklistRepository):
     # 호출부가 전달한 세션을 보관
     def __init__(self, session: AsyncSession) -> None:
@@ -119,7 +119,7 @@ class SqlAlchemyTokenBlacklistRepository(TokenBlacklistRepository):
         # 조회 결과를 bool로 반환
         result = await self.session.scalar(stmt)
         return bool(result)
-    
+
     # 토큰 차단 기록을 저장
     # 같은 요청의 이후 조회가 볼 수 있도록 flush. 확정은 get_db
     async def save(self, entry: TokenBlacklist) -> None:

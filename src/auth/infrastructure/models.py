@@ -5,9 +5,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from database import Base
 
+
 # 회원 정보를 users 테이블에 연결
 class UserModel(Base):
-    __tablename__ = 'users'
+    __tablename__ = "users"
 
     # DB가 부여할 회원 식별자를 정의
     id: Mapped[int] = mapped_column(
@@ -40,9 +41,10 @@ class UserModel(Base):
         server_default=func.now(),
     )
 
+
 # 토큰 차단 기록을 token_blacklist 테이블에 연결
 class TokenBlacklistModel(Base):
-    __tablename__ = 'token_blacklist'
+    __tablename__ = "token_blacklist"
 
     # DB가 부여할 차단 기록 식별자를 정의
     id: Mapped[int] = mapped_column(

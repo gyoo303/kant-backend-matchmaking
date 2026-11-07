@@ -5,14 +5,15 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from database import Base # ORM 모델의 부모 클래스 (공통요소)
+from database import Base  # ORM 모델의 부모 클래스 (공통요소)
 
 ### 개념: ORM 모델 = 테이블 설계도
 # `class RoomModel(Base)` 처럼 `Base`를 상속하면 `Base.metadata`라는 "테이블 목록"에 자동 등록
 #   - 나중에 A의 `bootstrap/lifespan.py`가 `create_all`을 부르면 목록에 있는 테이블을 실제로 생성함
-# `Mapped[int]` = "이 속성은 int 컬럼"이라는 타입 표시, `mapped_column(...)` = 컬럼 옵션(PK, FK, 길이 등).
+# `Mapped[int]` = "이 속성은 int 컬럼"이라는 타입 표시
+# `mapped_column(...)` = 컬럼 옵션(PK, FK, 길이 등).
 # `Mapped[datetime | None]` 처럼 `| None`을 붙이면 NULL 허용 컬럼
-# `relationship(...)` = 컬럼이 아니라 **"연결된 다른 객체로 가는 길"** 
+# `relationship(...)` = 컬럼이 아니라 **"연결된 다른 객체로 가는 길"**
 #   - `room_model.participations` 처럼 파이썬 리스트로 다룰 수 있게 함
 
 ### 이 프로젝트 테이블 구조의 특이사항 3가지 (ADR-011)
@@ -24,7 +25,7 @@ from database import Base # ORM 모델의 부모 클래스 (공통요소)
 
 # RoomModel: rooms 테이블
 class RoomModel(Base):
-    __tablename__ = "rooms" # 실제 DB 내 테이블 이름
+    __tablename__ = "rooms"  # 실제 DB 내 테이블 이름
 
     # primary_key=True + int -> 1,2,3 자동 넘버링 (PostgreSQL)
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -58,7 +59,7 @@ class TeamModel(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"), nullable=False)
-    side: Mapped[str] = mapped_column(String(1), nullable=False) # A 또는 B
+    side: Mapped[str] = mapped_column(String(1), nullable=False)  # A 또는 B
 
     # back_populates : 양쪽 relationship이 "서로 같은 연결"임을 알려준다.
     #  team.room = room 하면 room.teams에도 자동으로 들어간다.
@@ -73,7 +74,8 @@ class ParticipationModel(Base):
 
     # 두 컬럼에 primary_key=True -> 복합PK (room_id, user_id)
     room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"), primary_key=True)
-    # unique=True -> 한 회원은 participations에 딱 1행만, 동시에 한 방에만 참가, 이전 행(참여)는 덮어쓴다.
+    # unique=True -> 한 회원은 participations에 딱 1행만, 동시에 한 방에만 참가
+    #   이전 행(참여)는 덮어쓴다.
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True, unique=True)
     join_order: Mapped[int] = mapped_column(Integer, nullable=False)
     team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"), nullable=False)
@@ -84,12 +86,12 @@ class ParticipationModel(Base):
     team: Mapped["TeamModel"] = relationship(back_populates="participations")
 
 
-# ParticipationLogModel: participation_logs 테이블 
+# ParticipationLogModel: participation_logs 테이블
 # — 끝난 이용 1건 = 1행, INSERT only
 class ParticipationLogModel(Base):
     __tablename__ = "participation_logs"
 
-    id: Mapped[int] = mapped_column(primary_key=True) # 같은 방 재입장도 행이 따로 생긴다
+    id: Mapped[int] = mapped_column(primary_key=True)  # 같은 방 재입장도 행이 따로 생긴다
     room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"), nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     join_order: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -97,8 +99,7 @@ class ParticipationLogModel(Base):
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     left_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
-    # 역방향(back_populates) 
+    # 역방향(back_populates)
     # RoomModel에 logs 목록을 두면 방을 읽을 때 지난 기록까지 끌려올 위험 O
     room: Mapped["RoomModel"] = relationship()
     team: Mapped["TeamModel"] = relationship()
-

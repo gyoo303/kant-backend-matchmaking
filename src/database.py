@@ -17,6 +17,7 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -44,10 +45,13 @@ engine = create_async_engine(
 # 세션 = 하나의 요청이 DB와 주고받는 작업 단위
 # AsyncSessionLocal 호출할 때마다 세션 +1
 # expire_on_commit = False > 비동기 환경에서 필수 (교안 5-2)
-AsyncSessionLocal = async_sessionmaker(engine,
-                                       class_=AsyncSession,
-                                       expire_on_commit=_settings.db_session_expire_on_commit,
-                                       autoflush=_settings.db_session_autoflush)
+AsyncSessionLocal = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=_settings.db_session_expire_on_commit,
+    autoflush=_settings.db_session_autoflush,
+)
+
 
 # Base: 모든 ORM 모델의 부모, 교안 5-1
 # 클래스 내부 정의 필요X - 상속만 하면 빈 테이블 목록 생성 (Base.metadata)
@@ -86,6 +90,7 @@ async def get_db() -> AsyncIterator[AsyncSession]:
 
 
 ############
+
 
 ############
 # 서버 종료 시 engine.dispose() 호출 -> 커넥션 풀 정리

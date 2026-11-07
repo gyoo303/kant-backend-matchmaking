@@ -19,11 +19,13 @@ SESSION = object()  # 진짜 세션 대신 "같은 객체인지"만 확인할 �
 @pytest.fixture
 def container() -> Container:
     c = Container()
-    c.config.from_dict({
-        "jwt_secret_key": "test-secret-key-at-least-32-bytes!!",
-        "access_token_expire_minutes": 30,
-        "refresh_token_expire_days": 7,
-    })
+    c.config.from_dict(
+        {
+            "jwt_secret_key": "test-secret-key-at-least-32-bytes!!",
+            "access_token_expire_minutes": 30,
+            "refresh_token_expire_days": 7,
+        }
+    )
     return c
 
 

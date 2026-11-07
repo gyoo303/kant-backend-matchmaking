@@ -16,7 +16,6 @@
 #   - (infrastructure -> application 방향 = 바깥에서 안쪽이므로 허용)
 
 
-
 from abc import ABC, abstractmethod
 
 from rooms.application.read_models import (
@@ -31,11 +30,8 @@ from rooms.application.read_models import (
 class RoomQueryRepository(ABC):
     """화면용 읽기 모델 조회 계약"""
 
-
     @abstractmethod
-    async def list_active_rooms(
-        self, cond: RoomListCondition
-    ) -> tuple[list[RoomSummary], int]:
+    async def list_active_rooms(self, cond: RoomListCondition) -> tuple[list[RoomSummary], int]:
         """
         활성 방 목록 한 페이지와 전체 개수
         """
@@ -59,4 +55,3 @@ class RoomQueryRepository(ABC):
         """
         삭제된 방의 내 기록, 활성 방 or 참가한 적 없으면 None
         """
-

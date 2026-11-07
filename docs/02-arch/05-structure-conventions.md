@@ -22,21 +22,22 @@ kant-ubuntu-books-claude1/
 │   │   ├── error_handlers.py   # register_exception_handlers(): 400/401/404/410/422/500 → {"detail"}
 │   │   └── routing.py          # register_routes(): API·화면 라우터, /static 마운트
 │   ├── config.py               # Settings(BaseSettings), get_settings()
-│   ├── database.py             # engine, AsyncSessionLocal, Base, session_scope(), get_db(), DbSession
+│   ├── container.py            # Container(Singleton·Factory 설계도), DbSession 별칭 (D-031)
+│   ├── database.py             # engine, AsyncSessionLocal, Base, session_scope(), get_db() — fastapi 없음
 │   ├── exceptions.py           # DomainError, DomainRuleError, NotFoundError, GoneError, AuthenticationError
 │   ├── logging_middleware.py   # RequestLoggingMiddleware
 │   ├── seed.py                 # seed_initial_data() (DB)
 │   ├── auth/
 │   │   ├── __init__.py
-│   │   ├── domain/        __init__.py, user.py, token_blacklist.py, exceptions.py
+│   │   ├── domain/        __init__.py, user.py, token_blacklist.py, exceptions.py, repository.py(계약)
 │   │   ├── infrastructure/ __init__.py, models.py, repositories.py, security.py
-│   │   ├── application/   __init__.py, service.py
+│   │   ├── application/   __init__.py, service.py, ports.py(PasswordHasher·TokenProvider 계약)
 │   │   └── presentation/  __init__.py, schemas.py, router.py, dependencies.py, pages.py
 │   ├── rooms/
 │   │   ├── __init__.py
-│   │   ├── domain/        __init__.py, room.py, team.py, participation.py, exceptions.py
+│   │   ├── domain/        __init__.py, room.py, team.py, participation.py, exceptions.py, repository.py(계약)
 │   │   ├── infrastructure/ __init__.py, models.py, repositories.py
-│   │   ├── application/   __init__.py, service.py, queries.py, read_models.py, list_cache.py(CH-C)
+│   │   ├── application/   __init__.py, service.py, queries.py, read_models.py, query_repository.py(계약), list_cache.py(CH-C)
 │   │   └── presentation/  __init__.py, schemas.py, router.py, pages.py
 │   ├── templates/
 │   │   ├── base.html
@@ -47,9 +48,15 @@ kant-ubuntu-books-claude1/
 │       ├── css/app.css
 │       └── js/            api.js, rooms.js
 ├── tests/
-│   ├── conftest.py
-│   ├── unit/              test_room.py, test_team.py, test_participation.py, test_user.py        # DB 없음
-│   ├── integration/       test_auth_api.py, test_rooms_api.py, test_history_api.py, test_errors.py
+│   ├── conftest.py        # 위치 안내만
+│   ├── unit/              # DB 없음
+│   │   ├── fakes/repositories.py                                              # 계약을 상속한 메모리 저장소
+│   │   ├── test_room.py, test_team.py, test_participation.py, test_user.py     # 도메인
+│   │   ├── test_auth_service.py, test_room_service.py, test_security.py         # 서비스·어댑터
+│   │   └── test_container.py, test_wiring.py                                    # 조립
+│   ├── integration/       # TEST_DATABASE_URL 필요
+│   │   ├── conftest.py    # engine·_clean_db·client(get_db override)·make_member
+│   │   └── test_auth_api.py, test_rooms_api.py, test_history_api.py, test_errors.py
 │   └── concurrency/       test_room_concurrency.py                                 # CH-A
 └── docs/
 ```
@@ -61,16 +68,23 @@ kant-ubuntu-books-claude1/
 ## 2. 의존 방향
 
 ```
-presentation ──▶ application ──▶ domain
-      │                 │
-      │                 └──▶ infrastructure ──▶ domain
+presentation ──▶ application ──▶ domain ◀── infrastructure
+      │                 ▲                        │
+      │                 └────────────────────────┘ (조회 계약·읽기 모델·포트 상속)
       └──▶ domain(예외·열거형 참조만)
 
+계약 위치(D-030): aggregate 저장소 계약 → domain/repository.py
+                  조회 저장소 계약 → application/query_repository.py
+                  외부 도구 계약(포트) → application/ports.py
 기능 간: rooms.presentation ──▶ auth.presentation.dependencies (get_current_user_id)
-         rooms.infrastructure.repositories(RoomQueryRepository) ──▶ auth.infrastructure.models (UserModel: 닉네임 조회)
+         rooms.infrastructure.repositories(SqlAlchemyRoomQueryRepository) ──▶ auth.infrastructure.models (UserModel: 닉네임 조회)
          auth ──▶ rooms : 금지
-공통:    모든 계층 ──▶ src/exceptions.py, domain 제외 모든 계층 ──▶ config.py, database.py
+공통:    모든 계층 ──▶ src/exceptions.py, infrastructure·조립 ──▶ config.py, database.py
 조립:    main.py ──▶ bootstrap/ ──▶ 각 기능 presentation(라우터)·infrastructure.models(create_all)
+         main.py ──▶ container.py ──▶ 모든 기능의 application·infrastructure (D-031)
+         presentation ──▶ container : 허용 예외 (Container·DbSession 두 이름만, 실용적 타협)
+         presentation ──▶ infrastructure·database : 금지 (container를 거쳐서만)
+         domain·application·infrastructure ──▶ container : 금지
          기능 모듈(auth·rooms) ──▶ bootstrap/ : 금지 (D-028)
 ```
 
@@ -81,10 +95,10 @@ presentation ──▶ application ──▶ domain
 
 | ID | 규칙 |
 |---|---|
-| CONV-01 | 이름: 도메인 `<Entity>`, ORM `<Entity>Model`, 레포지토리 `<Entity>Repository`·`RoomQueryRepository`, 서비스 `<Feature>ApplicationService`·`RoomQueryService`, 요청 `<Action>Request`, 응답 `<Thing>Response`. 테이블 snake_case 복수형(`token_blacklist`만 예외, `03-db-schema.md`). |
-| CONV-02 | 비동기: DB 호출·레포지토리·서비스 메서드는 모두 `async def`, 호출은 `await`. 도메인 메서드는 동기. |
+| CONV-01 | 이름: 도메인 `<Entity>`, ORM `<Entity>Model`, 레포지토리 `<Entity>Repository`·`RoomQueryRepository`, 서비스 `<Feature>ApplicationService`·`RoomQueryService`, 요청 `<Action>Request`, 응답 `<Thing>Response`. 테이블 snake_case 복수형(`token_blacklist`만 예외, `03-db-schema.md`). 저장소 계약 `<Entity>Repository`(domain)와 구현 `SqlAlchemy<Entity>Repository`(infrastructure), 포트 `PasswordHasher`·`TokenProvider`(application)와 어댑터 `BcryptPasswordHasher`·`JwtTokenProvider`(infrastructure). |
+| CONV-02 | 비동기: DB 호출·레포지토리·서비스 메서드는 모두 `async def`, 호출은 `await`. 도메인 메서드는 동기. 단, `domain/repository.py`의 계약은 `async def` 추상 메서드다(엔티티·값 객체 메서드는 동기, D-030). |
 | CONV-03 | 라우터: `router = APIRouter(prefix="/api/auth", tags=["auth"])`, `APIRouter(prefix="/api", tags=["rooms"])`(`/me/*`는 `tags=["me"]`), 화면은 `page_router = APIRouter(include_in_schema=False)`. 모든 API에 `summary`·`response_model`. |
-| CONV-04 | 의존성 조립: 라우터 파일 안의 팩토리 `def get_room_service(db: DbSession) -> RoomApplicationService`로 서비스를 만든다. 서비스는 요청마다 새로 만든다. 세션은 `database.DbSession` 별칭으로만 받는다(`Depends(get_db)` 직접 사용 금지, D-029). |
+| CONV-04 | 의존성 조립(D-031): 서비스·저장소·외부 도구는 `src/container.py`만 만든다(서비스·저장소 `Factory`, 상태 없는 도구 `Singleton`). presentation의 의존성 함수는 `@inject`를 붙이고 `Depends(Provide[Container.<service>.provider])`로 설계도를 받아 `factory(<repo>__session=db)`로 호출한다. 키워드 이름은 서비스 생성자 매개변수와 같아야 한다. 세션은 `container.DbSession` 별칭으로만 받는다(`Depends(get_db)` 직접 사용 금지, D-029). `Provide`를 쓰는 모듈은 `Container.wiring_config.modules`에 등록한다. 앱 하나에 Container 하나(`app.state.container`). |
 | CONV-05 | 예외: 도메인·서비스는 `exceptions.py` 계층의 예외만 던진다. 라우터는 `try/except`로 HTTP 변환하지 않는다(전역 핸들러가 한다). |
 | CONV-06 | 시각: `datetime.now(UTC)`는 서비스의 `clock`과 `security.py`에서만 호출한다. |
 | CONV-07 | 로깅: `logging.getLogger(__name__)`. 미들웨어 한 줄 형식 `method=GET path=/api/rooms status=200 duration_ms=12.3 user_id=5`(user_id는 `request.state.user_id`가 있을 때만). 쿼리 문자열·본문·토큰·비밀번호는 남기지 않는다. |
@@ -111,6 +125,7 @@ presentation ──▶ application ──▶ domain
 12. (도전 A 적용 후) 방 변경 요청에서 `find_by_id`(잠금 없음) 사용 (CONV-08)
 13. 게임 결과·승패를 저장하는 테이블·필드·API (INV-09)
 14. 서비스·레포지토리·라우터에서 `commit()` 호출, `Depends(get_db)` 직접 사용 (확정은 `get_db`만, 세션은 `DbSession`만 — D-029)
+15. application에서 infrastructure 구현을 import·생성, presentation에서 infrastructure·`database`·sqlalchemy를 직접 import, 서비스가 주입받은 부품을 무시하고 다시 생성 (조립은 container만. presentation → container는 `Container`·`DbSession` import만 허용 — D-031)
 
 ## 5. 디렉토리 지도
 저장소 지도는 §1 디렉토리 트리를 기준으로 한다.

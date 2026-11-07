@@ -41,9 +41,12 @@ def test_auth_flow_through_container(client):
     headers = {"Authorization": f"Bearer {tokens['access_token']}"}
 
     assert client.get("/api/auth/me", headers=headers).status_code == 200
-    assert client.post(
-        "/api/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
-    ).status_code == 200
+    assert (
+        client.post(
+            "/api/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
+        ).status_code
+        == 200
+    )
 
     logout = client.post(
         "/api/auth/logout", json={"refresh_token": tokens["refresh_token"]}, headers=headers
