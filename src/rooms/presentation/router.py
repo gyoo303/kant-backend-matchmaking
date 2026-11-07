@@ -22,6 +22,13 @@ from rooms.application.queries import RoomQueryService
 from rooms.application.read_models import RoomListCondition
 from rooms.application.service import RoomApplicationService
 from rooms.domain.participation import TeamSide
+
+# [임시 조립 — 3단계] 4단계 container가 생기면 이 import와 아래 조립 코드를 지운다
+from rooms.infrastructure.repositories import (
+    SqlAlchemyRoomQueryRepository,
+    SqlAlchemyRoomRepository,
+)
+
 from rooms.presentation.schemas import (
     ArchivedRoomResponse,
     CurrentRoomResponse,
@@ -44,15 +51,25 @@ router = APIRouter(prefix="/api")
 
 def get_room_service(db: DbSession) -> RoomApplicationService:
     """변경 서비스. 현재 시각은 서비스가 clock으로 한 번 얻어 쓴다."""
-    return RoomApplicationService(db, clock=lambda: datetime.now(UTC))
+    return RoomApplicationService(
+        rooms = SqlAlchemyRoomRepository(db),
+        clock=lambda: datetime.now(UTC)
+    )
+
 
 # def get_room_service(db: AsyncSession = Depends(get_db)) -> RoomApplicationService:
 #     """변경 서비스. 현재 시각은 서비스가 clock으로 한 번 얻어 쓴다(§8)."""
 #     return RoomApplicationService(db, clock=lambda: datetime.now(UTC))
 
 def get_query_service(db: DbSession) -> RoomQueryService:
-    """조회 서비스(commit 없음)."""
-    return RoomQueryService(db)
+    """
+    조회 서비스(commit 없음).
+    두 저장소에 같은 요청 세션을 넣는다
+    """
+    return RoomQueryService(
+        room_repo = SqlAlchemyRoomRepository(db),
+        query_repo = SqlAlchemyRoomQueryRepository(db),
+    )
 
 # def get_query_service(db: AsyncSession = Depends(get_db)) -> RoomQueryService:
 #     """조회 서비스(commit 없음)."""

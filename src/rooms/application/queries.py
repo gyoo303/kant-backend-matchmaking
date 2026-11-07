@@ -17,7 +17,7 @@
 # `replace(detail, my_team=..., am_i_host=...)`는 **지정한 필드만 바꾼 새 복사본**을 생성한다
 
 from dataclasses import replace
-from sqlalchemy.ext.asyncio import AsyncSession
+# from sqlalchemy.ext.asyncio import AsyncSession # 세션은 서비스가 몰라야 한다 (SqlAlchemy만 쓴다)
 
 from rooms.application.read_models import (
     ArchivedRoom,
@@ -29,14 +29,10 @@ from rooms.application.read_models import (
 )
 from rooms.domain.exceptions import RoomDissolvedError, RoomNotFoundError
 from rooms.domain.room import DeleteReason
-# repositories만 import - infrastructure.models(ORM)은 임포트 X
 
-# from rooms.infrastructure.repositories import RoomQueryRepository, RoomRepository
-# [임시 연결 — 1단계] 3단계에서 계약 타입 주입으로 바꾼다
-from rooms.infrastructure.repositories import (
-    SqlAlchemyRoomQueryRepository,
-    SqlAlchemyRoomRepository,
-)
+# 계약만 import -> aggregate 저장소는 domain, 조회 저장소는 application (: D-030)
+from rooms.application.query_repository import RoomQueryRepository
+from rooms.domain.repository import RoomRepository
 
 # RoomQueryService
 #   - list_rooms
@@ -47,13 +43,19 @@ from rooms.infrastructure.repositories import (
 
 
 class RoomQueryService:
-    # 생성자 - (db 세션)만 받는다
+    # 생성자 주입 - 두 저장소를 계약 형식에 따라 받아온다
     # list_cache -> 도전과제(C) 범위, 필수범위에서 뺀다
-    def __init__(self, db: AsyncSession) -> None:
-        # 같은 세션을 2개의 repository가 함께 쓴다
-        self.room_repo = SqlAlchemyRoomRepository(db) # 도메인 - DB 사이를 이어준다.
-        self.query_repo = SqlAlchemyRoomQueryRepository(db) # [조회전용] 화면에 나갈 정보를 도메인 안거치고 빠르게 내보낸다
-        
+    def __init__(
+        self,
+        *,
+        room_repo: RoomRepository,
+        query_repo: RoomQueryRepository,
+    ) -> None:
+        # 두 구현이 같은 세션을 쓰도록 조정하는 역할/책임 = 조립하는 쪽에 맡긴다
+        # (presentation/container의 책임)
+        self.room_repo = room_repo # 도메인 - 인프라 계층 사이 연결
+        self.query_repo = query_repo # 조회전용 -> 화면에 나갈 정보를 도메인 안거치고 빠르게
+
     # 방 목록 조회 - 화면 정보 빠르게 가져온다 query_repo
     async def list_rooms(self, cond: RoomListCondition) -> RoomPage:
         # 방 조회 조건값에 따라 활성 방 목록을 가져온다: 객체, 총 갯수
