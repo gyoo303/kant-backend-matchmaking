@@ -35,7 +35,7 @@ from auth.application.ports import (
     TokenVerificationError,
 )
 
-from config import Settings, get_settings
+# from config import Settings, get_settings
 
 # JWT 서명 알고리즘을 고정
 ALGORITHM = "HS256"
@@ -76,15 +76,20 @@ class JwtTokenProvider(TokenProvider):
         self._clock = clock
         
     
-    # [임시 — 2단계] 서비스가 직접 만들 때 쓰는 생성 도우미. 4단계 container가 대신하면 지운다
-    @classmethod
-    def from_settings(cls, settings: Settings | None = None) -> "JwtTokenProvider":
-        settings = settings or get_settings()
-        return cls(
-            secret_key=settings.jwt_secret_key,
-            access_expire_minutes=settings.access_token_expire_minutes,
-            refresh_expire_days=settings.refresh_token_expire_days,
-        )
+    # # [임시 — 2단계] 서비스가 직접 만들 때 쓰는 생성 도우미. 4단계 container가 대신하면 지운다
+    # @classmethod
+    # def from_settings(cls, settings: Settings | None = None) -> "JwtTokenProvider":
+    #     settings = settings or get_settings()
+    #     return cls(
+    #         secret_key=settings.jwt_secret_key,
+    #         access_expire_minutes=settings.access_token_expire_minutes,
+    #         refresh_expire_days=settings.refresh_token_expire_days,
+    #     )
+    ##########
+    # 이제 JwtTokenProvider는 "설정이 어디서 오는지" 모른다
+    # 생성자로 받은 값만 쓴다
+    # 설정 파일 형식이 바뀌어도 container의 config. 연결만 고치면 ok
+    ##########
 
     def create_access_token(self, subject: str) -> str:
         return self._encode(subject, ACCESS_TOKEN_TYPE, self._access_ttl)
