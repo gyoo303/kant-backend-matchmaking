@@ -71,8 +71,7 @@ class AuthApplicationService:
         # 회원을 저장하고 DB 생성값이 반영된 객체를 받음
         saved = await self.users.save(user) # flush/refresh -> id, created_at 채운다.
 
-        # 회원가입의 DB 변경을 확정
-        # await self.db.commit()
+        # 확정(commit)은 서비스가 아니라 get_db가 요청 끝에서 한다 (D-029)
 
         return saved
 
@@ -132,8 +131,7 @@ class AuthApplicationService:
         # refresh 토큰의 차단 기록을 저장
         await self.blacklist.save(TokenBlacklist(token=refresh_token))
 
-        # 두 차단 기록의 저장을 함께 확정
-        # await self.db.commit()
+        # 두 기록은 같은 요청 세션 → get_db가 함께 확정한다 (D-029)
     
     # 토큰을 검증해 현재 회원을 반환
     async def authenticate(self, token: str) -> User:

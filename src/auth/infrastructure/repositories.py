@@ -8,7 +8,6 @@ from auth.infrastructure.models import TokenBlacklistModel, UserModel
 
 
 # 회원의 DB처리와 도메인 객체 변환을 담당
-# class UserRepository:
 class SqlAlchemyUserRepository(UserRepository):
     # 호출부가 전달한 세션을 보관
     def __init__(self, session: AsyncSession) -> None:
@@ -106,7 +105,6 @@ class SqlAlchemyUserRepository(UserRepository):
         )
 
 # 토큰 차단 기록의 DB 조회와 저장을 담당
-# class TokenBlacklistRepository:
 class SqlAlchemyTokenBlacklistRepository(TokenBlacklistRepository):
     # 호출부가 전달한 세션을 보관
     def __init__(self, session: AsyncSession) -> None:

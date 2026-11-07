@@ -20,8 +20,6 @@ from dataclasses import replace
 
 # 계약만 import -> aggregate 저장소는 domain, 조회 저장소는 application (: D-030)
 from rooms.application.query_repository import RoomQueryRepository
-
-# from sqlalchemy.ext.asyncio import AsyncSession # 세션은 서비스가 몰라야 한다 (SqlAlchemy만 쓴다)
 from rooms.application.read_models import (
     ArchivedRoom,
     CurrentRoom,

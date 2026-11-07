@@ -9,7 +9,6 @@
 # - /me/room-history.csv(API-ROOM-12, 도전 B)는 필수 범위가 아니라 두지 않았다.
 #   넣을 때는 /me/room-history/{room_id}보다 먼저 등록해야 한다.
 
-# from datetime import UTC, datetime
 from collections.abc import Callable
 from typing import Literal
 
@@ -17,12 +16,7 @@ from dependency_injector.wiring import Provide, inject
 from fastapi import APIRouter, Depends, Query
 
 from auth.presentation.dependencies import get_current_user_id
-
-# from sqlalchemy.ext.asyncio import AsyncSession
-# from database import DbSession
 from container import Container, DbSession
-
-# from database import get_db
 from rooms.application.queries import RoomQueryService
 from rooms.application.read_models import RoomListCondition
 from rooms.application.service import RoomApplicationService
@@ -57,10 +51,6 @@ def get_room_service(
         )
     ) -> RoomApplicationService:
     """변경 서비스. 현재 시각은 서비스의 기본 clock(now(UTC)을 쓴다)"""
-    # return RoomApplicationService(
-    #     rooms = SqlAlchemyRoomRepository(db),
-    #     clock=lambda: datetime.now(UTC)
-    # )
     return factory(rooms__session=db)
 
 @inject
@@ -74,10 +64,6 @@ def get_query_service(
     조회 서비스(commit 없음).
     두 저장소에 같은 요청 세션을 넣는다
     """
-    # return RoomQueryService(
-    #     room_repo = SqlAlchemyRoomRepository(db),
-    #     query_repo = SqlAlchemyRoomQueryRepository(db),
-    # )
     return factory(room_repo__session=db,
                    query_repo__session=db)
 

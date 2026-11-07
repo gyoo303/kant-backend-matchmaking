@@ -23,18 +23,9 @@ from dependency_injector.wiring import Provide, inject
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 
-# from sqlalchemy.ext.asyncio import AsyncSession
 from auth.application.service import AuthApplicationService
 from auth.domain.user import User
 from container import Container, DbSession
-
-# from auth.infrastructure.repositories import (
-#     SqlAlchemyTokenBlacklistRepository,
-#     SqlAlchemyUserRepository,
-# )
-# from auth.infrastructure.security import BcryptPasswordHasher, JwtTokenProvider
-# # from database import get_db
-# from database import DbSession
 
 # 요청 헤더에서 Bearer 토큰을 꺼낼 도구를 준비
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='/api/auth/token')

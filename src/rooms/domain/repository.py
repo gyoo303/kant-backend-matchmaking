@@ -11,7 +11,7 @@
 # [동작 방식] "변경 흐름"에서 쓰는 저장소
 #   서비스: room = await rooms.find_by_id(id) # 도메인 객체로 받기
 #           room.join(user_id, side, now) # 도메인 규칙 실행
-#           await room.save(room)       # 바뀐 상태 저장
+#           await rooms.save(room)      # 바뀐 상태 저장
 #   (화면용 조회 - 도메인을 거치지 않는 RoomQueryRepository가 따로 맡는다, CQRS 맛보기!)
 
 # [고려사항]
@@ -24,14 +24,6 @@ from abc import ABC, abstractmethod
 
 from rooms.domain.participation import Participation
 from rooms.domain.room import Room
-
-# from rooms.application.read_models import (
-#     ArchivedRoom,
-#     HistoryItem,
-#     RoomDetail,
-#     RoomListcondition,
-#     RoomSummary,
-# )
 
 
 class RoomRepository(ABC):
@@ -59,38 +51,3 @@ class RoomRepository(ABC):
         id 채워진 Room 객체를 돌려준다
         commit은 하지 않는다
         """
-
-
-
-
-#   - 읽기 모델을 반환하는 계약은 application/query_repository.py로 분리한다.
-
-# class RoomQueryRepository(ABC):
-#     @abstractmethod
-#     async def list_active_rooms(
-#         self, cond: RoomListCondition
-#     ) -> tuple[list[RoomSummary], int]:
-#         """
-#         활성 방 목록 한 페이지와 전체 개수
-#         """
-
-#     @abstractmethod
-#     async def get_room_detail(self, room_id: int) -> RoomDetail | None:
-#         """
-#         활성 방 상세, 없거나 삭제된 방 -> None
-#         """
-
-#     @abstractmethod
-#     async def list_history(
-#         self, user_id: int, page: int, size: int
-#     ) -> tuple[list[HistoryItem], int]:
-#         """
-#         현재 참가 + 끝난 참가 이력을 최신순 정렬
-#         """
-
-#     @abstractmethod
-#     async def get_archived_room(self, room_id: int, user_id: int) -> ArchivedRoom | None:
-#         """
-#         삭제된 방의 내 기록, 활성 방 or 참가한 적 없으면 None
-#         """
-
