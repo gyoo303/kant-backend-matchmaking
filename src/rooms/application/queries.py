@@ -30,7 +30,13 @@ from rooms.application.read_models import (
 from rooms.domain.exceptions import RoomDissolvedError, RoomNotFoundError
 from rooms.domain.room import DeleteReason
 # repositories만 import - infrastructure.models(ORM)은 임포트 X
-from rooms.infrastructure.repositories import RoomQueryRepository, RoomRepository
+
+# from rooms.infrastructure.repositories import RoomQueryRepository, RoomRepository
+# [임시 연결 — 1단계] 3단계에서 계약 타입 주입으로 바꾼다
+from rooms.infrastructure.repositories import (
+    SqlAlchemyRoomQueryRepository,
+    SqlAlchemyRoomRepository,
+)
 
 # RoomQueryService
 #   - list_rooms
@@ -45,8 +51,8 @@ class RoomQueryService:
     # list_cache -> 도전과제(C) 범위, 필수범위에서 뺀다
     def __init__(self, db: AsyncSession) -> None:
         # 같은 세션을 2개의 repository가 함께 쓴다
-        self.room_repo = RoomRepository(db) # 도메인 - DB 사이를 이어준다.
-        self.query_repo = RoomQueryRepository(db) # [조회전용] 화면에 나갈 정보를 도메인 안거치고 빠르게 내보낸다
+        self.room_repo = SqlAlchemyRoomRepository(db) # 도메인 - DB 사이를 이어준다.
+        self.query_repo = SqlAlchemyRoomQueryRepository(db) # [조회전용] 화면에 나갈 정보를 도메인 안거치고 빠르게 내보낸다
         
     # 방 목록 조회 - 화면 정보 빠르게 가져온다 query_repo
     async def list_rooms(self, cond: RoomListCondition) -> RoomPage:

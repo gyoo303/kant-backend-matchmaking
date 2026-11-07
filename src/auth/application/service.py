@@ -10,7 +10,15 @@ from auth.domain.exceptions import (
 from auth.domain.token_blacklist import TokenBlacklist
 
 from auth.domain.user import User
-from auth.infrastructure.repositories import TokenBlacklistRepository, UserRepository
+# from auth.infrastructure.repositories import TokenBlacklistRepository, UserRepository
+# [임시 연결 — 1단계] 앱 복구를 위해 구현 클래스를 직접 생성한다
+#   application → infrastructure 의존은 아직 위반 상태. 3단계에서 생성자 주입으로 제거
+from auth.infrastructure.repositories import (
+    SqlAlchemyTokenBlacklistRepository,
+    SqlAlchemyUserRepository,
+)
+
+
 from auth.infrastructure.security import (
     PasswordHasher,
     create_access_token,
@@ -31,8 +39,8 @@ class AuthApplicationService:
         # 서비스는 트랜잭션을 확정하지 않는다 (D-029)
         #   -> self.db 보관 필요X
         # self.db = db
-        self.users = UserRepository(db)
-        self.blacklist = TokenBlacklistRepository(db)
+        self.users = SqlAlchemyUserRepository(db)
+        self.blacklist = SqlAlchemyTokenBlacklistRepository(db)
 
         # 비밀번호 해시 도구를 준비
         self.hasher = PasswordHasher()
