@@ -1,4 +1,4 @@
-from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
+# from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.domain.exceptions import (
@@ -18,12 +18,15 @@ from auth.infrastructure.repositories import (
     SqlAlchemyUserRepository,
 )
 
+# [임시 연결 — 2단계] 구현 클래스를 직접 생성한다. 3단계에서 생성자 주입으로 제거
+from auth.infrastructure.security import BcryptPasswordHasher, JwtTokenProvider
 
-from auth.infrastructure.security import (
+# 서비스는 jwt 대신 포트(계약)의 상수·예외만 안다
+from auth.application.ports import (
+    REFRESH_TOKEN_TYPE,
     PasswordHasher,
-    create_access_token,
-    create_refresh_token,
-    decode_token,
+    TokenProvider,
+    TokenVerificationError,
 )
 from exceptions import AuthenticationError
 
@@ -43,7 +46,11 @@ class AuthApplicationService:
         self.blacklist = SqlAlchemyTokenBlacklistRepository(db)
 
         # 비밀번호 해시 도구를 준비
-        self.hasher = PasswordHasher()
+        # self.hasher = PasswordHasher()
+        # 변수 타입은 계약(PasswordHasher, TokenProvider)으로 작성
+        #   -> 아래 메서드들은 "계약된 메서드"만 쓰게 된다
+        self.hasher: PasswordHasher = BcryptPasswordHasher()
+        self.tokens: TokenProvider = JwtTokenProvider.from_settings()
 
     # 입력 검사와 중복 확인을 거쳐 새 회원을 저장
     async def signup(
@@ -87,8 +94,8 @@ class AuthApplicationService:
 
         # 회원의 로그인 아이디를 담은 토큰을 반환
         return {
-            'access_token' : create_access_token({'sub': user.login_id}),
-            'refresh_token' : create_refresh_token({'sub': user.login_id}),
+            'access_token' : self.tokens.create_access_token({'sub': user.login_id}),
+            'refresh_token' : self.tokens.create_refresh_token({'sub': user.login_id}),
             'token_type' : 'bearer',
         }
     # refresh 토큰을 확인해 새 access 토큰을 발급한다
@@ -99,18 +106,18 @@ class AuthApplicationService:
         
         # JWT의 서명과 만료를 검증
         try:
-            payload = decode_token(refresh_token)
-        except (ExpiredSignatureError, InvalidTokenError) as error:
+            claims = self.tokens.decode_token(refresh_token)
+        except TokenVerificationError as error:
             raise AuthenticationError(EXPIRED_REFRESH_MESSAGE) from error
         
         # refresh 용도와 회원 식별값을 확인
-        login_id = payload.get('sub')
-        if payload.get('token_type') != 'refresh' or login_id is None:
+        login_id = claims.subject
+        if claims.token_type != REFRESH_TOKEN_TYPE or login_id is None:
             raise AuthenticationError(EXPIRED_REFRESH_MESSAGE)
 
         # 새 access 토큰만 반환
         return {
-            'access_token': create_access_token({'sub': login_id}),
+            'access_token': self.tokens.create_access_token({'sub': login_id}),
             'token_type': 'bearer',
         }
     
@@ -118,8 +125,8 @@ class AuthApplicationService:
     async def logout(self, access_token: str, refresh_token: str) -> None:
         # 로그아웃에 사용할 refresh 토큰을 검증
         try:
-            decode_token(refresh_token)
-        except (ExpiredSignatureError, InvalidTokenError) as error:
+            self.tokens.decode_token(refresh_token)
+        except TokenVerificationError as error:
             raise InvalidRefreshTokenError() from error
 
         # 이미 처리한 refresh 토큰의 재사용을 거부
@@ -139,16 +146,16 @@ class AuthApplicationService:
     async def authenticate(self, token: str) -> User:
         # JWT의 서명과 만료를 검증
         try:
-            payload = decode_token(token)
-        except (ExpiredSignatureError, InvalidTokenError) as error:
+            claims = self.tokens.decode(token)
+        except TokenVerificationError as error:
             raise AuthenticationError(INVALID_TOKEN_MESSAGE) from error
         
         # refresh 토큰을 요청 인증에 사용하는 것을 거부
-        if payload.get('token_type') == 'refresh':
+        if claims.token_type == REFRESH_TOKEN_TYPE:
             raise AuthenticationError(INVALID_TOKEN_MESSAGE)
 
         # 회원을 조회할 로그인 아이디 확인
-        login_id = payload.get('sub')
+        login_id = claims.subject
         if login_id is None:
             raise AuthenticationError(INVALID_TOKEN_MESSAGE)
 
