@@ -15,7 +15,8 @@
 #   (화면용 조회 - 도메인을 거치지 않는 RoomQueryRepository가 따로 맡는다, CQRS 맛보기!)
 
 # [고려사항]
-#   - find_current_participation은 Participation(domain 객체)을 반환하므로 repository는 도메인 계층에 둔다.
+#   - find_current_participation은 Participation(domain 객체)을 반환하므로
+#     repository는 도메인 계층에 둔다.
 #   - read_models(application) import하면 domain -> application 역참조 (금지패턴)
 #   - 읽기 모델을 반환하는 계약은 application/query_repository.py로 분리한다.
 

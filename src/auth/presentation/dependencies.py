@@ -22,8 +22,8 @@ from collections.abc import Callable
 from dependency_injector.wiring import Provide, inject
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
-# from sqlalchemy.ext.asyncio import AsyncSession
 
+# from sqlalchemy.ext.asyncio import AsyncSession
 from auth.application.service import AuthApplicationService
 from auth.domain.user import User
 from container import Container, DbSession

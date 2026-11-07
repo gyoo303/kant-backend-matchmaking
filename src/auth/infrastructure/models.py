@@ -5,6 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from database import Base
 
+
 # 회원 정보를 users 테이블에 연결
 class UserModel(Base):
     __tablename__ = 'users'

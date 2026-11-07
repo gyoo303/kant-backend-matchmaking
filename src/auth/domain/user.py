@@ -2,11 +2,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 
-from auth.domain.exceptions import(
-    InvalidLoginIdError,
-    InvalidNicknameError,
-    InvalidPasswordError
-)
+from auth.domain.exceptions import InvalidLoginIdError, InvalidNicknameError, InvalidPasswordError
 
 # 회원 생성에 사용할 문자열 규칙을 준비
 LOGIN_ID_PATTERN = re.compile(r"^[a-z0-9]{4,20}$")

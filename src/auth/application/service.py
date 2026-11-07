@@ -1,22 +1,20 @@
-from auth.domain.exceptions import (
-    AlreadyLoggedOutError,
-    DuplicateLoginIdError,
-    DuplicateNicknameError,
-    InvalidRefreshTokenError,
-)
-from auth.domain.token_blacklist import TokenBlacklist
-
-from auth.domain.user import User
-
-# 계약(추상클래스)만 import - infrastructure, sqlalchemy, jwt import X
-from auth.domain.repository import TokenBlacklistRepository, UserRepository
-
 from auth.application.ports import (
     REFRESH_TOKEN_TYPE,
     PasswordHasher,
     TokenProvider,
     TokenVerificationError,
 )
+from auth.domain.exceptions import (
+    AlreadyLoggedOutError,
+    DuplicateLoginIdError,
+    DuplicateNicknameError,
+    InvalidRefreshTokenError,
+)
+
+# 계약(추상클래스)만 import - infrastructure, sqlalchemy, jwt import X
+from auth.domain.repository import TokenBlacklistRepository, UserRepository
+from auth.domain.token_blacklist import TokenBlacklist
+from auth.domain.user import User
 from exceptions import AuthenticationError
 
 LOGIN_FAILED_MESSAGE = '아이디 또는 비밀번호가 올바르지 않습니다'
@@ -37,7 +35,8 @@ class AuthApplicationService:
         ) -> None:
         # 세션은 받지 않는다 
         # :: "db session"은 SQLAlchemy에만 필요하며, Redis를 쓴다면 필요없다.
-        # :: 서비스가 세션을 받는 순간, "repository -> SQLAlchemy를 쓴다"는 사실을 서비스가 "알게 된다"
+        # :: 서비스가 세션을 받는 순간,
+        #    "repository -> SQLAlchemy를 쓴다"는 사실을 서비스가 "알게 된다"
         
         #   세션은 repositories 구현의 내부 사정 -> 조립하는 쪽이 저장소에 넣어 준다
         #   트랜잭션 확정(commit)도 서비스가 아니라 get_db가 실행한다

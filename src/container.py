@@ -9,7 +9,8 @@
 # [동작 방식] provider 종류와 수명 (scope)
 #   Singleton 서버 전체에서 객체 하나 (첫 요청때 생성 후 재사용)
 #     -> 상태가 없고 생성비용이 비싼 도구: 비밀번호 해시, 토큰 발급
-#   Factory 부를 때마다 새 객체 생성 -> 요청 세션에 할당되는 repository + 그 저장소를 쓰는 서비스 객체
+#   Factory 부를 때마다 새 객체 생성
+#     -> 요청 세션에 할당되는 repository + 그 저장소를 쓰는 서비스 객체
 #   Configuration 설정값 상자, main.py -> .env 값을 넣는다
 
 # [고려 사항]

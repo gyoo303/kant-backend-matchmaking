@@ -17,8 +17,11 @@
 # `replace(detail, my_team=..., am_i_host=...)`는 **지정한 필드만 바꾼 새 복사본**을 생성한다
 
 from dataclasses import replace
-# from sqlalchemy.ext.asyncio import AsyncSession # 세션은 서비스가 몰라야 한다 (SqlAlchemy만 쓴다)
 
+# 계약만 import -> aggregate 저장소는 domain, 조회 저장소는 application (: D-030)
+from rooms.application.query_repository import RoomQueryRepository
+
+# from sqlalchemy.ext.asyncio import AsyncSession # 세션은 서비스가 몰라야 한다 (SqlAlchemy만 쓴다)
 from rooms.application.read_models import (
     ArchivedRoom,
     CurrentRoom,
@@ -28,11 +31,8 @@ from rooms.application.read_models import (
     RoomPage,
 )
 from rooms.domain.exceptions import RoomDissolvedError, RoomNotFoundError
-from rooms.domain.room import DeleteReason
-
-# 계약만 import -> aggregate 저장소는 domain, 조회 저장소는 application (: D-030)
-from rooms.application.query_repository import RoomQueryRepository
 from rooms.domain.repository import RoomRepository
+from rooms.domain.room import DeleteReason
 
 # RoomQueryService
 #   - list_rooms

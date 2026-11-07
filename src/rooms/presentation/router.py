@@ -15,17 +15,18 @@ from typing import Literal
 
 from dependency_injector.wiring import Provide, inject
 from fastapi import APIRouter, Depends, Query
-# from sqlalchemy.ext.asyncio import AsyncSession
 
+from auth.presentation.dependencies import get_current_user_id
+
+# from sqlalchemy.ext.asyncio import AsyncSession
 # from database import DbSession
 from container import Container, DbSession
-from auth.presentation.dependencies import get_current_user_id
+
 # from database import get_db
 from rooms.application.queries import RoomQueryService
 from rooms.application.read_models import RoomListCondition
 from rooms.application.service import RoomApplicationService
 from rooms.domain.participation import TeamSide
-
 from rooms.presentation.schemas import (
     ArchivedRoomResponse,
     CurrentRoomResponse,

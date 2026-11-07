@@ -32,6 +32,7 @@ from abc import ABC, abstractmethod
 from auth.domain.token_blacklist import TokenBlacklist
 from auth.domain.user import User
 
+
 class UserRepository(ABC):
     """회원 저장소 contract 정의"""
 

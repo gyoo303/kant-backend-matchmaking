@@ -2,6 +2,7 @@
 import logging
 import time
 from collections.abc import Awaitable, Callable
+
 from fastapi import Request, Response
 
 # __name__ -> 로그에 호출 파일명이 찍혀서 위치를 알 수 있다
@@ -9,7 +10,8 @@ from fastapi import Request, Response
 logger = logging.getLogger(__name__)
 
 # log_requests(request, call_next)
-# Callable[[Request], Awaitable[Response]] = 요청을 받아서 응답을 await 방식으로 리턴하는 함수 객체타입
+# Callable[[Request], Awaitable[Response]]
+#   = 요청을 받아서 응답을 await 방식으로 리턴하는 함수 객체타입
 
 # 매개변수 두 개는 FastAPI가 자동으로 넣어준다.
 #   request   : 지금 들어온 요청 (메서드, 경로, 헤더 등)

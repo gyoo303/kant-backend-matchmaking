@@ -23,9 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from rooms.domain.participation import Participation, TeamSide
-from rooms.domain.room import DeleteReason, Room, RoomTitle
-from rooms.domain.team import Team
+from auth.infrastructure.models import UserModel
 from rooms.application.read_models import (
     ArchivedRoom,
     HistoryItem,
@@ -33,18 +31,20 @@ from rooms.application.read_models import (
     ParticipantView,
     RoomDetail,
     RoomListCondition,
-    RoomSummary
+    RoomSummary,
 )
-from src.rooms.application.query_repository import RoomQueryRepository
-from src.rooms.domain.repository import RoomRepository
-
+from rooms.domain.participation import Participation, TeamSide
+from rooms.domain.room import DeleteReason, Room, RoomTitle
+from rooms.domain.team import Team
 from rooms.infrastructure.models import (
     ParticipationLogModel,
     ParticipationModel,
     RoomModel,
-    TeamModel
+    TeamModel,
 )
-from auth.infrastructure.models import UserModel
+from src.rooms.application.query_repository import RoomQueryRepository
+from src.rooms.domain.repository import RoomRepository
+
 
 # RoomRepository
 class SqlAlchemyRoomRepository(RoomRepository):
@@ -154,7 +154,8 @@ class SqlAlchemyRoomRepository(RoomRepository):
 
         flush를 RoomRepository.save에서 수행하는 이유
         1) 새 방, 팀, 로그의 id(DB 자동생성값)이 필요 -> 라우터가 room.id로 상세정보를 읽는다
-        2) autoflush=False -> flush 없으면 같은 요청의 다음 조회(SELECT)가 방금 바꾼 내용을 보지 못함
+        2) autoflush=False -> flush 없으면
+           같은 요청의 다음 조회(SELECT)가 방금 바꾼 내용을 보지 못함
         3) unique 위반 같은 제약 오류가 commit 때가 아니라 "저장 지점"에서 드러난다
         """
 
@@ -260,7 +261,7 @@ class SqlAlchemyRoomQueryRepository(RoomQueryRepository):
 
         stmt = (
             select(RoomModel)
-            .where(RoomModel.deleted_at == None) # 삭제된 방은 제외
+            .where(RoomModel.deleted_at.is_(None))  # 삭제된 방은 제외 (SQL: IS NULL)
             .options(selectinload(RoomModel.participations)) # 현재 인원 계산용
             .order_by(*order) # 튜플을 풀어서 -> order_by(a, b)로 넘겨준다
         )
@@ -301,7 +302,7 @@ class SqlAlchemyRoomQueryRepository(RoomQueryRepository):
     async def get_room_detail(self, room_id: int) -> RoomDetail | None:
         stmt = (
             select(RoomModel)
-            .where(RoomModel.id == room_id, RoomModel.deleted_at == None) 
+            .where(RoomModel.id == room_id, RoomModel.deleted_at.is_(None)) 
             .options(selectinload(RoomModel.participations).selectinload(ParticipationModel.team))
         )
         result = await self.session.execute(stmt)
@@ -320,7 +321,8 @@ class SqlAlchemyRoomQueryRepository(RoomQueryRepository):
             participants.append(
                 ParticipantView(
                     user_id = row.user_id,
-                    nickname = user.nickname if user is not None else "", # FK이므로 정상 시나리오에서 존재
+                    # FK이므로 정상 시나리오에서 존재
+                    nickname = user.nickname if user is not None else "",
                     team = TeamSide(row.team.side),
                     is_host = row.user_id == model.host_user_id, 
                 )
@@ -336,7 +338,8 @@ class SqlAlchemyRoomQueryRepository(RoomQueryRepository):
             is_full = current_count >= model.capacity,
             host_user_id = model.host_user_id,
             participants = participants,
-            my_team = None, # 레포지토리는 "방에 입장한 어떤 유저가 보는지" 모른다 -> 서비스가 replace로 채운다.
+            # 레포지토리는 "방에 입장한 어떤 유저가 보는지" 모른다 -> 서비스가 replace로 채운다.
+            my_team = None,
             am_i_host = False,
             created_at = model.created_at,
         )
@@ -345,8 +348,8 @@ class SqlAlchemyRoomQueryRepository(RoomQueryRepository):
     ### 개념: 이력 = 두 테이블 합치기
 
     # 현재 참가 (participations, 0~1건)   ─┐
-    #                                    ├─▶ HistoryItem 목록 → joined_at 최신순 정렬 → 페이지 자르기
-    # 끝난 기록 (participation_logs, N건) ─┘
+    #                                    ├─▶ HistoryItem 목록
+    # 끝난 기록 (participation_logs, N건) ─┘     → joined_at 최신순 정렬 → 페이지 자르기
 
     ##### 여기서 잠깐: python - stable sort (안정 정렬)
     # 정렬 기준값이 동일하면, 정렬 이전 원래 순서를 보존한다.

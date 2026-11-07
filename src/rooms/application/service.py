@@ -1,17 +1,14 @@
 # rooms 응용 서비스 — 조회 → 도메인 행위 → 저장 → commit
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Protocol
 
 # 세션을 받는지 여부를 서비스는 몰라야 한다 (SQLAlchemy만 쓰기 때문!)
 # from sqlalchemy.ext.asyncio import AsyncSession
-
 from rooms.application.read_models import GameStartResult, LeaveResult
 from rooms.domain.exceptions import RoomNotFoundError
 from rooms.domain.participation import TeamSide
-from rooms.domain.repository import RoomRepository # 계약만 가져온다
+from rooms.domain.repository import RoomRepository  # 계약만 가져온다
 from rooms.domain.room import Room
-
 
 # 목록 캐시(도전 C)가 갖출 모양 약속 — 캐시 파일 없이도 타입을 적기 위해 Protocol로 둔다
 # class ListCacheInvalidator(Protocol):

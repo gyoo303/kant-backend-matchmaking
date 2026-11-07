@@ -1,5 +1,6 @@
 from exceptions import DomainRuleError
 
+
 # 아이디 형식 위반을 나타냄
 class InvalidLoginIdError(DomainRuleError):
     def __init__(self) -> None:

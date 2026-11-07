@@ -29,6 +29,8 @@ dev = [
 
 [tool.ruff]
 line-length = 100
+# import 정렬(I001)이 우리 코드(auth·rooms·main·tests…)를 "first-party"로 알아보도록 위치를 알려 준다
+src = ["src", "."]
 target-version = "py313"
 
 [tool.ruff.lint]

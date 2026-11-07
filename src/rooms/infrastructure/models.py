@@ -5,12 +5,13 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from database import Base # ORM 모델의 부모 클래스 (공통요소)
+from database import Base  # ORM 모델의 부모 클래스 (공통요소)
 
 ### 개념: ORM 모델 = 테이블 설계도
 # `class RoomModel(Base)` 처럼 `Base`를 상속하면 `Base.metadata`라는 "테이블 목록"에 자동 등록
 #   - 나중에 A의 `bootstrap/lifespan.py`가 `create_all`을 부르면 목록에 있는 테이블을 실제로 생성함
-# `Mapped[int]` = "이 속성은 int 컬럼"이라는 타입 표시, `mapped_column(...)` = 컬럼 옵션(PK, FK, 길이 등).
+# `Mapped[int]` = "이 속성은 int 컬럼"이라는 타입 표시
+# `mapped_column(...)` = 컬럼 옵션(PK, FK, 길이 등).
 # `Mapped[datetime | None]` 처럼 `| None`을 붙이면 NULL 허용 컬럼
 # `relationship(...)` = 컬럼이 아니라 **"연결된 다른 객체로 가는 길"** 
 #   - `room_model.participations` 처럼 파이썬 리스트로 다룰 수 있게 함
@@ -73,7 +74,8 @@ class ParticipationModel(Base):
 
     # 두 컬럼에 primary_key=True -> 복합PK (room_id, user_id)
     room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"), primary_key=True)
-    # unique=True -> 한 회원은 participations에 딱 1행만, 동시에 한 방에만 참가, 이전 행(참여)는 덮어쓴다.
+    # unique=True -> 한 회원은 participations에 딱 1행만, 동시에 한 방에만 참가
+    #   이전 행(참여)는 덮어쓴다.
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True, unique=True)
     join_order: Mapped[int] = mapped_column(Integer, nullable=False)
     team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"), nullable=False)
