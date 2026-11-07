@@ -94,8 +94,8 @@ class AuthApplicationService:
 
         # 회원의 로그인 아이디를 담은 토큰을 반환
         return {
-            'access_token' : self.tokens.create_access_token({'sub': user.login_id}),
-            'refresh_token' : self.tokens.create_refresh_token({'sub': user.login_id}),
+            'access_token' : self.tokens.create_access_token(user.login_id),
+            'refresh_token' : self.tokens.create_refresh_token(user.login_id),
             'token_type' : 'bearer',
         }
     # refresh 토큰을 확인해 새 access 토큰을 발급한다
@@ -106,7 +106,7 @@ class AuthApplicationService:
         
         # JWT의 서명과 만료를 검증
         try:
-            claims = self.tokens.decode_token(refresh_token)
+            claims = self.tokens.decode(refresh_token)
         except TokenVerificationError as error:
             raise AuthenticationError(EXPIRED_REFRESH_MESSAGE) from error
         
@@ -117,7 +117,7 @@ class AuthApplicationService:
 
         # 새 access 토큰만 반환
         return {
-            'access_token': self.tokens.create_access_token({'sub': login_id}),
+            'access_token': self.tokens.create_access_token(login_id),
             'token_type': 'bearer',
         }
     
@@ -125,7 +125,7 @@ class AuthApplicationService:
     async def logout(self, access_token: str, refresh_token: str) -> None:
         # 로그아웃에 사용할 refresh 토큰을 검증
         try:
-            self.tokens.decode_token(refresh_token)
+            self.tokens.decode(refresh_token)
         except TokenVerificationError as error:
             raise InvalidRefreshTokenError() from error
 
