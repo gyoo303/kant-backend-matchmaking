@@ -3,16 +3,14 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Protocol
 
-from sqlalchemy.ext.asyncio import AsyncSession
+# 세션을 받는지 여부를 서비스는 몰라야 한다 (SQLAlchemy만 쓰기 때문!)
+# from sqlalchemy.ext.asyncio import AsyncSession
 
 from rooms.application.read_models import GameStartResult, LeaveResult
 from rooms.domain.exceptions import RoomNotFoundError
 from rooms.domain.participation import TeamSide
+from rooms.domain.repository import RoomRepository # 계약만 가져온다
 from rooms.domain.room import Room
-
-# from rooms.infrastructure.repositories import RoomRepository
-# [임시 연결 — 1단계] 3단계에서 RoomRepository(계약) 타입을 생성자로 주입받도록 바꾼다
-from rooms.infrastructure.repositories import SqlAlchemyRoomRepository
 
 
 # 목록 캐시(도전 C)가 갖출 모양 약속 — 캐시 파일 없이도 타입을 적기 위해 Protocol로 둔다
@@ -33,12 +31,13 @@ class RoomApplicationService:
     #   도전C 진행시, get_db의 commit 뒤에서 비운다 (ADR-007)
     def __init__(
         self,
-        db: AsyncSession,
+        *,
+        rooms: RoomRepository,
         clock: Callable[[], datetime] = _utc_now,
     ) -> None:
         # self.db = db
         self.clock = clock
-        self.rooms = SqlAlchemyRoomRepository(db)
+        self.rooms = rooms
 
     # 방 만들기 — 한 회원 한 방 판단은 도메인이 하므로 현재 참가를 먼저 읽어 넘긴다
     async def create_room(self, user_id: int, title: str) -> Room:

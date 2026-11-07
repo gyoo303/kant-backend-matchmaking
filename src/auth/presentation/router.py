@@ -4,7 +4,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 
 from auth.application.service import AuthApplicationService
 from auth.domain.user import User
-from auth.presentation.dependencies import get_current_user, oauth2_scheme
+from auth.presentation.dependencies import get_auth_service, get_current_user, oauth2_scheme
 from auth.presentation.schemas import (
     AccessTokenResponse,
     MessageResponse,
@@ -13,20 +13,9 @@ from auth.presentation.schemas import (
     TokenResponse,
     UserResponse,
 )
-# from database import get_db
-from database import DbSession
 
 # 인증 API의 공통 경로와 문서 분류를 지정
 router = APIRouter(prefix="/api/auth", tags=["auth"])
-
-
-# 요청의 DB 세션으로 인증 서비스를 준비
-def get_auth_service(
-    db: DbSession
-    # db: AsyncSession = Depends(get_db),
-) -> AuthApplicationService:
-    return AuthApplicationService(db)
-
 
 # 회원가입 요청을 인증 서비스에 연결
 @router.post(

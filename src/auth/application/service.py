@@ -1,6 +1,3 @@
-# from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from auth.domain.exceptions import (
     AlreadyLoggedOutError,
     DuplicateLoginIdError,
@@ -10,18 +7,14 @@ from auth.domain.exceptions import (
 from auth.domain.token_blacklist import TokenBlacklist
 
 from auth.domain.user import User
-# from auth.infrastructure.repositories import TokenBlacklistRepository, UserRepository
-# [임시 연결 — 1단계] 앱 복구를 위해 구현 클래스를 직접 생성한다
-#   application → infrastructure 의존은 아직 위반 상태. 3단계에서 생성자 주입으로 제거
-from auth.infrastructure.repositories import (
-    SqlAlchemyTokenBlacklistRepository,
-    SqlAlchemyUserRepository,
+
+# 계약(추상클래스)만 import - infrastructure, sqlalchemy, jwt import X
+from auth.domain.repository import TokenBlacklistRepository, UserRepository
+from auth.infrastructure.security import (
+    BcryptPasswordHasher,
+    JwtTokenProvider,
 )
 
-# [임시 연결 — 2단계] 구현 클래스를 직접 생성한다. 3단계에서 생성자 주입으로 제거
-from auth.infrastructure.security import BcryptPasswordHasher, JwtTokenProvider
-
-# 서비스는 jwt 대신 포트(계약)의 상수·예외만 안다
 from auth.application.ports import (
     REFRESH_TOKEN_TYPE,
     PasswordHasher,
@@ -37,13 +30,25 @@ INVALID_TOKEN_MESSAGE = '인증 토큰이 올바르지 않거나 로그인이 �
 
 # 인증 처리의 순서를 정의한다
 class AuthApplicationService:
-    def __init__(self, db: AsyncSession) -> None:
-        # 세션은 repository에만 넘긴다
-        # 서비스는 트랜잭션을 확정하지 않는다 (D-029)
-        #   -> self.db 보관 필요X
-        # self.db = db
-        self.users = SqlAlchemyUserRepository(db)
-        self.blacklist = SqlAlchemyTokenBlacklistRepository(db)
+    # * 뒤의 매개변수는 키워드로만 넘길 수 있다 (users=..., blacklist=...)
+    # -> 같은 타입 인자가 여러 개라 순서를 헷갈려도 잘못 들어가지 않는다.
+    def __init__(self, 
+                 *,
+                 users: UserRepository,
+                 blacklist: TokenBlacklistRepository,
+                 hasher: PasswordHasher,
+                 tokens: TokenProvider,
+        ) -> None:
+        # 세션은 받지 않는다 
+        # :: "db session"은 SQLAlchemy에만 필요하며, Redis를 쓴다면 필요없다.
+        # :: 서비스가 세션을 받는 순간, "repository -> SQLAlchemy를 쓴다"는 사실을 서비스가 "알게 된다"
+        
+        #   세션은 repositories 구현의 내부 사정 -> 조립하는 쪽이 저장소에 넣어 준다
+        #   트랜잭션 확정(commit)도 서비스가 아니라 get_db가 실행한다
+        self.users = users
+        self.blacklist = blacklist
+        self.hasher = hasher
+        self.tokens = tokens
 
         # 비밀번호 해시 도구를 준비
         # self.hasher = PasswordHasher()
