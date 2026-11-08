@@ -37,6 +37,7 @@
 | ID | 경로 | 만드는 단계 | 읽는 단계 (필수) | 읽는 단계 (선택) |
 |---|---|---|---|---|
 | IN-PROFILE | `docs/00-inputs/project-profile.md` (프로젝트 프로파일: 입력 문서 목록·제약 대장·일정·평가 기준, 형식은 `.claude/skills/pm-agent/references/project-profile-template.md`) | 사람 | PM, ARCH | — |
+| SK-PACK | `.claude/skills/pm-agent/references/packs/<name>.md` (특성별 팩, 카탈로그의 "팩" 칸이 가리키는 파일만 읽는다) | 사람 | — | PM, ARCH |
 | SK-TRAIT | `.claude/skills/pm-agent/references/trait-catalog.md` (프로젝트 특성 카탈로그, 스킬 부속 문서) | 사람 | PM, ARCH | — |
 | UX-BASE | `docs/uiux/domain/base/` | 사람 | UX | — |
 | UX-TPL | `docs/uiux/domain/templates/` (UX-BASE 작성 가이드, 예시 문장은 근거로 쓰지 않음) | 사람 | — | — |
