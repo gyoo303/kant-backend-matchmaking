@@ -29,17 +29,18 @@
    - 티켓마다 파일을 만드는 단계(FE-BRIEF, QA-BRIEF)는 `<TKT>` 자리에 티켓 ID를 넣은 새 파일을 만든다.
 4. **수용기준 번호**: 모든 단계는 PM의 `AC-xx-n`, `NFR-xx`를 그대로 쓴다. 새 번호 체계를 만들지 않는다. UI/UX 명세 항목은 `UX-n`을 쓴다.
 5. **예외 진행**: 점검이 `READY`가 아닌데 사용자가 진행을 승인하면, 막힌 입력이 이 티켓에 정말 필요한지와 대신 읽은 문서를 확인한 뒤 진행한다. 브리핑 머리말에 `exception`(§4)을, 본문에 "절차 예외" 칸(승인자·날짜·막힌 ID·이유)을 남긴다. 승인은 채팅이 아니라 이 기록으로 다음 단계에 전달된다.
-6. **문서 우선순위**: 문서끼리 충돌하면 PM 산출물 → ARCH 산출물 → 스킬 문서 순서로 따른다. 어느 문서에도 정의되지 않은 것은 사용자 확인을 받은 뒤 진행한다. 스킬 문서의 예시·기본값은 프로젝트 사실이 아니다.
+6. **문서 우선순위**: 문서끼리 충돌하면 프로파일(`IN-PROFILE`)의 `고정` 제약 → PM 산출물 → ARCH 산출물 → 스킬 문서 순서로 따른다. 프로파일과 다른 문서가 어긋나면 에이전트가 임의로 고르지 않고 질문하며, 사람이 프로파일을 고친다. 어느 문서에도 정의되지 않은 것은 사용자 확인을 받은 뒤 진행한다. 스킬 문서의 예시·기본값은 프로젝트 사실이 아니다.
 
 ## 3. 산출물 표
 
 ### 3.1 입력 원본 (사람이 작성, 에이전트는 읽기만)
 | ID | 경로 | 만드는 단계 | 읽는 단계 (필수) | 읽는 단계 (선택) |
 |---|---|---|---|---|
-| IN-REQ | `docs/00-inputs/usecase-requirements-raw.md` | 사람 | PM | — |
-| IN-KANT | `docs/00-inputs/kant-rubric.md` (프로젝트(2) 발제: 범위·일정·평가표) | 사람 | PM | ARCH, QA |
+| IN-PROFILE | `docs/00-inputs/project-profile.md` (프로젝트 프로파일: 입력 문서 목록·제약 대장·일정·평가 기준, 형식은 `.claude/skills/pm-agent/references/project-profile-template.md`) | 사람 | PM, ARCH | — |
 | UX-BASE | `docs/uiux/domain/base/` | 사람 | UX | — |
 | UX-TPL | `docs/uiux/domain/templates/` (UX-BASE 작성 가이드, 예시 문장은 근거로 쓰지 않음) | 사람 | — | — |
+
+> 요구사항 원문·외부 평가 기준·참고 자료 같은 그 밖의 입력 문서는 이 표가 아니라 프로파일 §2 입력 문서 표에 ID·경로·역할로 등록한다(`docs/00-inputs/` 아래에 둔다). 점검 스크립트는 프로파일이 있는지만 확인하고, 목록의 파일이 있는지는 PM 0단계가 확인한다. 목록에 없는 파일은 에이전트가 근거로 쓰지 않는다.
 
 ### 3.2 PM
 | ID | 경로 | 만드는 단계 | 읽는 단계 (필수) | 읽는 단계 (선택) |
@@ -51,7 +52,7 @@
 | PM-US | `docs/01-pm/05-user-stories.md` | PM | — | ARCH, BE, FE, UX |
 | PM-AC | `docs/01-pm/06-acceptance-criteria.md` | PM | FE, QA | ARCH, DB, BE, UX |
 | PM-SCR | `docs/01-pm/07-screens.md` | PM | FE | ARCH, UX |
-| PM-KANT | `docs/01-pm/08-rubric-traceability.md` | PM (ARCH가 이관 행 갱신) | — | ARCH, QA |
+| PM-TRACE | `docs/01-pm/08-traceability.md` | PM (ARCH가 이관 행 갱신) | — | ARCH, QA |
 | PM-DEC | `docs/01-pm/decision-log.md` | PM, ARCH(`[자율][ARCH]`) | — | 전체 |
 
 ### 3.3 ARCH
@@ -93,7 +94,7 @@
 | UX-PLAN-FE | `docs/uiux/review/frontend/README.md` (같은 폴더의 `design-system.md`, `screens.md`, 화면별 시안 `mockups/*.png`를 함께 읽는다) | UX | FE | QA |
 | UX-PLAN-QA | `docs/uiux/review/QA/README.md` (같은 폴더의 `scenarios.md`를 함께 읽는다) | UX | QA | — |
 
-> 이번 프로젝트(매치메이킹)는 UX 단계를 쓰지 않는다(`AGENTS.md` 규칙 8). 아래 UX 행은 다른 프로젝트용으로 남겨 둔다.
+> UX 단계를 쓸지는 프로젝트마다 정한다(프로파일 제약 대장). 쓰지 않는 프로젝트에서도 아래 UX 행은 남겨 둔다.
 > UX 산출물은 사람 승인 후에 배포된다(UX 스킬 R3). 아직 없으면 `필수`라도 `BLOCKED`로 멈추지 않고, 브리핑의 "확인하지 못한 것"에 `<ID> 미배포`로 적고 진행한다.
 > 승인 전 초안은 같은 폴더에 `<파일명>.draft.md`로 둔다. 다른 단계는 `.draft.md`를 읽지 않는다(UX 스킬 §7).
 > UX-PLAN-FE·UX-PLAN-QA는 FE·QA가 계획을 세울 때 읽는 참고자료 묶음이다. `review/` 아래에 있지만 검수 기록(UX-REVIEW)이 아니다. `review/QA/`의 `YYYY-MM-DD-<대상>.md`는 QA 산출물 검수 기록, `README.md`·`scenarios.md`는 UX-PLAN-QA다.
