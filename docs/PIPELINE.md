@@ -37,6 +37,7 @@
 | ID | 경로 | 만드는 단계 | 읽는 단계 (필수) | 읽는 단계 (선택) |
 |---|---|---|---|---|
 | IN-PROFILE | `docs/00-inputs/project-profile.md` (프로젝트 프로파일: 입력 문서 목록·제약 대장·일정·평가 기준, 형식은 `.claude/skills/pm-agent/references/project-profile-template.md`) | 사람 | PM, ARCH | — |
+| SK-TRAIT | `.claude/skills/pm-agent/references/trait-catalog.md` (프로젝트 특성 카탈로그, 스킬 부속 문서) | 사람 | PM, ARCH | — |
 | UX-BASE | `docs/uiux/domain/base/` | 사람 | UX | — |
 | UX-TPL | `docs/uiux/domain/templates/` (UX-BASE 작성 가이드, 예시 문장은 근거로 쓰지 않음) | 사람 | — | — |
 
@@ -45,6 +46,7 @@
 ### 3.2 PM
 | ID | 경로 | 만드는 단계 | 읽는 단계 (필수) | 읽는 단계 (선택) |
 |---|---|---|---|---|
+| PM-INTAKE | `docs/01-pm/00-intake.md` (프로젝트 분류, 특성 TR 판정표) | PM | — | ARCH |
 | PM-INV | `docs/01-pm/01-requirements-inventory.md` | PM | — | ARCH, UX |
 | PM-ASM | `docs/01-pm/02-assumptions-questions.md` | PM | ARCH (`→ARCH` 이관) | — |
 | PM-DOMAIN | `docs/01-pm/03-domain.md` | PM | — | ARCH, DB, BE, QA, UX |
@@ -166,7 +168,7 @@ scripts/run-stage.sh DB TKT-DB-01
 |---|---|---|
 | 0 | 완료 | 브리핑 확인 후 다음 단계 실행 |
 | 1 | 입력 부족 또는 승인 대기로 시작하지 않음 | 출력된 ID의 앞 단계 산출물을 채우거나 결정을 승인 |
-| 2 | 에이전트가 `STATUS:` 줄을 남기고 멈춤 (결정 카드·ADR 승인 대기 등) | `decision-log.md`의 `[PENDING]`을 `[APPROVED by user, …]`로, ADR을 `Accepted`로 바꾼 뒤 같은 명령 재실행 |
+| 2 | 에이전트가 `STATUS:` 줄을 남기고 멈춤 (결정 카드·ADR·접수 확인·질문 대기 등) | 결정 카드는 `decision-log.md`의 `[PENDING]`을 `[APPROVED by user, …]`로, ADR은 `Accepted`로 바꾼다. `INTAKE`는 `docs/01-pm/00-intake.md`의 판정표를 검토하고 첫 줄을 `상태: 확인됨 (날짜, 확인자)`로 바꾼다. `Q-xx`는 해당 질문 파일의 답변 섹션에 답을 적는다. 그 뒤 같은 명령 재실행 |
 | 3 | 실행은 끝났지만 산출물이 레지스트리와 다름 | 출력된 ID 확인 후 같은 명령 재실행 |
 
 - 실행 로그는 `.pipeline-logs/`에 남는다(Git 제외).
@@ -175,6 +177,6 @@ scripts/run-stage.sh DB TKT-DB-01
 
 ### 5.3 기본 실행 순서
 ```
-PM (P1~P9, 🔒마다 멈춤·재실행) → ARCH (A0~A8) → [마일스톤마다] DB 티켓들 → BE 티켓들 → FE 티켓들 → QA 티켓
+PM (P0~P9, 🔒마다 멈춤·재실행) → ARCH (A0~A8) → [마일스톤마다] DB 티켓들 → BE 티켓들 → FE 티켓들 → QA 티켓
 UX: PM 전에 컨텍스트 팩 배포, FE 이후 검수 (순서 밖에서 필요할 때 실행)
 ```
