@@ -21,6 +21,8 @@ const HANDOFF_PATH = 'docs/02-arch/HANDOFF.md';
 const MAP_HEADING = '## 디렉토리 지도';
 const PREDECESSOR_MARK = '선행';
 const TICKET_PATTERN = /TKT-(?:DB|BE|FE|QA)-[A-Z0-9-]*[A-Z0-9]/g;
+const PROFILE_PATH = 'docs/00-inputs/project-profile.md';
+const SCOPE_PATH = 'docs/01-pm/04-scope.md';
 const CHANGE_REQUEST_PATH = 'docs/change-requests.md';
 // 변경 요청의 단계 순서. '사람'은 프로파일(사람이 고침)이다. CR 대상은 사람·PM·ARCH뿐이다(PIPELINE.md §2-9).
 const CHANGE_REQUEST_ORDER = ['사람', 'PM', 'ARCH', 'DB', 'BE', 'FE', 'QA'];
@@ -66,14 +68,26 @@ const readRegistry = () => {
     .filter((row) => row.path);
 };
 
-// HANDOFF 표의 티켓 행: | TKT | … | 선행 |  (선행은 전체 ID를 쉼표로 나열, 없으면 —)
+const tableCells = (line) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.replace(/[`*]/g, '').trim());
+
+// HANDOFF 티켓 목록 표: 헤더(`| TKT | … | 선행 |`)에서 "선행" 열 위치를 찾고, 그 표 안의 행만 읽는다.
+// 선행 칸은 전체 ID를 쉼표로 나열, 없으면 —. 같은 티켓이 다른 표에 또 나오면 처음 읽은 행을 쓴다.
 const readPredecessors = () => {
   const predecessors = new Map();
   if (!existsSync(HANDOFF_PATH)) return predecessors;
+  let column = -1;
   for (const line of readFileSync(HANDOFF_PATH, 'utf-8').split(/\r?\n/)) {
-    const cells = line.split('|').map((cell) => cell.trim());
-    if (cells.length < 4 || !/^TKT-/.test(cells[1])) continue;
-    predecessors.set(cells[1], cells[cells.length - 2].match(TICKET_PATTERN) ?? []);
+    if (!line.trim().startsWith('|')) {
+      column = -1; // 표가 끝났다
+      continue;
+    }
+    const cells = tableCells(line);
+    if (cells[0] === 'TKT' && cells.includes('선행')) {
+      column = cells.indexOf('선행');
+      continue;
+    }
+    if (column === -1 || !/^TKT-/.test(cells[0]) || predecessors.has(cells[0])) continue;
+    predecessors.set(cells[0], (cells[column] ?? '').match(TICKET_PATTERN) ?? []);
   }
   return predecessors;
 };
@@ -115,6 +129,13 @@ const frontMatterTickets = (file) => {
   return content.match(/^tickets:\s*\[([^\]]*)\]/m)?.[1].match(TICKET_PATTERN) ?? [];
 };
 
+const frontMatterBlockedTickets = (file) => {
+  const content = readFileSync(file, 'utf-8');
+  if (!content.startsWith('---')) return null;
+  const match = content.match(/^blocked_tickets:\s*\[([^\]]*)\]/m);
+  return match ? match[1].match(TICKET_PATTERN) ?? [] : null;
+};
+
 const isBriefing = (path) => /^docs\/0[3-6]-[^/]+\/briefing/.test(path);
 
 // 선행 티켓 하나의 브리핑: 파일이 있고, blocked가 아니고, 머리말 tickets에 그 티켓이 있어야 한다.
@@ -129,7 +150,10 @@ const checkPredecessor = (predecessor, registry) => {
 
   const status = frontMatterStatus(file);
   if (status === null) return { id: row.id, problem: `${row.id} 머리말 없음: ${file} (PIPELINE.md §4)` };
-  if (status === 'blocked') return { id: row.id, problem: `${row.id} status: blocked — ${file}` };
+  // 누적 브리핑은 blocked_tickets가 있으면 그 티켓들만 막힌 것으로 본다(없으면 파일 전체가 막힌 것으로 본다).
+  const blockedTickets = frontMatterBlockedTickets(file);
+  const predecessorBlocked = blockedTickets ? blockedTickets.includes(predecessor) : status === 'blocked';
+  if (predecessorBlocked) return { id: row.id, problem: `${row.id} ${predecessor} 막힘 — ${file}` };
   if (!frontMatterTickets(file).includes(predecessor)) {
     return { id: row.id, problem: `${row.id} 미완료: ${file} 머리말 tickets에 ${predecessor} 없음` };
   }
@@ -150,6 +174,10 @@ const checkRow = (row, { ticket, post }) => {
       const status = frontMatterStatus(file);
       if (status === null) return `${row.id} 머리말 없음: ${file} (PIPELINE.md §4)`;
       if (status === 'blocked') return `${row.id} status: blocked — ${file}`;
+      // 누적 브리핑(경로에 <TKT>가 없음)은 실행 후 점검에서 이번 티켓이 머리말 tickets에 들어갔는지 본다.
+      if (post && ticket && !row.path.includes('<TKT') && !frontMatterTickets(file).includes(ticket)) {
+        return `${row.id} 머리말 tickets에 ${ticket} 없음: ${file}`;
+      }
     }
   }
   return null;
@@ -174,7 +202,6 @@ const pendingDecisions = (stage) => {
 
 // 변경 요청 표: 헤더 행(`| CR | … | 대상 단계 | 대상 | … | 상태 | …`)에서 열 위치를 찾고, 그 표의 `CR-` 행만 읽는다.
 // 읽을 수 없는 행(열 수 불일치 등)은 broken으로 표시해 점검이 막는 쪽으로 다루게 한다.
-const tableCells = (line) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.replace(/[`*]/g, '').trim());
 
 const readChangeRequests = () => {
   if (!existsSync(CHANGE_REQUEST_PATH)) return [];
@@ -249,6 +276,30 @@ const changeRequestChecks = (stage) => {
   return result;
 };
 
+// 사이클 일치(PIPELINE.md §6): 프로파일 §1의 사이클과 PM 요약 블록·HANDOFF 머리의 "현재 사이클"이 다르면
+// 앞 단계가 이번 사이클을 아직 끝내지 않은 것이다. 어느 한쪽에 값이 없으면(예전 형식 문서) 확인하지 않는다.
+const readCycle = (path, pattern) => (existsSync(path) ? readFileSync(path, 'utf-8').match(pattern)?.[1] ?? null : null);
+
+// 최종 확인(PIPELINE.md §5.2): PM 요약 블록·HANDOFF 머리에 "최종 확인: 대기"가 남아 있으면 다음 단계는 시작하지 않는다.
+// 줄이 없으면(예전 형식) 확인하지 않는다.
+const finalConfirmationCheck = (stage) => {
+  const target = stage === 'ARCH' ? { id: 'FINAL-PM', path: SCOPE_PATH } : TICKET_STAGES.includes(stage) ? { id: 'FINAL-ARCH', path: HANDOFF_PATH } : null;
+  if (!target || !existsSync(target.path)) return null;
+  const value = readFileSync(target.path, 'utf-8').match(/최종 확인:\s*\**\s*([^\s*|(]+)/)?.[1];
+  return value && value !== '확인됨' ? target.id : null;
+};
+
+const cycleCheck = (stage, ticket) => {
+  const target = stage === 'ARCH' ? { id: 'PM-SCOPE', path: SCOPE_PATH } : TICKET_STAGES.includes(stage) ? { id: 'AR-HAND', path: HANDOFF_PATH } : null;
+  if (!target) return null;
+  const profileCycle = readCycle(PROFILE_PATH, /^\s*-\s*사이클:\s*`?(C\d+)`?/m);
+  const documentCycle = readCycle(target.path, /현재 사이클[^\n]*?(C\d+)/);
+  if (!profileCycle || !documentCycle || profileCycle === documentCycle) return null;
+  // 이전 사이클의 남은 티켓(티켓의 사이클 = HANDOFF 사이클)은 다음 사이클 설계 중에도 실행할 수 있다. 사이클 표시가 없는 티켓은 C1이다.
+  if (ticket && (ticket.match(/^TKT-[A-Z]+-(C\d+)-/)?.[1] ?? 'C1') === documentCycle) return null;
+  return { id: target.id, problem: `${target.id} 사이클 불일치: 프로파일 ${profileCycle}, ${target.path} ${documentCycle} (PIPELINE.md §6)` };
+};
+
 const main = () => {
   const { stage, post, ticket } = parseArgs(process.argv.slice(2));
   const registry = readRegistry();
@@ -285,6 +336,9 @@ const main = () => {
     }
   }
 
+  const cycleProblem = post ? null : cycleCheck(stage, ticket);
+  if (cycleProblem) blocking.push(cycleProblem);
+
   console.log(`[${stage}] ${post ? '산출물' : '필수 입력'} ${rows.length}개 점검${predecessorNote}`);
   for (const { problem } of blocking) console.log(`  ✗ ${problem}`);
   for (const { problem } of warnings) console.log(`  ! ${problem} (경고: 진행은 가능, 브리핑에 미배포로 기록)`);
@@ -292,7 +346,8 @@ const main = () => {
   const changeRequests = post ? { pending: [], warnings: [] } : changeRequestChecks(stage);
   for (const warning of changeRequests.warnings) console.log(`  ! ${warning}`);
 
-  const pending = post ? [] : [...pendingDecisions(stage), ...changeRequests.pending];
+  const finalPending = post ? null : finalConfirmationCheck(stage);
+  const pending = post ? [] : [...pendingDecisions(stage), ...changeRequests.pending, ...(finalPending ? [finalPending] : [])];
   for (const id of pending) console.log(`  ✗ 승인 대기 결정: ${id}`);
 
   if (blocking.length > 0) {
