@@ -6,6 +6,8 @@
 //   node scripts/check-handoff.mjs <STAGE> --post [--ticket T]  # 실행 후: 산출물 확인
 // STAGE: PM | ARCH | DB | BE | FE | QA | UX
 // DB·BE·FE·QA의 실행 전 점검은 --ticket이 필요하다. HANDOFF "선행" 열의 티켓 브리핑을 필수 입력으로 본다.
+// 실행 전 점검은 docs/change-requests.md의 변경 요청(CR)도 본다(PIPELINE.md §2-9): 대상 단계가 앞인 '제안' CR은 막고,
+// '승인'·미반영 CR은 경고한다.
 // 종료 코드: 0 = 진행 가능, 1 = 막힘, 64 = 사용법 오류. 마지막 줄은 항상 `STATUS: ...`.
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -19,6 +21,11 @@ const HANDOFF_PATH = 'docs/02-arch/HANDOFF.md';
 const MAP_HEADING = '## 디렉토리 지도';
 const PREDECESSOR_MARK = '선행';
 const TICKET_PATTERN = /TKT-(?:DB|BE|FE|QA)-[A-Z0-9-]*[A-Z0-9]/g;
+const CHANGE_REQUEST_PATH = 'docs/change-requests.md';
+// 변경 요청의 단계 순서. '사람'은 프로파일(사람이 고침)이다. CR 대상은 사람·PM·ARCH뿐이다(PIPELINE.md §2-9).
+const CHANGE_REQUEST_ORDER = ['사람', 'PM', 'ARCH', 'DB', 'BE', 'FE', 'QA'];
+const CHANGE_REQUEST_TARGETS = ['사람', 'PM', 'ARCH'];
+const CHANGE_REQUEST_STATUS = /^(제안|승인|거절|반영됨)/;
 
 const usage = () => {
   console.error('사용법: node scripts/check-handoff.mjs <PM|ARCH|DB|BE|FE|QA|UX> [--post] [--ticket TKT-XX-01]');
@@ -165,6 +172,83 @@ const pendingDecisions = (stage) => {
   return found;
 };
 
+// 변경 요청 표: 헤더 행(`| CR | … | 대상 단계 | 대상 | … | 상태 | …`)에서 열 위치를 찾고, 그 표의 `CR-` 행만 읽는다.
+// 읽을 수 없는 행(열 수 불일치 등)은 broken으로 표시해 점검이 막는 쪽으로 다루게 한다.
+const tableCells = (line) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.replace(/[`*]/g, '').trim());
+
+const readChangeRequests = () => {
+  if (!existsSync(CHANGE_REQUEST_PATH)) return [];
+  const requests = [];
+  let columns = null;
+  for (const line of readFileSync(CHANGE_REQUEST_PATH, 'utf-8').split(/\r?\n/)) {
+    const isTableLine = line.trim().startsWith('|');
+    if (!columns) {
+      if (isTableLine && tableCells(line)[0] === 'CR') {
+        const header = tableCells(line);
+        columns = { count: header.length, target: header.indexOf('대상 단계'), what: header.indexOf('대상'), status: header.indexOf('상태') };
+      }
+      continue;
+    }
+    if (!isTableLine) break; // 첫 표가 끝나면 상세 절은 읽지 않는다
+    const cells = tableCells(line);
+    const id = cells[0].match(/^CR-\d+/)?.[0];
+    if (!id) continue; // 구분선 등
+    const broken = cells.length !== columns.count || columns.target < 0 || columns.status < 0;
+    requests.push({
+      id,
+      raw: line,
+      broken,
+      target: broken ? '' : cells[columns.target],
+      what: broken || columns.what < 0 ? '' : cells[columns.what],
+      status: broken ? '' : cells[columns.status],
+    });
+  }
+  return requests;
+};
+
+const normalizeTarget = (text) => {
+  const match = text.match(/^(사람|pm|arch|db|be|fe|qa)/i);
+  return match ? (match[1] === '사람' ? '사람' : match[1].toUpperCase()) : null;
+};
+
+// 점검하는 단계보다 대상 단계가 앞인 '제안' CR은 막고, '승인'·미반영 CR은 경고한다.
+// 대상 단계나 상태를 읽을 수 없는 행은, '제안'이 들어 있으면 막는다(fail-closed).
+const changeRequestChecks = (stage) => {
+  const result = { pending: [], warnings: [] };
+  const stageOrder = CHANGE_REQUEST_ORDER.indexOf(stage);
+  if (stageOrder === -1) return result; // UX
+  for (const request of readChangeRequests()) {
+    const mentionsProposal = request.raw.includes('제안');
+    if (request.broken) {
+      result.warnings.push(`${request.id}: 표 행을 읽을 수 없음(열 수·헤더 확인) — ${CHANGE_REQUEST_PATH}`);
+      if (mentionsProposal) result.pending.push(request.id);
+      continue;
+    }
+    const target = normalizeTarget(request.target);
+    const status = request.status.match(CHANGE_REQUEST_STATUS)?.[1] ?? null;
+    if (!target || !CHANGE_REQUEST_TARGETS.includes(target)) {
+      result.warnings.push(`${request.id}: 대상 단계 '${request.target}'은(는) CR 대상이 아님(사람·PM·ARCH)`);
+      if (status === '제안' || (!status && mentionsProposal)) result.pending.push(request.id);
+      continue;
+    }
+    if (!status) {
+      result.warnings.push(`${request.id}: 상태 '${request.status}'를 읽을 수 없음(제안·승인·거절·반영됨)`);
+      if (mentionsProposal) result.pending.push(request.id);
+      continue;
+    }
+    const targetOrder = CHANGE_REQUEST_ORDER.indexOf(target);
+    const where = request.what ? ` (${request.what})` : '';
+    if (status === '제안' && targetOrder < stageOrder) {
+      result.pending.push(request.id);
+    } else if (status === '승인' && targetOrder < stageOrder) {
+      result.warnings.push(`${request.id}: 승인됐지만 ${target} 미반영${where} — 상세 절을 읽고 그 내용을 따른다`);
+    } else if (status === '승인' && targetOrder === stageOrder) {
+      result.warnings.push(`${request.id}: 이 단계가 먼저 반영할 변경 요청${where}`);
+    }
+  }
+  return result;
+};
+
 const main = () => {
   const { stage, post, ticket } = parseArgs(process.argv.slice(2));
   const registry = readRegistry();
@@ -205,7 +289,10 @@ const main = () => {
   for (const { problem } of blocking) console.log(`  ✗ ${problem}`);
   for (const { problem } of warnings) console.log(`  ! ${problem} (경고: 진행은 가능, 브리핑에 미배포로 기록)`);
 
-  const pending = post ? [] : pendingDecisions(stage);
+  const changeRequests = post ? { pending: [], warnings: [] } : changeRequestChecks(stage);
+  for (const warning of changeRequests.warnings) console.log(`  ! ${warning}`);
+
+  const pending = post ? [] : [...pendingDecisions(stage), ...changeRequests.pending];
   for (const id of pending) console.log(`  ✗ 승인 대기 결정: ${id}`);
 
   if (blocking.length > 0) {
