@@ -2,7 +2,7 @@
 # 파이프라인 단계 하나를 헤드리스로 실행한다: 입력 점검 → 스킬 실행 → 산출물 점검.
 #
 # 사용법: scripts/run-stage.sh <PM|ARCH|DB|BE|FE|QA|UX> [TKT-ID] [추가 지시]
-#   예) scripts/run-stage.sh DB TKT-DB-01
+#   예) scripts/run-stage.sh DB TKT-DB-M3-01
 #
 # 환경변수:
 #   CLAUDE_BIN   claude 실행 파일 (기본: claude)

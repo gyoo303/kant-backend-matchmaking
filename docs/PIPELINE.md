@@ -57,7 +57,7 @@
    - **승인 기록**: 대화형에서는 요청 단계가 §2-7 형식으로 묻고, 답을 받으면 상태를 바꾸고 승인 칸에 `user YYYY-MM-DD`를 적는다. 한 실행에서 생긴 CR은 🔒 게이트나 최종 브리핑에서 한꺼번에 물어도 된다. **헤드리스**에서는 요청 단계가 `제안`으로 쓰고 `STATUS: AWAITING_USER_DECISION CR-xxx`로 끝난다. 사람이 상세 절을 읽고 표의 상태를 `승인`/`거절`로, 승인 칸을 `user 날짜`로 직접 바꾼 뒤 다시 실행한다.
    - **승인 뒤 반영 전**: 승인된 CR의 내용이 대상 항목보다 우선한다(§2-6 문서 우선순위의 예외). 요청 단계와 그 뒤 단계는 그 내용을 따라 작업을 이어 갈 수 있다. 뒤 단계는 점검 경고에 CR이 보이면 `CR-LOG`에서 그 CR의 상세 절을 반드시 읽는다.
    - **반영**:
-     - 대상 `사람`: 사람이 프로파일을 고치고 상태를 바로 `반영됨`으로 바꾼다(승인과 반영을 한 번에 해도 된다). 사용자가 요청 단계에게 대신 고치라고 지시하면 그 단계가 고치고 반영 칸에 `사용자 지시`를 적는다.
+     - 대상 `사람`: 사람이 프로파일을 고치고 상태를 바로 `반영됨`으로 바꾼다(승인과 반영을 한 번에 해도 된다). 사람에게 고칠 파일을 알려 줄 때는 저장소 기준 경로와 절대 경로를 함께 보여 준다(작업 공간이 따로 떨어진 경우 다른 사본을 고치는 일을 막기 위해서다). 사용자가 요청 단계에게 대신 고치라고 지시하면 그 단계가 고치고 반영 칸에 `사용자 지시`를 적는다.
      - 대상 `PM`·`ARCH`: 그 단계를 **CR 반영 실행**으로 다시 돌린다. 0단계에서 자기 대상 `승인` CR을 반영하고, 영향받는 태스크만 다시 확인한 뒤 `반영됨`(반영 칸에 커밋·날짜)으로 바꾸고 끝낸다. CR 승인이 그 내용에 대한 🔒 확인을 대신한다. 반영하면서 새로 사용자 결정이 필요한 것이 생기면 평소처럼 묻는다.
      - **언제**: 요청 단계가 끝날 때 최종 브리핑에 미반영 CR 목록과 "대상 단계 CR 반영 실행"을 다음 할 일로 적는다. 다음 단계로 넘어가기 전에 반영 실행을 하는 것을 기본으로 한다(§5.3).
    - **점검**: 대상 단계보다 뒤 단계는 `제안` CR이 있으면 시작하지 않는다(`STATUS: AWAITING_USER_DECISION CR-xxx`). `승인`·미반영 CR은 막지 않고 경고한다. 단계 순서는 사람 → PM → ARCH → DB → BE → FE → QA다. 표 행의 대상 단계나 상태를 읽을 수 없으면 점검은 그 행을 막는 쪽으로 다룬다.
@@ -113,7 +113,7 @@
 | FE-BRIEF | `docs/05-frontend/briefing-<TKT>.md` | FE | 선행 | UX (검수 시) |
 | QA-BRIEF | `docs/06-qa/briefing-<TKT 또는 브랜치>.md` | QA | 선행 | UX, 사람 |
 
-> `선행` = 점검하는 티켓의 HANDOFF "선행" 열에 이 단계 티켓이 있을 때만 필수다. 예: TKT-FE-01(선행 TKT-DB-01)은 DB-BRIEF, TKT-FE-M2-01(선행 TKT-BE-M2-01)은 BE-BRIEF가 필수다. 브리핑 하나를 여러 티켓이 함께 쓰는 단계(DB·BE)는 머리말 `tickets`에 선행 티켓이 있어야 통과한다.
+> `선행` = 점검하는 티켓의 HANDOFF "선행" 열에 이 단계 티켓이 있을 때만 필수다. 예: TKT-FE-M3-01(선행 TKT-DB-M3-01)은 DB-BRIEF, TKT-FE-M2-01(선행 TKT-BE-M2-01)은 BE-BRIEF가 필수다. 브리핑 하나를 여러 티켓이 함께 쓰는 단계(DB·BE)는 머리말 `tickets`에 선행 티켓이 있어야 통과한다.
 
 ### 3.5 UX (횡단)
 | ID | 경로 | 만드는 단계 | 읽는 단계 (필수) | 읽는 단계 (선택) |
@@ -153,7 +153,7 @@ DB·BE·FE·QA 브리핑 파일은 맨 위에 아래 블록을 둔다. 다음 �
 ```yaml
 ---
 stage: BE                 # PM | ARCH | DB | BE | FE | QA | UX
-tickets: [TKT-BE-01]
+tickets: [TKT-BE-M3-01]
 status: done              # done | blocked | partial
 inputs_read: [AR-HAND, AR-API, AR-CONV, AR-GATE, DB-BRIEF]
 next_readers: [FE, QA]
@@ -177,7 +177,7 @@ node scripts/check-handoff.mjs BE --post --ticket TKT-BE-M2-01
 ```
 
 - DB·BE·FE·QA의 실행 전 점검은 `--ticket`이 없으면 `STATUS: BLOCKED_BY_MISSING TICKET`으로 멈춘다. PM·ARCH·UX는 `--ticket` 없이 실행한다.
-- 선행 티켓은 `docs/02-arch/HANDOFF.md` 표의 마지막 열("선행")에서 읽는다. 이 열은 전체 티켓 ID(`TKT-DB-01`)를 쉼표로 나열하고, 없으면 `—`로 쓴다. HANDOFF 표의 열 순서를 바꾸면 스크립트(`readPredecessors`)도 같이 고친다.
+- 선행 티켓은 `docs/02-arch/HANDOFF.md` 표의 마지막 열("선행")에서 읽는다. 이 열은 전체 티켓 ID(`TKT-DB-M3-01`)를 쉼표로 나열하고, 없으면 `—`로 쓴다. HANDOFF 표의 열 순서를 바꾸면 스크립트(`readPredecessors`)도 같이 고친다.
 
 | 마지막 줄 | 의미 | 종료 코드 |
 |---|---|---|
@@ -207,7 +207,7 @@ scripts/run-stage.sh PM
 ```
 
 ```bash
-scripts/run-stage.sh DB TKT-DB-01
+scripts/run-stage.sh DB TKT-DB-M3-01
 ```
 
 | 종료 코드 | 의미 | 할 일 |
@@ -219,7 +219,7 @@ scripts/run-stage.sh DB TKT-DB-01
 
 - 실행 로그는 `.pipeline-logs/`에 남는다(Git 제외).
 - `CLAUDE_ARGS`로 `claude -p` 옵션을 바꿀 수 있다(기본 `--permission-mode acceptEdits`). 빌드·테스트 명령까지 허용하려면 `--allowedTools`를 추가한다.
-- 대화형으로 실행할 때는 Claude Code에서 `/db-agent TKT-DB-01`처럼 스킬을 직접 호출한다. 스킬 맨 위 0단계가 같은 점검을 수행한다.
+- 대화형으로 실행할 때는 Claude Code에서 `/db-agent TKT-DB-M3-01`처럼 스킬을 직접 호출한다. 스킬 맨 위 0단계가 같은 점검을 수행한다.
 
 ### 5.3 기본 실행 순서
 ```

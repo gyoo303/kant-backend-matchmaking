@@ -28,7 +28,7 @@ const CHANGE_REQUEST_TARGETS = ['사람', 'PM', 'ARCH'];
 const CHANGE_REQUEST_STATUS = /^(제안|승인|거절|반영됨)/;
 
 const usage = () => {
-  console.error('사용법: node scripts/check-handoff.mjs <PM|ARCH|DB|BE|FE|QA|UX> [--post] [--ticket TKT-XX-01]');
+  console.error('사용법: node scripts/check-handoff.mjs <PM|ARCH|DB|BE|FE|QA|UX> [--post] [--ticket TKT-XX-M1-01]');
   process.exit(64);
 };
 
@@ -268,7 +268,7 @@ const main = () => {
   let predecessorNote = '';
   if (!post && TICKET_STAGES.includes(stage)) {
     if (!ticket) {
-      console.log(`[${stage}] 선행 티켓 브리핑을 점검하려면 --ticket이 필요하다 (예: --ticket TKT-${stage}-01)`);
+      console.log(`[${stage}] 선행 티켓 브리핑을 점검하려면 --ticket이 필요하다 (예: --ticket TKT-${stage}-M1-01)`);
       console.log('STATUS: BLOCKED_BY_MISSING TICKET');
       process.exit(1);
     }
