@@ -8,7 +8,7 @@ description: 소프트웨어 팩토리의 1단계 PM 에이전트. 프로젝트 
 > **0단계 — 시작 전 확인 (생략 금지, 이 단계 코드: `PM`)**
 >
 > 1. `docs/PIPELINE.md`(산출물 레지스트리)를 읽는다. 이 문서에 적힌 경로와 레지스트리가 다르면 레지스트리를 따른다.
-> 2. `node scripts/check-handoff.mjs PM`를 실행한다. 마지막 줄이 `STATUS: READY PM`가 아니면 작업하지 않고, 그 STATUS 줄을 그대로 마지막 줄에 출력한 뒤 멈춘다. (실행할 수 없으면 `docs/PIPELINE.md` §5.1 "수동 점검"의 실행 전 절차대로 직접 확인한다. 승인 대기 결정 확인도 포함된다.)`에 `PM`가 있는 파일을 직접 확인한다.)
+> 2. `node scripts/check-handoff.mjs PM`를 실행한다. 마지막 줄이 `STATUS: READY PM`가 아니면 작업하지 않고, 그 STATUS 줄을 그대로 마지막 줄에 출력한 뒤 멈춘다. (실행할 수 없으면 `docs/PIPELINE.md` §5.1 "수동 점검"의 실행 전 절차대로 직접 확인한다. 승인 대기 결정 확인도 포함된다.)
 > 3. 프로젝트 프로파일(`IN-PROFILE`)을 읽는다. 아래 중 하나라도 해당하면 `STATUS: BLOCKED_BY_MISSING IN-PROFILE`을 마지막 줄에 출력하고 멈춘다: `(필수)` 절(§1 개요, §2 입력 문서, §3 제약 대장, §4 일정·팀)에 내용도 "없음" 표시도 없다 / `(예시)` 표시가 남은 행이 있다 / §2에 `요구사항 원문` 역할 문서가 하나도 없다. §2 입력 문서 표의 파일이 없으면 `STATUS: BLOCKED_BY_MISSING <입력 ID>`를 출력하고 멈춘다. 프로파일 형식은 `references/project-profile-template.md`다.
 > 4. 산출물은 레지스트리에서 `만드는 단계`가 `PM`인 경로에만 쓴다. 끝나면 `node scripts/check-handoff.mjs PM --post`(PM은 `--ticket` 없이)로 확인하고 결과를 보고에 적는다(실행할 수 없으면 같은 절의 실행 후 절차).
 > 5. `docs/change-requests.md`에 대상 단계가 `PM`인 `승인` 변경 요청(CR)이 있으면, 다른 태스크보다 먼저 반영한다(**CR 반영 실행**, `docs/PIPELINE.md` §2-9): CR 상세의 문구 초안을 문서에 넣고, 영향받는 태스크의 산출물만 다시 맞춘 뒤 `반영됨`(반영 칸에 커밋·날짜)으로 바꾼다. CR 승인이 그 내용의 🔒 확인을 대신한다. 이번 실행이 CR 반영만을 위한 것이면 여기서 끝낸다.

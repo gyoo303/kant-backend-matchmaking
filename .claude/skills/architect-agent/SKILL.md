@@ -7,7 +7,7 @@ description: 소프트웨어 팩토리의 2단계 Architect 에이전트. PM 에
 
 > **0단계 — 시작 전 확인 (생략 금지, 이 단계 코드: `ARCH`)**
 > 1. `docs/PIPELINE.md`(산출물 레지스트리)를 읽는다. 이 문서에 적힌 경로와 레지스트리가 다르면 레지스트리를 따른다.
-> 2. `node scripts/check-handoff.mjs ARCH`를 실행한다. 마지막 줄이 `STATUS: READY ARCH`가 아니면 작업하지 않고, 그 STATUS 줄을 그대로 마지막 줄에 출력한 뒤 멈춘다. (실행할 수 없으면 `docs/PIPELINE.md` §5.1 "수동 점검"의 실행 전 절차대로 직접 확인한다. 승인 대기 결정 확인도 포함된다.)`에 `ARCH`가 있는 파일을 직접 확인한다.)
+> 2. `node scripts/check-handoff.mjs ARCH`를 실행한다. 마지막 줄이 `STATUS: READY ARCH`가 아니면 작업하지 않고, 그 STATUS 줄을 그대로 마지막 줄에 출력한 뒤 멈춘다. (실행할 수 없으면 `docs/PIPELINE.md` §5.1 "수동 점검"의 실행 전 절차대로 직접 확인한다. 승인 대기 결정 확인도 포함된다.)
 > 3. 프로젝트 프로파일(`IN-PROFILE`)을 읽는다. 특히 §1 산출물 형태, §3 제약 대장, §7 제출물, §8 허용 의존성을 확인한다. `(필수)` 절에 내용도 "없음" 표시도 없거나 `(예시)` 표시가 남아 있으면 `STATUS: BLOCKED_BY_MISSING IN-PROFILE`을, 프로파일 §2에서 `읽는 단계`에 ARCH가 있는 입력 문서의 파일이 저장소에 없으면 `STATUS: BLOCKED_BY_MISSING <입력 ID>`를 마지막 줄에 출력하고 멈춘다(ARCH가 읽도록 지정된 문서가 하나도 없는 것은 정상이다). 그 입력 문서는 필요한 절만 읽는다.
 > 4. 산출물은 레지스트리에서 `만드는 단계`가 `ARCH`인 경로에만 쓴다. 끝나면 `node scripts/check-handoff.mjs ARCH --post`(ARCH는 `--ticket` 없이)로 확인하고 결과를 보고에 적는다(실행할 수 없으면 같은 절의 실행 후 절차).
 > 5. `docs/change-requests.md`에 대상 단계가 `ARCH`인 `승인` 변경 요청(CR)이 있으면, 다른 태스크보다 먼저 반영한다(**CR 반영 실행**, `docs/PIPELINE.md` §2-9): CR 상세의 문구 초안을 문서에 넣고, 영향받는 태스크의 산출물만 다시 맞춘 뒤 `반영됨`(반영 칸에 커밋·날짜)으로 바꾼다. CR 승인이 그 내용의 🔒 확인을 대신한다. 이번 실행이 CR 반영만을 위한 것이면 여기서 끝낸다.
