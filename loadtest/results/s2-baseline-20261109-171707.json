@@ -1,0 +1,101 @@
+{
+  "scenario": "s2",
+  "tag": "baseline",
+  "measured_at": "2026-11-09T08:17:07.130425+00:00",
+  "args": {
+    "scenario": "s2",
+    "base_url": "http://127.0.0.1:8001",
+    "levels": [
+      10,
+      50,
+      100,
+      200
+    ],
+    "rooms": 1000,
+    "requests": 2000,
+    "users": 100,
+    "repeat": 3,
+    "timeout": 30.0,
+    "tag": "baseline"
+  },
+  "runs": [
+    {
+      "label": "s2-hotspot#1",
+      "concurrency": 100,
+      "requests": 100,
+      "elapsed_s": 0.671,
+      "tps": 149.0,
+      "p50_ms": 467.2,
+      "p95_ms": 591.6,
+      "p99_ms": 632.3,
+      "max_ms": 637.0,
+      "statuses": {
+        "200": 9,
+        "400": 91
+      },
+      "generator_cpu_pct": 72.2,
+      "integrity": {
+        "rooms_over_capacity": 1,
+        "teams_over_capacity": 1,
+        "duplicate_join_order": 2,
+        "last_join_order_mismatch": 0
+      },
+      "extra": {
+        "expected_success": 3,
+        "participants_in_room": 10
+      }
+    },
+    {
+      "label": "s2-hotspot#2",
+      "concurrency": 100,
+      "requests": 100,
+      "elapsed_s": 0.669,
+      "tps": 149.6,
+      "p50_ms": 472.2,
+      "p95_ms": 582.3,
+      "p99_ms": 584.8,
+      "max_ms": 587.1,
+      "statuses": {
+        "200": 8,
+        "400": 92
+      },
+      "generator_cpu_pct": 74.8,
+      "integrity": {
+        "rooms_over_capacity": 1,
+        "teams_over_capacity": 1,
+        "duplicate_join_order": 2,
+        "last_join_order_mismatch": 0
+      },
+      "extra": {
+        "expected_success": 3,
+        "participants_in_room": 9
+      }
+    },
+    {
+      "label": "s2-hotspot#3",
+      "concurrency": 100,
+      "requests": 100,
+      "elapsed_s": 0.653,
+      "tps": 153.1,
+      "p50_ms": 443.3,
+      "p95_ms": 564.3,
+      "p99_ms": 573.2,
+      "max_ms": 573.4,
+      "statuses": {
+        "200": 6,
+        "400": 94
+      },
+      "generator_cpu_pct": 81.3,
+      "integrity": {
+        "rooms_over_capacity": 1,
+        "teams_over_capacity": 1,
+        "duplicate_join_order": 2,
+        "last_join_order_mismatch": 0
+      },
+      "extra": {
+        "expected_success": 3,
+        "participants_in_room": 7
+      }
+    }
+  ]
+}

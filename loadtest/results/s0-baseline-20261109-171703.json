@@ -1,0 +1,79 @@
+{
+  "scenario": "s0",
+  "tag": "baseline",
+  "measured_at": "2026-11-09T08:17:03.291328+00:00",
+  "args": {
+    "scenario": "s0",
+    "base_url": "http://127.0.0.1:8001",
+    "levels": [
+      1,
+      10,
+      50
+    ],
+    "rooms": 100,
+    "requests": 2000,
+    "users": 100,
+    "repeat": 3,
+    "timeout": 30.0,
+    "tag": "baseline"
+  },
+  "runs": [
+    {
+      "label": "s0-list",
+      "concurrency": 1,
+      "requests": 2000,
+      "elapsed_s": 18.84,
+      "tps": 106.2,
+      "p50_ms": 9.2,
+      "p95_ms": 10.3,
+      "p99_ms": 12.1,
+      "max_ms": 34.8,
+      "statuses": {
+        "200": 2000
+      },
+      "generator_cpu_pct": 25.1,
+      "integrity": {},
+      "extra": {
+        "rooms": 100
+      }
+    },
+    {
+      "label": "s0-list",
+      "concurrency": 10,
+      "requests": 2000,
+      "elapsed_s": 8.779,
+      "tps": 227.8,
+      "p50_ms": 42.4,
+      "p95_ms": 65.5,
+      "p99_ms": 72.3,
+      "max_ms": 191.8,
+      "statuses": {
+        "200": 2000
+      },
+      "generator_cpu_pct": 55.9,
+      "integrity": {},
+      "extra": {
+        "rooms": 100
+      }
+    },
+    {
+      "label": "s0-list",
+      "concurrency": 50,
+      "requests": 2000,
+      "elapsed_s": 13.483,
+      "tps": 148.3,
+      "p50_ms": 230.9,
+      "p95_ms": 974.4,
+      "p99_ms": 1476.6,
+      "max_ms": 2622.6,
+      "statuses": {
+        "200": 2000
+      },
+      "generator_cpu_pct": 99.4,
+      "integrity": {},
+      "extra": {
+        "rooms": 100
+      }
+    }
+  ]
+}
