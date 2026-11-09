@@ -42,8 +42,8 @@ from rooms.infrastructure.models import (
     RoomModel,
     TeamModel,
 )
-from src.rooms.application.query_repository import RoomQueryRepository
-from src.rooms.domain.repository import RoomRepository
+from rooms.application.query_repository import RoomQueryRepository
+from rooms.domain.repository import RoomRepository
 
 
 # RoomRepository
