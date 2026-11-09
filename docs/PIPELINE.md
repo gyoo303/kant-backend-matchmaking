@@ -214,7 +214,7 @@ scripts/run-stage.sh DB TKT-DB-01
 |---|---|---|
 | 0 | 완료 | 브리핑 확인 후 다음 단계 실행 |
 | 1 | 입력 부족 또는 승인 대기로 시작하지 않음 | 출력된 ID의 앞 단계 산출물을 채우거나 결정을 승인 |
-| 2 | 에이전트가 `STATUS:` 줄을 남기고 멈춤 (결정 카드·ADR·접수 확인·질문 대기 등) | 결정 카드는 `decision-log.md`의 `[PENDING]`을 `[APPROVED by user, …]`로, ADR은 `Accepted`로 바꾼다. `INTAKE`는 `docs/01-pm/00-intake.md`의 판정표를 검토하고 첫 줄을 `상태: 확인됨 (사이클, 날짜, 확인자)`로 바꾼다. `Q-xx`는 해당 질문 파일의 답변 섹션에 답을 적는다. `CR-xxx`는 `docs/change-requests.md`에서 상세 절을 읽고 표의 상태를 `승인`/`거절`, 승인 칸을 `user 날짜`로 바꾼다(대상이 `사람`이면 프로파일을 고치고 `반영됨`). 그 뒤 같은 명령 재실행 |
+| 2 | 에이전트가 `STATUS:` 줄을 남기고 멈춤 (결정 카드·ADR·접수 확인·질문 대기 등) | 결정 카드는 `decision-log.md`의 `[PENDING]`을 `[APPROVED by user, …]`로, ADR은 `Accepted`로 바꾼다. `INTAKE`는 `docs/01-pm/00-intake.md`의 판정표를 검토하고 첫 줄을 `상태: 확인됨 (사이클, 날짜, 확인자)`로 바꾼다. `Q-xx`는 그 질문(`00-intake.md` `## 질문` 또는 `02-assumptions-questions.md`) 바로 아래 `답:` 줄에 고른 선택지 문구나 자기 말을 그대로 적는다. `CR-xxx`는 `docs/change-requests.md`에서 상세 절을 읽고 표의 상태를 `승인`/`거절`, 승인 칸을 `user 날짜`로 바꾼다(대상이 `사람`이면 프로파일을 고치고 `반영됨`). 그 뒤 같은 명령 재실행 |
 | 3 | 실행은 끝났지만 산출물이 레지스트리와 다름 | 출력된 ID 확인 후 같은 명령 재실행 |
 
 - 실행 로그는 `.pipeline-logs/`에 남는다(Git 제외).
