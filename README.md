@@ -87,11 +87,25 @@ uv run uvicorn main:app --app-dir src --reload
 
 ### 테스트
 
+Git Bash:
+
 ```bash
 uv run pytest -q                       # 단위 테스트 (DB 불필요, 통합 테스트는 skip)
 docker exec matchmaking-db createdb -U matchmaking matchmaking_test   # 처음 한 번
 TEST_DATABASE_URL="postgresql+asyncpg://matchmaking:matchmaking@localhost:5432/matchmaking_test" uv run pytest -q
 ```
+
+PowerShell:
+
+```powershell
+uv run pytest -q                       # 단위 테스트 (DB 불필요, 통합 테스트는 skip)
+docker exec matchmaking-db createdb -U matchmaking matchmaking_test   # 처음 한 번
+$env:TEST_DATABASE_URL="postgresql+asyncpg://matchmaking:matchmaking@localhost:5432/matchmaking_test"; uv run pytest -q
+```
+
+- PowerShell은 `변수=값 명령` 형식을 쓸 수 없어서 `$env:`로 먼저 지정합니다. 이 값은 그 PowerShell 창을 닫을 때까지 남아 있으니, 단위 테스트만 다시 돌리려면 `Remove-Item Env:TEST_DATABASE_URL`로 지웁니다.
+- 단위 테스트도 앱 설정을 읽으므로 저장소 루트에 `.env`가 있어야 합니다(`.env.example` 복사).
+- `TEST_DATABASE_URL`이 없으면 통합 테스트는 skip되고 단위 테스트만 돕니다.
 
 `TEST_DATABASE_URL`의 DB는 테스트마다 비워집니다. 개발용 DB(`matchmaking`)를 넣지 않습니다.
 
