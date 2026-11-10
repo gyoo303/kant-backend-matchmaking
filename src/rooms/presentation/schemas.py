@@ -8,7 +8,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 
 class _Schema(BaseModel):
@@ -39,7 +39,34 @@ class TeamChangeRequest(_Schema):
 
 
 # ---------------------------------------------------------------- 응답: 목록·상세
+# WebSocket 입력에 공통 검증 설정을 적용
+class _RoomWebSocketMessage(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+        strict=True,
+        hide_input_in_errors=True,
+    )
 
+# 첫 인증 메시지에서 access 토큰을 받음
+class RoomWebSocketAuth(_RoomWebSocketMessage):
+    type: Literal['auth']
+    token: SecretStr = Field(min_length=1)
+
+# 참가자가 보낼 채팅 메시지를 검사
+class RoomWebSocketChat(_RoomWebSocketMessage):
+    # 채팅 본문의 앞뒤 공백을 제거
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    type: Literal["chat_message"]
+    content: str = Field(min_length=1, max_length=300)
+
+# 연결 확인 요청의 입력 형식을 정의
+class RoomWebSocketPing(_RoomWebSocketMessage):
+    type: Literal["ping"]
+
+# 연결 확인 응답의 입력 형식을 정의
+class RoomWebSocketPong(_RoomWebSocketMessage):
+    type: Literal["pong"]
 
 class RoomSummaryResponse(_Schema):
     """공개 방 목록의 한 행."""

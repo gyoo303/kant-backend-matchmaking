@@ -40,7 +40,7 @@ from auth.infrastructure.repositories import (
 from auth.infrastructure.security import BcryptPasswordHasher, JwtTokenProvider
 from database import AsyncSessionLocal, get_db
 from rooms.application.queries import RoomQueryService
-from rooms.application.realtime import RealtimeServices
+from rooms.application.realtime import RealtimeServices, RoomRealtimeService
 from rooms.application.service import RoomApplicationService
 from rooms.domain.repository import RoomRepository
 from rooms.infrastructure.realtime import InMemoryRoomRealtimeHub
@@ -102,6 +102,7 @@ class Container(containers.DeclarativeContainer):
         modules=[
             "auth.presentation.dependencies",
             "rooms.presentation.router",
+            "rooms.presentation.websocket",
         ],
     )
 
@@ -152,3 +153,10 @@ class Container(containers.DeclarativeContainer):
         rooms_factory=room_repository.provider,
         queries_factory=room_query_service.provider,
     )
+
+    # 실시간 응용 서비스에 연결 관리자와 작업 범위 함수를 전달
+    room_realtime_service = providers.Factory(
+            RoomRealtimeService,
+            hub=room_realtime_hub,
+            scope=room_realtime_scope,
+        )
