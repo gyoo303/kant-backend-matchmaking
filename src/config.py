@@ -29,9 +29,25 @@ class Settings(BaseSettings):
     db_max_overflow: int = 10
 
     # 수업 추가 내용: DB 커넥션 풀 관련 설정
-    db_pool_timeout: int = 30
+    # 커넥션 풀에서 연결을 빌릴 때 최대 대기 시간(초)
+    #   - 30초 -> 1초 (ADR-013 AD-03)
+    #   풀이 고갈되면 -> 30초 동안 응답 X -> "화면 멈춤"
+    #   - 1초 안에 연결을 못 빌리면 
+    #       -> SQLAlchemy가 TimeoutError를 던지고, 전역 핸들러가 409로 바뀐다
+    db_pool_timeout: float = 1.0
     db_pool_recycle: int = 1800
     db_pool_pre_ping: bool = True
+
+    # db_pool_timeout = 1.0으로 발생하는 트레이드오프(단점)
+    # db_pool_timeout은 앱 전체 적용
+    # 과부하 상황에서 목록 조회도 1초 안에 연결을 못 받으면 -> 409
+    # ADR-013 "감수할 점"으로 수용 (감수하는 리스크)
+
+
+    # 방 행 잠금을 기다리는 최대 시간 (밀리초) - ADR-013, AD-02
+    #   쓰기 트랜잭션 안에서 SET LOCAL lock_timeout으로 건다, 넘으면 409 (바빠서 거절)
+    #   지연예산: 풀 대기 1초 + 잠금대기 2초 + 처리여유 1초 = 서버4초 < 클라이언트5초 (최대대기시간)
+    db_lock_timeout_ms: int = 2000
 
     # 수업 추가 내용: DB 세션 관련 설정
     db_session_autoflush: bool = False

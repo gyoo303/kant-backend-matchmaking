@@ -19,11 +19,13 @@
 
 # rooms 저장소 (flush만, commit은 get_db에서 수행한다.)
 
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from auth.infrastructure.models import UserModel
+from exceptions import ServiceBusyError
 from rooms.application.read_models import (
     ArchivedRoom,
     HistoryItem,
@@ -33,10 +35,12 @@ from rooms.application.read_models import (
     RoomListCondition,
     RoomSummary,
 )
+from rooms.domain.exceptions import AlreadyParticipatingError
 from rooms.domain.participation import Participation, TeamSide
 from rooms.domain.room import DeleteReason, Room, RoomTitle
 from rooms.domain.team import Team
 from rooms.infrastructure.models import (
+    UQ_PARTICIPATION_USER,
     ParticipationLogModel,
     ParticipationModel,
     RoomModel,
@@ -46,11 +50,36 @@ from rooms.application.query_repository import RoomQueryRepository
 from rooms.domain.repository import RoomRepository
 
 
+# PostgreSQL 오류코드(SQLSTATE)
+# "55P03" -> "잠금을 lock_timeout 안에 못 얻었다"
+LOCK_NOT_AVAILABLE = "55P03"
+
+# 오류 발생으로부터 원인 해석을 도와주는 내부용 함수
+def _sqlstate(error: DBAPIError) -> str | None:
+    """SQLAlchemy가 감싼 DB 드라이버(asyncpg) 오류에서 SQLSTATE 코드를 꺼낸다"""
+    return getattr(error.orig, "sqlstate", None)
+
+# 오류 발생으로부터 원인 해석을 도와주는 내부용 함수
+def _constraint_name(error: IntegrityError) -> str | None:
+    """
+    unique 위반에서 "어느 제약이 깨졌는지" 이름을 꺼낸다.
+    error.orig = SQLAlchemy 어댑터 오류
+    error.orig.__cause__ = asyncpg 원래 오류
+    error.orig.__cause__.constraint_name = 제약 이름
+    """
+    cause = getattr(error.orig, "__cause__", None)
+    return getattr(cause, "constraint_name", None)
+
+
 # RoomRepository
 class SqlAlchemyRoomRepository(RoomRepository):
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, lock_timeout_ms: int = 2000) -> None:
         # 동일 요청 안에서는 서비스, 레파지토리가 세션 하나를 함께 쓴다.
         self.session = session
+
+        # 방 잠금 최대 대기(ms)
+        # container가 설정 config(db_lock_timeout_ms)에서 넣어준다
+        self.lock_timeout_ms = lock_timeout_ms
 
     #   - find_by_id: 없으면 None (404 판단은 서비스)
     async def find_by_id(self, room_id: int) -> Room | None:
@@ -59,11 +88,45 @@ class SqlAlchemyRoomRepository(RoomRepository):
             return None  # "없음"만 알려주고, 응답코드로 내보낼지 여부는 서비스가 정한다.
         return self._to_domain(model)
 
+    ### 개념 : 비관적 잠금 SELECT ... FOR UPDATE
+    # "내가 읽은 뒤 바꿀테니까 아무도 건들지 마라"
+    # 요청A: SELECT rooms ... FOR UPDATE -> lock -> 검사 -> 저장 -> commit -> 잠금해제
+    # 요청B: SELECT rooms ... FOR UPDATE -> (A 종료까지 대기) -> A가 저장한 최신 상태 조회
+    # **잠그는 것은 rooms 테이블의 행 하나뿐, teams / participations 행은 잠그지 않는다
+    # **이유: 방에 대한 모든 쓰기 동작이 "방 행부터 잠그고" 시작하기로 약속되어 있음
+    # **팀 변경처럼 rooms 행 값이 안 바뀌는 동작도 잠금은 똑같이 잡는다 (방 쓰기 동작이기 때문)
+    async def find_by_id_for_update(self, room_id: int) -> Room | None:
+        # 1) 이 트랜잭션에만 잠금 대기 상한을 건다 (SET LOCAL = 트랜잭션 끝나면 원래대로)
+        #   set_config(이름, 값, true) -> true가 LOCAL이라는 뜻
+        #   하지만 SET LOCAL lock_timeout = '...' 문장은 값 자리에 바인드 파라미터를 못 쓴다(:v)
+        #       문자열을 직접 이어 붙이는 대신, text + set_config 함수 + 바인드 파라미터 쓴다
+        await self.session.execute(
+            text("SELECT set_config('lock_timeout', :timeout, true)"),
+            {"timeout": f"{self.lock_timeout_ms}ms"},
+        )
+        try:
+            # 2) 방 행을 잠그며 읽는다
+            model = await self._find_model(room_id, for_update=True)
+        except DBAPIError as error:
+            # 3) lock_timeout 안에 잠금을 못 얻으면,
+            # PostgreSQL이 55P03 오류 발생
+            #   -> 바빠서 거절(409)
+            #   DB 오류 코드는 인프라만 알도록 한다
+            if _sqlstate(error) == LOCK_NOT_AVAILABLE:
+                raise ServiceBusyError() from error
+            raise
+        if model is None:
+            return None
+        return self._to_domain(model)
+
     # 파일/클래스 안에서만 쓰는 메서드 -> _ 표시
-    async def _find_model(self, room_id: int) -> RoomModel | None:
+    async def _find_model(self, 
+                          room_id: int,
+                          for_update: bool = False) -> RoomModel | None:
         """
         방 ORM 객체를 team, participation, participation의 team까지 한 번에 읽어온다
         (save도 재사용한다)
+        **for_update=True면 rooms 행을 FOR UPDATE로 잠그고 읽는다.
         """
         stmt = (
             select(RoomModel)
@@ -73,6 +136,31 @@ class SqlAlchemyRoomRepository(RoomRepository):
                 selectinload(RoomModel.participations).selectinload(ParticipationModel.team),
             )
         )
+
+        if for_update:
+            stmt = (
+                # FOR UPDATE: 첫 SELECT(rooms)에만 붙는다
+                #   selectinload의 추가 SELECT(teams 등)에는 안붙는다
+
+                stmt.with_for_update()
+                #### 주의: identity map과 populate_existing
+                # 세션은 한 번 읽은 행을 "identity map"에 객체로 기억해 두고,
+                # 같은 행을 다시 SELECT 하면 이미 가진 객체를 그대로 돌려준다 (값을 새로 덮어쓰지 않는다)
+                # 서비스가 잠금 전에 같은 방을 한 번 읽었다면 (빠른거절)
+                # 잠금 뒤에도 "잠금 전의 낡은 값"을 보게된다 -> 잠금을 걸어도 정합성 깨진다
+                #   populate_existing=True: identity map에 담은 객체라도
+                #   새로 읽은 DB 값으로 덮어쓴다
+                    .execution_options(populate_existing=True)
+                # populate_existing을 빼먹으면 생기는 일: 
+                # 8단계의 "빠른 거절"이 잠금 전에 방을 한 번 읽는다. 
+                # 이때 세션이 그 방을 기억해 두므로, 잠금 뒤 SELECT가 
+                # 최신 행을 가져와도 SQLAlchemy는 기억해 둔 옛 객체를 
+                # 돌려준다. 잠금은 걸렸는데 검사는 낡은 값으로 하게 되어, 
+                # 정원 초과가 그대로 재현된다. 잠금 코드에서 가장 찾기 
+                # 어려운 버그라 꼭 기억해 두자.
+
+            )
+
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -229,7 +317,16 @@ class SqlAlchemyRoomRepository(RoomRepository):
 
         # 4. flush -> SQL을 DB로 보낸다, 확정(commit)은 안한다
         # 이 시점에서 새로운 방 / 룸 / 로그 테이블 행의 id가 입력된다.
-        await self.session.flush()
+        try:
+            await self.session.flush()
+        except IntegrityError as error:
+            # 한 회원은 한 방에만 참가 - 방 잠금으로 강제할 수 없다
+            # DB가 마지막 방어선 (user_id unique constraint)
+            # "한 회원 한 방" 제약 위반만 도메인 예외(400 - 이미 다른 방에 참가 중입니다)로 처리
+            # 다른 제약(예: 순번 안전망 uq_participations_room_join_order) 위반 -> 버그 -> 500
+            if _constraint_name(error) == UQ_PARTICIPATION_USER:
+                raise AlreadyParticipatingError() from error
+            raise
 
         # 서비스는 이 반환값을 받아 room.id 등을 읽는다.
         return self._to_domain(model)

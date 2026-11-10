@@ -37,6 +37,17 @@ class RoomRepository(ABC):
         """
 
     @abstractmethod
+    async def find_by_id_for_update(self, room_id: int) -> Room | None:
+        """
+        find_by_id와 같지만, 이 트랜잭션이 끝날 때까지(commit or rollback) 방을 잠근다.
+        - 같은 방을 바꾸려는 다른 요청은 앞 요청이 끝날 때까지 기다린다 -> 최신 상태를 읽고 검사한다.
+        - 잠금을 너무 오래 기다리면 ServiceBusyError (어떻게 잠그는가 -> 구현 infrastructure에서 정한다)
+        - **방을 바꾸는 쓰기 동작** (참가, 제목변경, 팀변경, 나가기, 게임시작)만 쓴다
+        - 조회 화면은 그대로 find_by_id를 쓴다.
+        *** 도메인 파일에는 "FOR UPDATE", "PostgreSQL" 등이 노출되어서는 안된다 (인프라의 사정이다)
+        """
+
+    @abstractmethod
     async def find_current_participation(self, user_id: int) -> Participation | None:
         """
         이 회원의 현재 참가 (0-1건)

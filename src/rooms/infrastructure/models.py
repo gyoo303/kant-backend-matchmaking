@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base  # ORM 모델의 부모 클래스 (공통요소)
@@ -67,16 +67,36 @@ class TeamModel(Base):
     participations: Mapped[list["ParticipationModel"]] = relationship(back_populates="team")
 
 
+# 제약 이름을 상수로 둔다
+# repository가 IntegrityError 제약 이름으로 "무슨 위반인가"를 구분
+UQ_PARTICIPATION_USER = "uq_participations_user_id"
+UQ_PARTICIPATION_JOIN_ORDER = "uq_participations_room_join_order"
+
+
 # ParticipationModel: participations 테이블 — 현재 참가만 (team_id -> teams)
 #   - PK (room_id, user_id), user_id unique, left_at 없음.
 class ParticipationModel(Base):
     __tablename__ = "participations"
 
+    # __table_args__ : 컬럼 하나에 붙이기 어려운 테이블 단위 설정 (여러 컬럼 unique 등)
+    __table_args__ = (
+        # 한 회원은 동시에 한 방에만. 기존 unique=True 제약에 이름만 붙임
+        #   이름을 붙인 이유 = 위반 시 "이미 참가 중(400)"으로 정확히 판단 가능
+        UniqueConstraint("user_id", name=UQ_PARTICIPATION_USER),
+
+        # 안전망 - 한 방 안에서 입장순번 겹치면 저장 자체를 실패시킨다.
+        #   잠금이 제대로 걸려 있으면 절대 생기지 않는다
+        #   생겼다 = 버그 = 500 호출한다
+        #   잠금 전: 순번이 겹친 채 조용히 에러없이 저장성공 (baseline test)
+        UniqueConstraint("room_id", "join_order",
+                         name=UQ_PARTICIPATION_JOIN_ORDER),
+    )
+
     # 두 컬럼에 primary_key=True -> 복합PK (room_id, user_id)
     room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"), primary_key=True)
     # unique=True -> 한 회원은 participations에 딱 1행만, 동시에 한 방에만 참가
     #   이전 행(참여)는 덮어쓴다.
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True, unique=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     join_order: Mapped[int] = mapped_column(Integer, nullable=False)
     team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"), nullable=False)
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

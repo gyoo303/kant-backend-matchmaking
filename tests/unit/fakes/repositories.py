@@ -37,7 +37,7 @@ class FakeUserRepository(UserRepository):
         saved = replace(user, id=len(self._by_id) + 1, created_at=datetime.now(UTC))
         self._by_id[saved.id] = saved
         return saved
-
+    
 
 class FakeTokenBlacklistRepository(TokenBlacklistRepository):
     def __init__(self) -> None:
@@ -53,8 +53,15 @@ class FakeTokenBlacklistRepository(TokenBlacklistRepository):
 class FakeRoomRepository(RoomRepository):
     def __init__(self) -> None:
         self.rooms: dict[int, Room] = {}
+        self.locked_room_ids: list[int] = []
 
     async def find_by_id(self, room_id: int) -> Room | None:
+        return self.rooms.get(room_id)
+
+    # (find_by_id 아래)
+    async def find_by_id_for_update(self, room_id: int) -> Room | None:
+        # 메모리 가짜: 동시 요청이 없으므로 잠금 없이 같은 방을 돌려준다
+        self.locked_room_ids.append(room_id)  # 테스트가 "잠금 조회를 썼는지" 확인할 수 있게 기록
         return self.rooms.get(room_id)
 
     async def find_current_participation(self, user_id: int) -> Participation | None:

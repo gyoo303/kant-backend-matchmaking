@@ -84,7 +84,13 @@ class Container(containers.DeclarativeContainer):
     # ---------------------------------------------------------- 저장소 (Factory, session은 호출 때)
     user_repository = providers.Factory(SqlAlchemyUserRepository)
     token_blacklist_repository = providers.Factory(SqlAlchemyTokenBlacklistRepository)
-    room_repository = providers.Factory(SqlAlchemyRoomRepository)
+
+    # lock_timeout_ms -> Config에서 받는다
+    # 각 요청에 대한 session -> presentation이 넣어준다 (`rooms__session=db`)
+    room_repository = providers.Factory(
+        SqlAlchemyRoomRepository,
+        lock_timeout_ms = config.db_lock_timeout_ms,
+    )
     room_query_repository = providers.Factory(SqlAlchemyRoomQueryRepository)
 
     # ---------------------------------------------------------- 응용 서비스 (Factory)

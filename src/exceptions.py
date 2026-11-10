@@ -62,3 +62,18 @@ class AuthenticationError(Exception):
     def __init__(self, message: str = "인증이 필요합니다") -> None:
         super().__init__(message)
         self.message = message
+
+# ServiceBusyError -> 409
+# 부모 클래스로 DomainError 쓰지 않는다
+#   "정원 마감" 같은 규칙 위반 X
+#   "지금은 서버가 시간 안에 처리하지 못했다"는 의미.
+#   1) 방 잠금을 2초 넘게 기다림 (repository가 PostgreSQL 55P03 오류를 이 예외로 받는다.)
+#   2) 커넥션 풀에서 1초 넘게 연결을 못 빌림 (전역 핸들러가 SQLAlchemy TimeoutError를 직접 409로)
+class ServiceBusyError(Exception):
+    """요청이 몰려 서버가 시간 내 처리하지 못함(재시도 시 될 수도 있음)"""
+
+    def __init__(
+            self, message: str = "요청이 많아 처리하지 못했습니다. 다시 시도해 주세요."
+    ) -> None:
+        super().__init__(message)
+        self.message = message

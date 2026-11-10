@@ -27,7 +27,15 @@ from fastapi.exceptions import RequestValidationError
 # JSONResponse: 상태코드/헤더를 직접 정해서 JSON 응답을 만드는 클래스
 from fastapi.responses import JSONResponse
 
-from exceptions import AuthenticationError, DomainRuleError, GoneError, NotFoundError
+from sqlalchemy.exc import TimeoutError as PoolTimeoutError
+
+from exceptions import (
+    AuthenticationError, 
+    DomainRuleError, 
+    GoneError, 
+    NotFoundError,
+    ServiceBusyError
+)
 
 # 이 파일 전용 로거 (500 오류 로그 남길때 사용한다)
 logger = logging.getLogger(__name__)
@@ -71,6 +79,24 @@ async def handle_gone_error(_: Request, exc: GoneError) -> JSONResponse:
     # Cache-Control: no-store 헤더를 넣어 브라우저가 캐시하지 않게 한다.
     return _detail(status_code=410, message=exc.message, headers={"Cache-Control": "no-store"})
 
+
+# 409 - 바빠서 거절
+# 화면(room.js) -> 문구가 아니라 상태코드 409를 보고
+#   "입장하지 못했습니다. 다시 시도해 주세요" 메시지 띄운다.
+async def handle_service_busy_error(_: Request, 
+                                    exc: ServiceBusyError) -> JSONResponse:
+    return _detail(status_code=409, message=exc.message)
+
+
+# 커넥션 풀 대기 초과 ㅡ SQLAlchemy가 던지는 TimeoutError -> 409
+#   풀에서 연결을 빌리는 순간 = "특정 단일 요청의 첫 SQL"
+#   인증 조회, 방 조회일 수도 있다 = 어느 곳에서 발생할지 알수없다
+#   -> 모든 요청이 지나가는 전역 핸들러 한 곳에서 바꾼다.
+async def handle_pool_timeout_errr(_: Request, 
+                                   exc: PoolTimeoutError) -> JSONResponse:
+    logger.warning("db pool timeout: %s", exc)
+    return _detail(status_code=409,
+                   message=ServiceBusyError().message)
 
 ##########################################
 # 401, 422 핸들러
@@ -139,3 +165,6 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(AuthenticationError, handle_authentication_error)
     app.add_exception_handler(RequestValidationError, handle_validation_error)
     app.add_exception_handler(Exception, handle_unexpected_error)
+
+    app.add_exception_handler(ServiceBusyError, handle_service_busy_error)
+    app.add_exception_handler(PoolTimeoutError, handle_pool_timeout_errr)
