@@ -41,6 +41,15 @@ function clearLoadError() {
   }
 }
 
+// [새로고침] 직전에 부른다 — 이전 안내 문구를 종류와 상관없이 지운다(SEQ-13)
+//   clearLoadError와 차이: clearLoadError는 "불러오기 실패" 문구만 지운다(조회 성공 뒤 자동 정리용).
+//   이 함수는 쓰기 결과 문구("입장 결과를 확인하지 못했습니다." 등)까지 지운다.
+//   사용자가 지금 상태를 다시 확인하는 동작이라, 이전 결론은 더 이상 맞지 않기 때문이다.
+function clearNoticeForRefresh() {
+  hideNotice();
+  showingLoadError = false;
+}
+
 function showError(message) {
   showNotice(message, "error");
   showingLoadError = false;
@@ -282,6 +291,8 @@ function setListBusy(busy) {
     button.disabled = busy || button.dataset.full === "true";
   }
   document.getElementById("create-button").disabled = busy;
+  // [새로고침]도 잠근다 — 처리 중에 누르면 "입장 중..." 진행 표시가 지워진다(CQ-08)
+  document.getElementById("refresh-button").disabled = busy;
 }
 
 // 목록 화면 쓰기 요청의 공통 흐름: 잠금 -> 진행 표시 -> 요청 -> 결론
@@ -356,7 +367,14 @@ function initRoomListPage() {
     return;
   }
   const cond = readListCondition();
-  setupRefreshButton(() => loadRoomList(cond));
+  setupRefreshButton(() => {
+    // 새로고침이 먼저 시작돼 버튼이 다시 켜진 사이에 쓰기 요청이 진행 중일 수 있다 → 그때는 무시
+    if (listBusy) {
+      return Promise.resolve();
+    }
+    clearNoticeForRefresh();
+    return loadRoomList(cond);
+  });
   document.getElementById("create-form").addEventListener("submit", createRoom);
   loadRoomList(cond);
 }
@@ -421,6 +439,8 @@ function updateDetailButtons() {
   for (const button of document.querySelectorAll("#room button")) {
     button.disabled = detailBusy;
   }
+  // [새로고침]은 #room 바깥(머리글)에 있어 따로 잠근다 — 처리 중 진행 표시 보호(CQ-08)
+  document.getElementById("refresh-button").disabled = detailBusy;
   const teamsReady =
     teamMembers(lastDetail, "A").length === TEAM_SIZE &&
     teamMembers(lastDetail, "B").length === TEAM_SIZE;
@@ -571,8 +591,10 @@ function initRoomDetailPage() {
   }
   detailRoomId = document.getElementById("room").dataset.roomId;
   setupRefreshButton(() => {
-    hideNotice();
-    showingLoadError = false;
+    if (detailBusy) {
+      return Promise.resolve(); // 변경 요청 처리 중에는 진행 표시를 지우지 않는다
+    }
+    clearNoticeForRefresh();
     return loadRoomDetail();
   });
   document.getElementById("rename-form").addEventListener("submit", renameRoom);
