@@ -4,7 +4,7 @@
 - DB: PostgreSQL 15+. 테이블은 lifespan의 `Base.metadata.create_all`로 만든다(마이그레이션 없음).
 - 현재 참가는 `participations`(PK `room_id`+`user_id`), 끝난 이용은 `participation_logs`에 1건씩 둔다. 회원의 이용 이력 = 현재 참가 + 로그다(ARCH-Q-03, D-025, ADR-011).
 - 시각 컬럼은 모두 `timestamptz`(UTC 저장).
-- **교안 수준(D-020)**: 컬럼은 교안 5장의 `mapped_column` 옵션(`primary_key`, `nullable`, `unique=True`, `index=True`, `default`, `server_default`, `ForeignKey`)과 `relationship`만 쓴다. 도메인이 이미 검사하는 규칙의 CHECK, 이름 붙인 제약, 성능용 복합·조건부 인덱스는 두지 않는다.
+- **교안 수준(D-020)**: 컬럼은 교안 5장의 `mapped_column` 옵션(`primary_key`, `nullable`, `unique=True`, `index=True`, `default`, `server_default`, `ForeignKey`)과 `relationship`만 쓴다. 도메인이 이미 검사하는 규칙의 CHECK, 이름 붙인 제약, 성능용 복합·조건부 인덱스는 두지 않는다. 예외: `participations`의 unique 제약 2개는 위반 종류를 이름으로 구분해야 해서 이름을 붙인다(ADR-013, §3.4).
 
 ## 1. 엔티티
 
@@ -117,14 +117,17 @@ erDiagram
 | 컬럼 | 타입 | null | 기본값 | 제약 | 설명 |
 |---|---|---|---|---|---|
 | `room_id` | `Integer` | N | — | `ForeignKey("rooms.id")`, `primary_key=True` | |
-| `user_id` | `Integer` | N | — | `ForeignKey("users.id")`, `primary_key=True`, `unique=True` | 한 회원 한 방(INV-04) |
-| `join_order` | `Integer` | N | — | — | 방 안 입장 순서 (INV-11, `Room`이 부여) |
+| `user_id` | `Integer` | N | — | `ForeignKey("users.id")`, `primary_key=True`, unique `uq_participations_user_id` | 한 회원 한 방(INV-04) |
+| `join_order` | `Integer` | N | — | unique `uq_participations_room_join_order` (`room_id`+`join_order`) | 방 안 입장 순서 (INV-11, `Room`이 부여) |
 | `team_id` | `Integer` | N | — | `ForeignKey("teams.id")` | 현재 소속 팀. 같은 방의 팀만 가리킨다(`RoomRepository.save`가 정함, RISK-13) |
 | `joined_at` | `DateTime(timezone=True)` | N | — | — | 입장 시각 |
 
 - 관계: `room: Mapped["RoomModel"] = relationship(back_populates="participations")` (N:1), `team: Mapped["TeamModel"] = relationship(back_populates="participations")` (N:1)
 - `left_at` 컬럼은 없다. 행이 있으면 참가 중이다.
-- 필수 범위에서 `unique`·PK 위반(동시 요청)은 `IntegrityError` → 500이다(D-018). 400 변환은 도전 A.
+- 제약은 `__table_args__`의 `UniqueConstraint(..., name=...)` 두 개로 둔다. 이름은 `models.py`의 상수 `UQ_PARTICIPATION_USER`·`UQ_PARTICIPATION_JOIN_ORDER`로 한 곳에서 관리한다(ADR-013).
+  - `uq_participations_user_id` 위반 → `AlreadyParticipatingError`(400). 같은 회원이 두 방에 동시에 들어가려 한 경우.
+  - `uq_participations_room_join_order` 위반 → 변환하지 않는다(500). 잠금이 빠진 버그를 조용히 저장하지 않고 드러내는 안전망이다.
+- `create_all`은 이미 있는 테이블을 고치지 않으므로 제약을 바꾼 뒤에는 DB를 다시 만든다(STK-04).
 
 ### 3.5 `teams` (ENT-05, ADR-010)
 
@@ -156,19 +159,19 @@ erDiagram
 
 ## 4. INV → 제약 대응
 
-규칙은 도메인 클래스가 검사한다(D-020). DB에는 NOT NULL·FK·`unique=True`(아이디·닉네임)만 둔다.
+규칙은 도메인 클래스가 검사한다(D-020). DB에는 NOT NULL·FK·`unique=True`(아이디·닉네임)와 `participations`의 이름 붙인 unique 2개(ADR-013)만 둔다.
 
 | INV | DB | 도메인 검사 |
 |---|---|---|
 | INV-01 | — | `Room.CAPACITY=4`, `Team.CAPACITY=2` |
-| INV-02·03 | — | `Room.join()`(정원), `Team.add()`(팀 정원, `Room.join`·`Room.change_team`이 호출). 동시 요청은 도전 A의 방 행 잠금(ADR-009) |
-| INV-04 | `participations` PK(`room_id`+`user_id`), `user_id` `unique=True` (ADR-011) | `Room.create()`, `Room.join()`의 `current_participation` 검사 |
+| INV-02·03 | — | `Room.join()`(정원), `Team.add()`(팀 정원, `Room.join`·`Room.change_team`이 호출). 동시 요청은 방 행 잠금(ADR-013) |
+| INV-04 | `participations` PK(`room_id`+`user_id`), `uq_participations_user_id` (ADR-011, ADR-013) | `Room.create()`, `Room.join()`의 `current_participation` 검사 |
 | INV-05 | `host_user_id` NOT NULL FK | `Room.leave()` 위임 |
 | INV-06·08 | — | 삭제 방 행위 메서드 거부, `start_game()`·`leave()`가 전원 종료 |
 | INV-07 | — | `Room.__init__`, `_soft_delete()` |
 | INV-09 | 결과 테이블 없음 | — |
 | INV-10 | 삭제 API 없음, `participation_logs`는 INSERT만 | `Participation.end()` |
-| INV-11 | — | `Room.last_join_order` 증가 |
+| INV-11 | `uq_participations_room_join_order` (안전망, ADR-013) | `Room.last_join_order` 증가 |
 | INV-12 | `String(20)` | `RoomTitle` |
 | INV-13 | — | 응답 스키마에 필드 없음 |
 | INV-14 | — | 인증 서비스가 블랙리스트 토큰을 거부(ADR-002) |
@@ -182,13 +185,13 @@ erDiagram
 |---|---|---|---|---|
 | `UserModel` | `User` | `UserRepository` | `_to_domain(model) -> User`, `_to_model(user) -> UserModel` | `find_by_id(user_id: int) -> User \| None` · `find_by_login_id(login_id: str) -> User \| None` · `exists_login_id(login_id: str) -> bool` · `exists_nickname(nickname: str) -> bool` · `save(user: User) -> User` (`flush` 후 `refresh`로 id·`created_at`을 읽음) |
 | `TokenBlacklistModel` | `TokenBlacklist` | `TokenBlacklistRepository` | — | `exists(token: str) -> bool` · `save(entry: TokenBlacklist) -> None` |
-| `RoomModel` + `TeamModel` + `ParticipationModel` (+ `ParticipationLogModel` 쓰기) | `Room`(팀 2개·현재 참가자 포함), `Team`, `Participation` | `RoomRepository` | `_to_domain(room_model) -> Room`(팀은 `Team(id, side)`로, 팀원은 `Room` 생성자가 현재 참가로 채움), `_participation_to_domain(model) -> Participation`(`team = TeamSide(model.team.side)`) | `find_by_id(room_id: int) -> Room \| None` (`select(RoomModel).options(selectinload(RoomModel.teams), selectinload(RoomModel.participations).selectinload(ParticipationModel.team))`) · (도전 A) `find_by_id_for_update(room_id: int) -> Room \| None` (`with_for_update()`) · `find_current_participation(user_id: int) -> Participation \| None` (`participations`에서 `user_id`로 1건) · `save(room: Room) -> Room` (방 행 insert/update, 새 방이면 `TeamModel` A·B 두 행을 함께 만듦. 참가는 `user_id`로 짝지음: 행이 없고 참가 중 → `ParticipationModel` append / 행이 있고 참가 중 → `team` 갱신 / 행이 있고 `left_at` 있음 → `ParticipationLogModel` add 후 `room_model.participations.remove(행)`. `TeamSide` → 같은 방의 `TeamModel`, `flush` 후 id가 채워진 `Room` 반환) |
+| `RoomModel` + `TeamModel` + `ParticipationModel` (+ `ParticipationLogModel` 쓰기) | `Room`(팀 2개·현재 참가자 포함), `Team`, `Participation` | `RoomRepository` | `_to_domain(room_model) -> Room`(팀은 `Team(id, side)`로, 팀원은 `Room` 생성자가 현재 참가로 채움), `_participation_to_domain(model) -> Participation`(`team = TeamSide(model.team.side)`) | `find_by_id(room_id: int) -> Room \| None` (`select(RoomModel).options(selectinload(RoomModel.teams), selectinload(RoomModel.participations).selectinload(ParticipationModel.team))`) · `find_by_id_for_update(room_id: int) -> Room \| None` (`SET LOCAL lock_timeout` 후 `with_for_update()` + `populate_existing`, 잠금 대기 초과(55P03) → `ServiceBusyError`, ADR-013) · `find_current_participation(user_id: int) -> Participation \| None` (`participations`에서 `user_id`로 1건) · `save(room: Room) -> Room` (방 행 insert/update, 새 방이면 `TeamModel` A·B 두 행을 함께 만듦. 참가는 `user_id`로 짝지음: 행이 없고 참가 중 → `ParticipationModel` append / 행이 있고 참가 중 → `team` 갱신 / 행이 있고 `left_at` 있음 → `ParticipationLogModel` add 후 `room_model.participations.remove(행)`. `TeamSide` → 같은 방의 `TeamModel`, `flush` 후 id가 채워진 `Room` 반환) |
 | 조회 전용 | `RoomSummary`, `RoomDetail`, `HistoryItem`, `ArchivedRoom` (`src/rooms/application/read_models.py`) | `RoomQueryRepository` | ORM 객체 → frozen dataclass | `list_active_rooms(cond: RoomListCondition) -> tuple[list[RoomSummary], int]` · `get_room_detail(room_id: int) -> RoomDetail \| None` · `list_history(user_id: int, page: int, size: int) -> tuple[list[HistoryItem], int]` (`participations` 현재 1건 + `participation_logs`를 합쳐 `joined_at` 최신순, 같으면 로그 `id` 큰 것 먼저) · `get_archived_room(room_id: int, user_id: int) -> ArchivedRoom \| None` (`participation_logs`만, `joined_at`·`id` 순) |
 
 - 조회 방식(교안 수준, D-020): `select(...).where(...).options(selectinload(...)).order_by(...)`로 읽고, 현재 인원 계산·제목 검색(`keyword.lower() in title.lower()`)·`available_only`·전체 건수(`len`)·페이지 자르기(`items[skip:skip+size]`)는 파이썬에서 한다(교안 2·3장 목록 필터 방식). 집계 서브쿼리·`ILIKE ESCAPE`는 쓰지 않는다.
 - 상세의 닉네임은 `await session.get(UserModel, user_id)`로 읽는다(같은 요청 안에서 방을 바꾼 직후에도 정확). `RoomQueryRepository`만 `auth.infrastructure.models.UserModel`을 import한다(ADR-001).
 - 아이디·닉네임 중복은 서비스가 `exists_*`로 먼저 확인한다. 레포지토리는 `IntegrityError`를 바꾸지 않는다(동시 가입 중복은 500, D-018·D-020).
-- (도전 A) `IntegrityError`(`participations`의 PK·`user_id` unique 위반)는 `RoomRepository.save()`가 잡아 `AlreadyParticipatingError`(도메인 예외, 400)로 바꾼다(ADR-011이 ADR-009의 부분 유니크 인덱스를 대체).
+- `RoomRepository.save()`는 flush의 `IntegrityError`를 제약 이름(`error.orig.__cause__.constraint_name`)으로 구분한다. `uq_participations_user_id`만 `AlreadyParticipatingError`(도메인 예외, 400)로 바꾸고, 나머지(`uq_participations_room_join_order`, PK)는 그대로 올려 500이 된다(ADR-013. ADR-011이 ADR-009의 부분 유니크 인덱스를 대체).
 - 현재 인원은 `len(room_model.participations)`다(현재 참가만 들어 있음). `left_at` 거르기는 없다.
 
 ## 6. 시드 계획

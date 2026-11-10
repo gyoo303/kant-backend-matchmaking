@@ -44,13 +44,6 @@ class RoomApplicationService:
 
     # 참가 — 같은 방에 다시 요청하면 도메인이 기존 기록을 돌려주고 변화가 없다
     async def join_room(self, room_id: int, user_id: int) -> Room:
-        ######### 이전 코드 ##########
-        # current = await self.rooms.find_current_participation(user_id)
-        # room = await self._get_room(room_id)
-        # room.join(user_id, current, self.clock())
-        # saved = await self.rooms.save(room)
-        # return saved
-
         # 사본 검사와 실제 참가에 같은 시각을 쓰기 위해 변수로 저장
         now = self.clock()
 
@@ -78,7 +71,6 @@ class RoomApplicationService:
 
     # 제목 변경
     async def rename_room(self, room_id: int, user_id: int, title: str) -> Room:
-        # room = await self._get_room(room_id)
         room = await self._get_room_for_update(room_id)
         room.rename(user_id, title)
         saved = await self.rooms.save(room)
@@ -86,7 +78,6 @@ class RoomApplicationService:
 
     # 팀 변경
     async def change_team(self, room_id: int, user_id: int, team: TeamSide) -> Room:
-        # room = await self._get_room(room_id)
         room = await self._get_room_for_update(room_id)
         room.change_team(user_id, team)
         saved = await self.rooms.save(room)
@@ -94,7 +85,6 @@ class RoomApplicationService:
 
     # 나가기 — leave 전에 방장을 기억해 둬야 위임이 있었는지 알 수 있다
     async def leave_room(self, room_id: int, user_id: int) -> LeaveResult:
-        # room = await self._get_room(room_id)
         room = await self._get_room_for_update(room_id)
         previous_host = room.host_user_id
         room.leave(user_id, self.clock())
@@ -107,7 +97,6 @@ class RoomApplicationService:
 
     # 게임 시작 — 시각은 한 번만 얻어 도메인과 결과에 같은 값을 쓴다
     async def start_game(self, room_id: int, user_id: int) -> GameStartResult:
-        # room = await self._get_room(room_id)
         room = await self._get_room_for_update(room_id)
         now = self.clock()
         room.start_game(user_id, now)

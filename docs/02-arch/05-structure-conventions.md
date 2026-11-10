@@ -102,7 +102,7 @@ presentation ──▶ application ──▶ domain ◀── infrastructure
 | CONV-05 | 예외: 도메인·서비스는 `exceptions.py` 계층의 예외만 던진다. 라우터는 `try/except`로 HTTP 변환하지 않는다(전역 핸들러가 한다). |
 | CONV-06 | 시각: `datetime.now(UTC)`는 서비스의 `clock`과 `security.py`에서만 호출한다. |
 | CONV-07 | 로깅: `logging.getLogger(__name__)`. 미들웨어 한 줄 형식 `method=GET path=/api/rooms status=200 duration_ms=12.3 user_id=5`(user_id는 `request.state.user_id`가 있을 때만). 쿼리 문자열·본문·토큰·비밀번호는 남기지 않는다. |
-| CONV-08 | (도전 A 적용 후) 방을 바꾸는 서비스 메서드(참가·제목·팀·나가기·게임 시작)는 반드시 `RoomRepository.find_by_id_for_update`로 방을 읽는다(ADR-009). 필수 범위에서는 `find_by_id`를 쓴다. |
+| CONV-08 | 방을 바꾸는 서비스 메서드(참가·제목·팀·나가기·게임 시작)는 `_get_room_for_update`(`RoomRepository.find_by_id_for_update`)로 방을 읽는다. 잠금 없는 `_get_room`은 참가의 빠른 거절 사본에만 쓴다. 참가는 잠금 **뒤에** `find_current_participation`을 읽는다(ADR-013). |
 | CONV-09 | 인증은 `Authorization: Bearer` 헤더만 쓴다(쿠키 없음, ADR-002·D-021). 화면 JS는 access·refresh 토큰을 `localStorage`에 두고 `api.js`로만 API를 부른다. 상태 변경은 JSON `fetch`로만 보낸다. |
 | CONV-10 | CORS: `CORSMiddleware(allow_origins=settings.cors_origins, allow_credentials=True, allow_methods=["GET","POST","PATCH","DELETE"], allow_headers=["Authorization","Content-Type"])`. 와일드카드 `*` 금지. |
 | CONV-11 | 미들웨어 등록 순서(`bootstrap/middleware.py`, D-028): `RequestLoggingMiddleware` 다음 `CORSMiddleware`를 `add_middleware`(마지막에 추가한 CORS가 가장 바깥). |
@@ -122,7 +122,7 @@ presentation ──▶ application ──▶ domain ◀── infrastructure
 9. 주석 처리된 옛 코드, 쓰지 않는 파일
 10. 기능 변경과 구조 리팩토링을 한 커밋에 섞기
 11. 도메인 메서드 안에서 현재 시각·난수·DB·HTTP 직접 호출
-12. (도전 A 적용 후) 방 변경 요청에서 `find_by_id`(잠금 없음) 사용 (CONV-08)
+12. 방 변경 요청에서 잠금 없는 `_get_room` 사용 — 참가의 빠른 거절 사본은 예외 (CONV-08, ADR-013)
 13. 게임 결과·승패를 저장하는 테이블·필드·API (INV-09)
 14. 서비스·레포지토리·라우터에서 `commit()` 호출, `Depends(get_db)` 직접 사용 (확정은 `get_db`만, 세션은 `DbSession`만 — D-029)
 15. application에서 infrastructure 구현을 import·생성, presentation에서 infrastructure·`database`·sqlalchemy를 직접 import, 서비스가 주입받은 부품을 무시하고 다시 생성 (조립은 container만. presentation → container는 `Container`·`DbSession` import만 허용 — D-031)

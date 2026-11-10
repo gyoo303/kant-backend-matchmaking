@@ -15,8 +15,9 @@
 | `NotFoundError` | `DomainError` | 404 | 대상 없음·조회 권한 없음 |
 | `GoneError` | `DomainError` | 410 | 게임 시작으로 해산된 방 상세 조회 (ARCH-Q-04) |
 | `AuthenticationError` | `Exception` | 401 | 토큰 없음·무효·만료·블랙리스트, 로그인 실패. 응답 헤더 `WWW-Authenticate: Bearer` |
+| `ServiceBusyError` | `Exception` | 409 | 잠금 대기 초과(lock_timeout). "요청이 많아 처리하지 못했습니다. 다시 시도해 주세요" (ADR-013, D-034) |
 
-- 전역 핸들러(`src/bootstrap/error_handlers.py`, D-028)는 위 4개 부모 클래스만 등록한다. `detail = exc.message`. 403은 쓰지 않는다(D-015).
+- 전역 핸들러(`src/bootstrap/error_handlers.py`, D-028)는 위 5개 부모 클래스와 SQLAlchemy 풀 대기 초과(`sqlalchemy.exc.TimeoutError` → 409, ADR-013)를 등록한다. `detail = exc.message`. 403은 쓰지 않는다(D-015).
 
 ### 1.2 기능별 예외
 
@@ -216,7 +217,7 @@ class Participation:
 | API-ROOM-02 | POST | `/api/rooms` | 필요 | — | `RoomCreateRequest` | `RoomDetailResponse` | 200 | 400 "방 제목은 앞뒤 공백을 빼고 1~20자여야 합니다", 400 "이미 다른 방에 참가 중입니다", 401, 422 | US-01 / AC-01-1~5 |
 | API-ROOM-03 | GET | `/api/rooms/{room_id}` | 필요 | `room_id: int` | — | `RoomDetailResponse` | 200 | 404 "방을 찾을 수 없습니다", 410 "게임이 시작되어 방이 해산되었습니다", 401 | US-07 / AC-07-1·4·5 |
 | API-ROOM-04 | PATCH | `/api/rooms/{room_id}` | 필요 | `room_id` | `RoomRenameRequest` | `RoomDetailResponse` | 200 | 400 "방장만 할 수 있습니다", 400 "이미 삭제된 방입니다", 400 제목 규칙, 404 | US-03 / AC-03-1~4 |
-| API-ROOM-05 | POST | `/api/rooms/{room_id}/participants` | 필요 | `room_id` | — | `RoomDetailResponse` | 200 | 400 "정원이 마감되었습니다", 400 "이미 다른 방에 참가 중입니다", 400 "이미 삭제된 방입니다", 404 | US-02 / AC-02-1~8 |
+| API-ROOM-05 | POST | `/api/rooms/{room_id}/participants` | 필요 | `room_id` | — | `RoomDetailResponse` | 200 | 400 "정원이 마감되었습니다", 400 "이미 다른 방에 참가 중입니다", 400 "이미 삭제된 방입니다", 404, 409(바빠서 거절, ADR-013) | US-02 / AC-02-1~8 |
 | API-ROOM-06 | PATCH | `/api/rooms/{room_id}/participants/me` | 필요 | `room_id` | `TeamChangeRequest` | `RoomDetailResponse` | 200 | 400 "선택한 팀의 정원이 찼습니다", 400 "이 방의 참가자가 아닙니다", 400 "이미 삭제된 방입니다", 404, 422 | US-04 / AC-04-1~6 |
 | API-ROOM-07 | DELETE | `/api/rooms/{room_id}/participants/me` | 필요 | `room_id` | — | `LeaveResponse` | 200 | 400 "이 방의 참가자가 아닙니다", 404 | US-05 / AC-05-1~5 |
 | API-ROOM-08 | POST | `/api/rooms/{room_id}/start` | 필요 | `room_id` | — | `GameStartResponse` | 200 | 400 "방장만 할 수 있습니다", 400 "A팀과 B팀이 각각 2명일 때만 시작할 수 있습니다", 400 "이미 삭제된 방입니다", 404 | US-06 / AC-06-1~6 |
@@ -287,6 +288,7 @@ class Participation:
 | 401 | `AuthenticationError`: 서명 오류·만료·refresh 토큰으로 API 접근·블랙리스트·회원 없음, 로그인 실패. 헤더 없음은 `OAuth2PasswordBearer` 기본 401 | 인증 의존성, `AuthApplicationService.login`·`refresh` |
 | 404 | `NotFoundError`: 없는 방, EMPTY로 삭제된 방 상세, 보관 정보 권한 없음 | 응용 서비스 |
 | 410 | `GoneError`: GAME_STARTED로 삭제된 방 상세 조회 (화면의 해산 신호, SEQ-13). 응답 헤더 `Cache-Control: no-store`(브라우저가 410을 캐시해 DB 재생성 뒤 재사용된 방 번호를 해산으로 보이는 것을 막음) | `RoomQueryService.get_room_detail` → 전역 핸들러 |
+| 409 | 바빠서 거절(D-034): `ServiceBusyError`(방 잠금 대기가 `db_lock_timeout_ms`=2초 초과), 커넥션 풀 대기가 `db_pool_timeout`=1초 초과. 처리하지 않았으므로 다시 시도해도 된다. 방을 바꾸는 API(API-ROOM-02·04~08)에서 생긴다. 화면은 상태 코드로 분기한다(ADR-014) | 저장소·DB 엔진 → 전역 핸들러 (ADR-013) |
 | 422 | `RequestValidationError` → `{"detail": "<loc 마지막>: <msg>; …"}`(최대 3개) | 전역 핸들러 (ADR-004) |
 | 500 | 처리하지 않은 예외 → `{"detail": "서버 오류가 발생했습니다"}`. 스택은 로그에만 | 전역 핸들러 (NFR-02) |
 
@@ -347,22 +349,22 @@ router: `token = Depends(oauth2_scheme)`, `Depends(get_current_user)`(유효한 
 `refresh(refresh_token)`: 블랙리스트에 있음 → `AuthenticationError("로그아웃 처리되어 사용할 수 없는 토큰입니다")` → `decode_token` 실패 → `AuthenticationError("리프레시 토큰이 만료되었습니다. 다시 로그인하세요")` → `token_type != "refresh"` → 같은 401 → `create_access_token({"sub": sub})` → `AccessTokenResponse`.
 
 ### SEQ-05 방 생성 (API-ROOM-02)
-`create_room` → `RoomRepository.find_current_participation(user_id)` → `Room.create(title, user_id, current, now)` → `RoomRepository.save(room)` (방 insert → 팀 A·B insert → 참가 insert(`team_id` = A팀). 같은 회원 동시 생성은 `participations.user_id` unique 위반 → 필수 범위 500, 도전 A 적용 후 `AlreadyParticipatingError`) → router가 같은 세션의 `RoomQueryService.get_room_detail(room.id, user_id)`로 응답(flush된 변경이 보임) → (get_db commit → CH-C 캐시 clear).
+`create_room` → `RoomRepository.find_current_participation(user_id)` → `Room.create(title, user_id, current, now)` → `RoomRepository.save(room)` (방 insert → 팀 A·B insert → 참가 insert(`team_id` = A팀). 같은 회원 동시 생성은 `uq_participations_user_id` 위반 → `AlreadyParticipatingError` 400, ADR-013) → router가 같은 세션의 `RoomQueryService.get_room_detail(room.id, user_id)`로 응답(flush된 변경이 보임) → (get_db commit → CH-C 캐시 clear).
 
 ### SEQ-06 방 참가 (API-ROOM-05)
-`join_room` → `find_current_participation(user_id)` → `find_by_id(room_id)` (없음 → `RoomNotFoundError`) → `room.join(user_id, current, now)` → `save` → 상세 응답 → (get_db commit → 캐시 clear).
-- 도전 A(ADR-009): `find_by_id`를 `find_by_id_for_update`(방 행 잠금)로 바꾸고, `save`가 `participations` PK·unique 위반을 `AlreadyParticipatingError`로 바꾼다(ADR-011). 잠금 후 도메인이 삭제 상태·정원을 다시 검사하므로 마지막 자리 동시 참가는 하나만 성공한다(AC-18-1).
+`join_room` (ADR-013) → `now = clock()` → ① 빠른 거절: `find_by_id(room_id)`(잠금 없음, 없음 → `RoomNotFoundError`)로 읽은 사본에 이 회원이 없으면 `snapshot.join(user_id, None, now)` (꽉 참·삭제 → 400, 잠금 대기열에 서지 않음. 사본은 버림) → ② `find_by_id_for_update(room_id)` (방 행 잠금, 2초 넘게 기다리면 409) → ③ 잠금 **뒤에** `find_current_participation(user_id)` → `room.join(user_id, current, now)` → `save` (`uq_participations_user_id` 위반 → 400) → 상세 응답 → (get_db commit, 잠금 해제 → 캐시 clear).
+- 잠금 뒤에 최신 상태를 읽고 도메인이 삭제 상태·정원을 다시 검사하므로 마지막 자리 동시 참가는 하나만 성공한다(AC-18-1). 현재 참가를 잠금 뒤에 읽어야 같은 회원의 같은 방 연타가 "변화 없음"이 된다.
 
 ### SEQ-07 제목 변경·팀 변경 (API-ROOM-04, API-ROOM-06)
-`find_by_id` (없음 → 404, 도전 A는 `find_by_id_for_update`) → `room.rename(...)` 또는 `room.change_team(...)` → `save` → 상세 응답 → (get_db commit → 캐시 clear).
+`find_by_id_for_update` (없음 → 404, 잠금 대기 초과 → 409, ADR-013) → `room.rename(...)` 또는 `room.change_team(...)` → `save` → 상세 응답 → (get_db commit → 캐시 clear).
 
 ### SEQ-08 나가기 (API-ROOM-07)
-`find_by_id`(도전 A는 `find_by_id_for_update`) → 기존 방장 기억 → `room.leave(user_id, now)` → `save`(나간 참가 → `participation_logs` insert + `participations` 행 delete) → `LeaveResult(room_deleted=not room.is_active, new_host_user_id=room.host_user_id if 방장이 바뀌었고 방이 활성 else None)` → (get_db commit → 캐시 clear).
+`find_by_id_for_update`(ADR-013) → 기존 방장 기억 → `room.leave(user_id, now)` → `save`(나간 참가 → `participation_logs` insert + `participations` 행 delete) → `LeaveResult(room_deleted=not room.is_active, new_host_user_id=room.host_user_id if 방장이 바뀌었고 방이 활성 else None)` → (get_db commit → 캐시 clear).
 
 ### SEQ-09 게임 시작 (API-ROOM-08)
-`find_by_id`(도전 A는 `find_by_id_for_update`) → `room.start_game(user_id, now)` (삭제 → 400, 방장 아님 → 400, 구성 불일치 → 400) → `save`(방 `deleted_at`·`delete_reason`, 참가 4건 → `participation_logs` insert + `participations` 행 delete) → `GameStartResult` → (get_db commit → 캐시 clear) → (CH-B) `background_tasks.add_task(log_room_dissolved, room_id, dissolved_at)`.
+`find_by_id_for_update`(ADR-013) → `room.start_game(user_id, now)` (삭제 → 400, 방장 아님 → 400, 구성 불일치 → 400) → `save`(방 `deleted_at`·`delete_reason`, 참가 4건 → `participation_logs` insert + `participations` 행 delete) → `GameStartResult` → (get_db commit → 캐시 clear) → (CH-B) `background_tasks.add_task(log_room_dissolved, room_id, dissolved_at)`.
 - 반복 요청(순차): 두 번째 요청은 삭제된 방을 읽어 `RoomDeletedError`(400). 해산은 한 번뿐이다(AC-06-5).
-- 도전 A: 동시 반복 요청은 잠금을 기다린 뒤 같은 결과가 된다(AC-18-4). 시작과 나가기 경합도 같은 방 행 잠금으로 순서가 정해져 AC-18-5의 두 결과 중 하나만 생긴다.
+- 동시 반복 요청은 잠금을 기다린 뒤 순차와 같은 결과가 된다(AC-18-4, ADR-013). 시작과 나가기 경합도 같은 방 행 잠금으로 순서가 정해져 AC-18-5의 두 결과 중 하나만 생긴다.
 
 ### SEQ-10 공개 방 목록 (API-ROOM-01)
 router가 쿼리를 `RoomListCondition`으로 묶음(keyword strip, 빈 문자열 → None) → `RoomQueryService.list_rooms` → (CH-C) 캐시 조회 → `RoomQueryRepository.list_active_rooms`: `select(RoomModel).where(deleted_at IS NULL).options(selectinload(participations)).order_by(created_at, id 정렬)` → 파이썬에서 방마다 현재 인원(`len(participations)`, 현재 참가만 들어 있음) 계산 → `keyword.lower() in title.lower()`·`available_only`(인원 < 4)로 거름 → `total = len(목록)` → `목록[(page-1)*size : page*size]` → `RoomPage` (교안 2·3장 방식, D-020).
@@ -410,4 +412,5 @@ page_router → `templates.TemplateResponse(request, "rooms/list.html", {"cond":
 | 같은 팀으로 변경 2회 | 둘 다 200, 변화 없음 |
 | 방 생성 2회(응답 유실 후 재시도) | 두 번째 400 "이미 다른 방에 참가 중입니다" |
 
+- 409(바빠서 거절)는 처리하지 않았다는 뜻이라 다시 눌러도 안전하다. 화면은 5초 안에 응답이 없으면 "결과를 확인하지 못했습니다"로 끝내고 자동으로 다시 묻지 않는다(ADR-014).
 - 응답을 못 받은 클라이언트는 `GET /api/me/room`(현재 참가 방)과 `GET /api/rooms/{id}`(404/410 포함)로 결과를 확인한다. 화면은 [새로고침]과 변경 실패 뒤 상세 재조회(SEQ-13)가 이 역할을 한다.

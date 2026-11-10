@@ -15,7 +15,7 @@
 | GATE-06 | 비밀값 | 앞 두 명령 출력 0줄, `.gitignore`에 `.venv`·`__pycache__`·`.env*`·`!.env.example` 존재 | EV-09, NFR-09, RISK-09 |
 | GATE-07 | 금지 패턴 | 모든 명령 출력 0줄 | `05-structure-conventions.md` §4 |
 | GATE-08 | ORM 누출 | 출력 0줄 | EV-03, RC-07, RISK-02 |
-| GATE-09 | (도전 A 적용 후에만) 잠금 조회 강제 | 출력 0줄 | ADR-009, CONV-08 |
+| GATE-09 | 잠금 조회 강제 | 출력 정확히 2줄(`_get_room` 정의 1줄 + 참가 빠른 거절 1줄) | ADR-013, CONV-08 |
 
 ```bash
 # GATE-01 (서버를 띄운 다른 터미널에서)
@@ -65,8 +65,9 @@ grep -rniE "winner|loser|game_result" src/
 # 금지 패턴 9(주석 처리된 옛 코드) 후보: 출력이 있으면 사람이 판단한다. 이유가 적힌 TODO는 허용
 grep -rnE "^\s*#\s*(from \S+ import|import \S+$|await |self\.\w+ = |def \w+\(|class \w+[:(]|return )" src
 
-# GATE-09 (도전 A 적용 후에만): 방 변경 서비스에서 잠금 없는 조회 0줄
-grep -rn "find_by_id(" src/rooms/application/service.py
+# GATE-09 (ADR-013): 잠금 없는 조회는 정의 1줄 + 참가 빠른 거절 1줄, 정확히 2줄. 주석 줄은 세지 않는다
+# (예전 명령 `grep "find_by_id("` 0줄은 빠른 거절 때문에 더는 맞지 않는다)
+grep -nE "^[^#]*(self\._get_room\(|def _get_room\()" src/rooms/application/service.py
 
 # GATE-08: ORM 모델 이름(03-db-schema.md §5)·infrastructure.models 경로로 찾는다. 모델을 추가하면 이름도 넣는다 (D-022)
 grep -rnE "^[^#]*\b(UserModel|TokenBlacklistModel|RoomModel|TeamModel|ParticipationModel|ParticipationLogModel)\b|^[^#]*infrastructure\.models" src/*/application src/*/presentation

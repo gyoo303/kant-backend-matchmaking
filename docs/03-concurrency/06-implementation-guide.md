@@ -1114,9 +1114,11 @@ grep -rnE "setInterval|polling" src/static src/templates
 GATE-09 새 명령 — 잠금 없는 조회(`_get_room(`)은 정의 1줄 + 참가 빠른 거절 1줄, **정확히 2줄**이어야 한다.
 
 ```bash
-grep -n "self._get_room(\|def _get_room(" src/rooms/application/service.py
+grep -nE "^[^#]*(self\._get_room\(|def _get_room\()" src/rooms/application/service.py
 ```
 
+> `^[^#]*`는 "줄 맨 앞부터 `#` 없이 이어진 부분"이라, `# room = await self._get_room(...)` 같은 주석 속 옛 코드는 세지 않는다. 옛 코드를 주석으로 남기는 것 자체도 금지 패턴 9에 걸리므로, 바꾼 코드는 지우고 기록은 git에 맡긴다.
+>
 > 예전 GATE-09 명령(`grep "find_by_id("` 0줄)은 빠른 거절 때문에 더는 맞지 않는다. 게이트도 결정이 바뀌면 함께 바꿔야 한다.
 
 ---
