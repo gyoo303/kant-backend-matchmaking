@@ -1,12 +1,12 @@
 {# 보관 정보: 삭제된 방의 내 참가 기록 (읽기 전용, SCR-06) #}
 {% extends "base.html" %}
 
-{% block title %}보관 정보{% endblock %}
+{% block title %}보관 정보 · TAG TEAM{% endblock %}
 {% block require_login %}true{% endblock %}
 
 {% block content %}
 <section id="archived" class="card" data-room-id="{{ room_id }}" hidden>
-  <h2 id="archived-title"></h2>
+  <h1 id="archived-title" class="section-title"></h1>
 
   <div class="table-wrap">
     <table>

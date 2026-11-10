@@ -1,58 +1,55 @@
 {% extends "base.html" %}
-{# 방 상세, SCR-04 / PAGE-04. 서버 컨텍스트는 room_id 하나. 내용은 rooms.js가 API로 채운다. #}
-{# 버튼 묶음은 처음에 모두 hidden. .form-row의 display가 hidden 속성을 덮으므로 hidden은 바깥 div에 둔다. #}
 
-{% block title %}방 상세{% endblock %}
+{% block title %}방 상세 · TAG TEAM{% endblock %}
 
 {% block content %}
-<div class="form-row">
-  <button type="button" id="refresh-button" class="secondary">새로고침</button>
-</div>
+<section class="page-hero room-hero" aria-label="방 정보">
+  <a href="/" class="back-link icon-arrow">공개 방 목록</a>
+  <div class="room-heading">
+    <div id="room-summary" class="room-summary" hidden>
+      <h1 id="room-title" class="section-title"></h1>
+      <span id="room-state" class="status-badge"></span>
+      <span id="room-count"></span>
+    </div>
+    <button type="button" id="refresh-button" class="secondary icon-refresh">새로고침</button>
+  </div>
+</section>
 
-<section class="card" id="room" data-room-id="{{ room_id }}" aria-labelledby="room-title" hidden>
-  <h1 id="room-title" class="cell-title"></h1>
-  <p class="muted">인원 <span id="room-count"></span></p>
-
+<section id="room" data-room-id="{{ room_id }}" aria-labelledby="room-title" hidden>
   {# 방장만 #}
   <div id="rename-box" hidden>
-    <form id="rename-form" class="form-row">
-      <div class="form-field">
-        <label for="rename-title">제목 변경</label>
-        <input id="rename-title" name="title" maxlength="20" required>
-      </div>
+    <form id="rename-form" class="rename-form">
+      <label for="rename-title">제목 변경</label>
+      <input id="rename-title" name="title" maxlength="20" required>
       <button type="submit" id="rename-button" class="secondary">변경</button>
     </form>
   </div>
 
   <div class="teams">
-    <section class="card team-a" aria-labelledby="team-a-heading">
-      <h2 id="team-a-heading">A팀 (<span id="team-a-count"></span>)</h2>
+    <section class="team-panel team-a" aria-labelledby="team-a-heading">
+      <h2 id="team-a-heading">A팀 <span id="team-a-count"></span></h2>
       <ul id="team-a-members"></ul>
     </section>
-    <section class="card team-b" aria-labelledby="team-b-heading">
-      <h2 id="team-b-heading">B팀 (<span id="team-b-count"></span>)</h2>
+    <span class="team-divider" aria-hidden="true">VS</span>
+    <section class="team-panel team-b" aria-labelledby="team-b-heading">
+      <h2 id="team-b-heading">B팀 <span id="team-b-count"></span></h2>
       <ul id="team-b-members"></ul>
     </section>
   </div>
 
-  {# 참가자만 #}
-  <div id="member-actions" hidden>
-    <div class="form-row">
+  <div class="room-actions">
+    {# 참가자만 #}
+    <div id="member-actions" class="form-row" hidden>
       <button type="button" id="move-button" class="secondary"></button>
       <button type="button" id="leave-button" class="secondary">나가기</button>
     </div>
-  </div>
-
-  {# 방장만. A·B 각 2명일 때만 누를 수 있다(최종 판단은 서버) #}
-  <div id="host-actions" hidden>
-    <div class="form-row">
-      <button type="button" id="start-button">게임 시작</button>
+    {# 방장만. A·B 각 2명일 때만 누를 수 있다(최종 판단은 서버) #}
+    <div id="host-actions" class="form-row" hidden>
+      <p class="muted" id="start-hint">양 팀에 2명씩 모이면 시작할 수 있어요.</p>
+      <button type="button" id="start-button" aria-describedby="start-hint">게임 시작</button>
     </div>
-  </div>
-
-  {# 참가하지 않은 회원만 #}
-  <div id="guest-actions" hidden>
-    <div class="form-row">
+    {# 참가하지 않은 회원만 #}
+    <div id="guest-actions" class="form-row" hidden>
       <button type="button" id="join-button">참가</button>
     </div>
   </div>

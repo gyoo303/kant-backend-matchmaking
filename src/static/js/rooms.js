@@ -19,9 +19,19 @@ const TEAM_SIZE = 2;
 // 지금 #notice에 보이는 것이 조회 실패 안내인지. 거부 사유는 이어진 조회가 성공해도 지우지 않는다.
 let showingLoadError = false;
 
+// 안내는 페이지 맨 위에 있다. 아래쪽 버튼을 누르다 거부되면 안내가 화면 밖에 뜨므로,
+// 보이지 않을 때만 안내까지 스크롤한다(이미 보이면 움직이지 않음).
+function revealNotice() {
+  const notice = document.getElementById("notice");
+  if (notice) {
+    notice.scrollIntoView({ block: "nearest" });
+  }
+}
+
 function showLoadError() {
   showNotice(FAILED_TO_LOAD, "error");
   showingLoadError = true;
+  revealNotice();
 }
 
 function clearLoadError() {
@@ -34,6 +44,7 @@ function clearLoadError() {
 function showError(message) {
   showNotice(message, "error");
   showingLoadError = false;
+  revealNotice();
 }
 
 function isLoadFailure(result) {
@@ -79,11 +90,29 @@ function listQuery(cond, page) {
   return query.toString();
 }
 
-function renderRoomRows(rooms) {
+function roomOccupancy(count, capacity) {
+  const occupancy = document.createElement("span");
+  occupancy.className = "occupancy";
+  const slots = document.createElement("span");
+  slots.className = "occupancy-slots";
+  slots.setAttribute("aria-hidden", "true");
+  for (let index = 0; index < capacity; index += 1) {
+    const slot = document.createElement("span");
+    slot.className = index < count ? "is-filled" : "";
+    slots.appendChild(slot);
+  }
+  const total = document.createElement("span");
+  total.textContent = count + "/" + capacity;
+  occupancy.append(slots, total);
+  return occupancy;
+}
+
+function renderRoomRows(rooms, currentRoomId) {
   const rows = document.getElementById("room-rows");
   rows.replaceChildren();
   for (const room of rooms) {
     const row = document.createElement("tr");
+    const isCurrent = room.id === currentRoomId;
 
     const titleCell = document.createElement("td");
     titleCell.className = "cell-title";
@@ -91,37 +120,51 @@ function renderRoomRows(rooms) {
     link.href = "/rooms/" + room.id;
     link.textContent = room.title;
     titleCell.appendChild(link);
+    const mobileTime = document.createElement("span");
+    mobileTime.className = "room-mobile-time";
+    mobileTime.textContent = formatTime(room.created_at);
+    titleCell.appendChild(mobileTime);
 
     const countCell = document.createElement("td");
-    countCell.className = "nowrap";
-    countCell.textContent = room.current_count + "/" + room.capacity;
+    countCell.className = "room-occupancy nowrap";
+    countCell.appendChild(roomOccupancy(room.current_count, room.capacity));
 
     const timeCell = document.createElement("td");
     timeCell.className = "nowrap";
-    timeCell.textContent = formatTime(room.created_at);
+    timeCell.textContent = mobileTime.textContent;
 
     const stateCell = document.createElement("td");
     stateCell.className = "nowrap";
-    stateCell.textContent = room.is_full ? "정원 마감" : "참가 가능";
+    const state = document.createElement("span");
+    state.className = room.is_full && !isCurrent ? "status-badge is-muted" : "status-badge";
+    state.textContent = isCurrent ? "참가 중" : room.is_full ? "정원 마감" : "참가 가능";
+    stateCell.appendChild(state);
 
     const joinCell = document.createElement("td");
-    const joinButton = document.createElement("button");
-    joinButton.type = "button";
-    joinButton.className = "secondary";
-    joinButton.textContent = "참가";
-    joinButton.disabled = room.is_full;
-    joinButton.addEventListener("click", () => joinRoom(room.id, joinButton));
-    joinCell.appendChild(joinButton);
+    if (isCurrent) {
+      const returnLink = document.createElement("a");
+      returnLink.href = link.href;
+      returnLink.className = "button button-outline";
+      returnLink.textContent = "돌아가기";
+      joinCell.appendChild(returnLink);
+    } else {
+      const joinButton = document.createElement("button");
+      joinButton.type = "button";
+      joinButton.textContent = "참가";
+      joinButton.disabled = room.is_full;
+      joinButton.addEventListener("click", () => joinRoom(room.id, joinButton));
+      joinCell.appendChild(joinButton);
+    }
 
-    row.append(titleCell, countCell, timeCell, stateCell, joinCell);
+    row.append(titleCell, countCell, stateCell, timeCell, joinCell);
     rows.appendChild(row);
   }
 }
 
-function renderRoomPage(roomPage, cond) {
+function renderRoomPage(roomPage, cond, currentRoomId) {
   document.getElementById("room-total").textContent = "전체 " + roomPage.total + "개";
   document.getElementById("room-empty").hidden = roomPage.items.length > 0;
-  renderRoomRows(roomPage.items);
+  renderRoomRows(roomPage.items, currentRoomId);
   renderPagination(
     document.getElementById("pagination"),
     roomPage.page,
@@ -139,7 +182,7 @@ function renderCurrentRoom(currentRoom) {
   }
   const link = document.getElementById("current-room-link");
   link.href = "/rooms/" + currentRoom.room_id;
-  link.textContent = currentRoom.title;
+  document.getElementById("current-room-title").textContent = currentRoom.title;
   area.hidden = false;
 }
 
@@ -160,9 +203,8 @@ async function loadRoomList(cond) {
     showListFailure(rooms);
     return;
   }
-  renderRoomPage(rooms.data, cond);
-
   const current = await apiRequest("GET", "/api/me/room");
+  renderRoomPage(rooms.data, cond, current.ok ? current.data.room_id : null);
   if (!current.ok) {
     showListFailure(current);
     return;
@@ -229,13 +271,22 @@ function renderTeam(side, members) {
   list.replaceChildren();
   for (const member of members) {
     const item = document.createElement("li");
-    item.textContent = member.is_host ? "★" + member.nickname + " (방장)" : member.nickname;
+    item.className = "team-slot icon-user";
+    const name = document.createElement("span");
+    name.textContent = member.nickname;
+    item.appendChild(name);
+    if (member.is_host) {
+      const badge = document.createElement("span");
+      badge.className = "status-badge";
+      badge.textContent = "방장";
+      item.appendChild(badge);
+    }
     list.appendChild(item);
   }
   for (let seat = members.length; seat < TEAM_SIZE; seat += 1) {
     const item = document.createElement("li");
-    item.className = "muted";
-    item.textContent = "(빈자리)";
+    item.className = "team-slot is-empty icon-user";
+    item.textContent = "빈자리";
     list.appendChild(item);
   }
 }
@@ -261,14 +312,24 @@ function updateDetailButtons() {
     teamMembers(lastDetail, "A").length === TEAM_SIZE &&
     teamMembers(lastDetail, "B").length === TEAM_SIZE;
   document.getElementById("start-button").disabled = detailBusy || !teamsReady;
+  document.getElementById("start-hint").hidden = teamsReady;
   document.getElementById("join-button").disabled = detailBusy || lastDetail.is_full;
 }
 
 function renderDetail(detail) {
   lastDetail = detail;
+  document.getElementById("room-summary").hidden = false;
   document.getElementById("room").hidden = false;
   document.getElementById("room-title").textContent = detail.title;
-  document.getElementById("room-count").textContent = detail.current_count + "/" + detail.capacity;
+  document.getElementById("room-count").replaceChildren(roomOccupancy(detail.current_count, detail.capacity));
+  const state = document.getElementById("room-state");
+  state.textContent = detail.is_full ? "정원 마감" : "모집 중";
+  state.classList.toggle("is-muted", detail.is_full);
+  const titleInput = document.getElementById("rename-title");
+  if (titleInput.value === titleInput.defaultValue) {
+    titleInput.value = detail.title;
+  }
+  titleInput.defaultValue = detail.title;
   renderTeam("A", teamMembers(detail, "A"));
   renderTeam("B", teamMembers(detail, "B"));
   updateDetailButtons();
@@ -283,6 +344,7 @@ function handleDetailError(result) {
   } else if (result.status === 404) {
     // 해산 안내와 다른 문구(AC-16-7)
     document.getElementById("room").hidden = true;
+    document.getElementById("room-summary").hidden = true;
     showError(NOT_FOUND_TEXT);
   } else if (isLoadFailure(result)) {
     // 마지막으로 그린 정보는 그대로 두고 안내만 보인다(AC-16-5)
@@ -340,7 +402,7 @@ async function renameRoom(event) {
   const detail = await sendDetailChange("PATCH", detailUrl(""), { title: input.value });
   if (detail) {
     renderDetail(detail);
-    input.value = "";
+    input.value = detail.title;
   }
 }
 

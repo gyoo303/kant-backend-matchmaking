@@ -4,70 +4,66 @@
 {# 목록 행·현재 방·페이지 이동은 rooms.js가 API로 채운다. require_login은 base 기본값(true) 그대로 둔다. #}
 {% set available_only = cond.available_only in [True, "true"] %}
 
-{% block title %}공개 방 목록{% endblock %}
+{% block title %}공개 방 목록 · TAG TEAM{% endblock %}
 
 {% block content %}
-{# [새로고침]을 누를 때만 다시 조회한다(SEQ-13, ADR-012) #}
-<div class="form-row">
-  <button type="button" id="refresh-button" class="secondary">새로고침</button>
-</div>
-<p id="current-room" class="card" hidden>
-  참가 중인 방: <a id="current-room-link" href="#"></a>
-</p>
-
-<section class="card" aria-labelledby="create-heading">
-  <h2 id="create-heading">방 만들기</h2>
-  <form id="create-form" class="form-row">
-    <div class="form-field">
-      <label for="create-room-title">제목</label>
-      <input id="create-room-title" name="title" maxlength="20" required>
-    </div>
-    <button type="submit" id="create-button">만들기</button>
-  </form>
-  <p class="muted">2vs2 · 4명 고정</p>
+<section class="page-hero lobby-hero" aria-labelledby="list-heading">
+  <h1 id="list-heading" class="section-title">공개 방 목록</h1>
+  <p>원하는 방에 참가하거나 새 방을 만들어 보세요.</p>
 </section>
 
-<section class="card" aria-labelledby="list-heading">
-  <h1 id="list-heading">공개 방 목록</h1>
-  {# 조건을 바꾸면 page 없이 GET 제출하므로 1페이지부터 본다(AC-15-4) #}
-  <form method="get" action="/" class="form-row">
-    <div class="form-field">
-      <label for="keyword">검색</label>
-      <input id="keyword" name="keyword" maxlength="50" value="{{ cond.keyword or '' }}">
-    </div>
-    <div class="form-field">
-      <label for="available_only">
-        <input type="checkbox" id="available_only" name="available_only" value="true"
-               {% if available_only %}checked{% endif %}>
-        빈자리 있는 방만
-      </label>
-    </div>
-    <div class="form-field">
-      <label for="sort">정렬</label>
-      <select id="sort" name="sort">
-        <option value="newest" {% if cond.sort != "oldest" %}selected{% endif %}>최신순</option>
-        <option value="oldest" {% if cond.sort == "oldest" %}selected{% endif %}>오래된순</option>
-      </select>
-    </div>
-    <button type="submit" class="secondary">찾기</button>
-  </form>
+<div id="current-room" class="current-room" hidden>
+  <span>참가 중인 방</span>
+  <strong id="current-room-title"></strong>
+  <a id="current-room-link" class="icon-arrow" href="#">방으로 돌아가기</a>
+</div>
 
+<div class="lobby-toolbar">
+  {# [새로고침]을 누를 때만 다시 조회한다(SEQ-13, ADR-012) #}
+  <button type="button" id="refresh-button" class="secondary icon-refresh">새로고침</button>
+  {# 조건을 바꾸면 page 없이 GET 제출하므로 1페이지부터 본다(AC-15-4) #}
+  <form method="get" action="/" class="lobby-filters" role="search" aria-label="공개 방 검색">
+    <label class="search-field icon-search">
+      <span class="sr-only">방 제목 검색</span>
+      <input id="keyword" name="keyword" type="search" maxlength="50"
+             placeholder="방 제목 검색" value="{{ cond.keyword or '' }}">
+    </label>
+    <label class="checkbox-label" for="available_only">
+      <input type="checkbox" id="available_only" name="available_only" value="true"
+             {% if available_only %}checked{% endif %}>
+      빈자리 있는 방만
+    </label>
+    <label class="sr-only" for="sort">정렬</label>
+    <select id="sort" name="sort">
+      <option value="newest" {% if cond.sort != "oldest" %}selected{% endif %}>최신순</option>
+      <option value="oldest" {% if cond.sort == "oldest" %}selected{% endif %}>오래된순</option>
+    </select>
+    <button type="submit" class="secondary filter-submit">찾기</button>
+  </form>
+  <form id="create-form" class="lobby-create">
+    <label class="sr-only" for="create-room-title">새 방 제목</label>
+    <input id="create-room-title" name="title" maxlength="20" placeholder="새 방 제목" required>
+    <button type="submit" id="create-button">방 만들기</button>
+  </form>
+</div>
+
+<section aria-labelledby="list-heading">
   <div id="room-list"
        data-keyword="{{ cond.keyword or '' }}"
        data-available-only="{{ 'true' if available_only else 'false' }}"
        data-sort="{{ cond.sort or 'newest' }}"
        data-page="{{ cond.page or 1 }}">
-    <p id="room-total" class="muted"></p>
-    <p id="room-empty" hidden>조건에 맞는 방이 없습니다. 새 방을 만들어 보세요</p>
-    <div class="table-wrap">
-      <table>
+    <p id="room-total" class="sr-only" aria-live="polite"></p>
+    <p id="room-empty" class="empty-state" hidden>조건에 맞는 방이 없습니다. 새 방을 만들어 보세요.</p>
+    <div class="table-wrap lobby-table" role="region" aria-labelledby="list-heading" tabindex="0">
+      <table aria-labelledby="list-heading">
         <thead>
           <tr>
-            <th scope="col">제목</th>
+            <th scope="col">방 제목</th>
             <th scope="col" class="nowrap">인원</th>
-            <th scope="col" class="nowrap">생성 시각</th>
             <th scope="col" class="nowrap">상태</th>
-            <th scope="col"><span class="muted">참가</span></th>
+            <th scope="col" class="nowrap">생성 시각</th>
+            <th scope="col">참가</th>
           </tr>
         </thead>
         <tbody id="room-rows"></tbody>

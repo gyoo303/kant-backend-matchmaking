@@ -1,17 +1,21 @@
 {# 내 이용 기록: 이력 목록, 페이지 이동 (SCR-05) #}
 {% extends "base.html" %}
 
-{% block title %}내 이용 기록{% endblock %}
+{% block title %}내 이용 기록 · TAG TEAM{% endblock %}
 {% block require_login %}true{% endblock %}
 
 {% block content %}
-<section id="history" class="card" data-page="{{ page }}">
-  <h2>내 이용 기록 <span class="muted">전체 <span id="history-total">0</span>건</span></h2>
+<section id="history" data-page="{{ page }}" aria-labelledby="history-heading">
+  <div class="page-hero history-hero">
+    <h1 id="history-heading" class="section-title">내 이용 기록</h1>
+    <p>참가했던 방과 입장·퇴장 시간을 확인하세요.</p>
+    <p class="history-total muted">전체 <span id="history-total">0</span>건</p>
+  </div>
 
-  <p id="history-empty" class="muted" hidden>아직 이용 기록이 없습니다</p>
+  <p id="history-empty" class="empty-state" hidden>아직 이용 기록이 없습니다.</p>
 
-  <div class="table-wrap">
-    <table id="history-table" hidden>
+  <div class="table-wrap history-table" role="region" aria-labelledby="history-heading" tabindex="0">
+    <table id="history-table" aria-labelledby="history-heading" hidden>
       <thead>
         <tr>
           <th>방 제목</th>
@@ -42,16 +46,25 @@
     const tr = document.createElement("tr");
     tr.appendChild(makeCell(item.room_title, "cell-title"));
     tr.appendChild(makeCell(formatTime(item.joined_at), "nowrap"));
-    tr.appendChild(makeCell(item.is_current ? "참가 중" : formatTime(item.left_at), "nowrap"));
+    const leftCell = makeCell(formatTime(item.left_at), "nowrap");
+    if (item.is_current) {
+      const badge = document.createElement("span");
+      badge.className = "status-badge";
+      badge.textContent = "참가 중";
+      leftCell.replaceChildren(badge);
+    }
+    tr.appendChild(leftCell);
 
     const linkCell = document.createElement("td");
     linkCell.className = "nowrap";
     if (item.room_deleted) {
       const link = document.createElement("a");
       link.href = "/me/history/" + item.room_id;
-      link.className = "button secondary";
+      link.className = "button secondary icon-arrow";
       link.textContent = "보관 정보";
       linkCell.appendChild(link);
+    } else {
+      linkCell.textContent = "—";
     }
     tr.appendChild(linkCell);
     return tr;

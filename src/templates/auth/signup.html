@@ -1,13 +1,14 @@
 {% extends "base.html" %}
 
 {# 회원가입 화면의 제목과 접근 설정 #}
-{% block title %}회원가입 · 2vs2 매치메이킹{% endblock %}
+{% block title %}회원가입 · TAG TEAM{% endblock %}
 {% block require_login %}false{% endblock %}
+{% block body_class %}auth-page{% endblock %}
 
 {# 회원가입 입력 영역 #}
 {% block content %}
-<section class="card">
-  <h1>회원가입</h1>
+<section class="auth-panel" aria-labelledby="auth-title">
+  <h1 id="auth-title"><span class="brand-mark" aria-hidden="true"></span>회원가입</h1>
 
   <form id="signup-form" action="/api/auth/signup" method="post">
     <div class="form-field">
@@ -50,7 +51,7 @@
   </form>
 
   {# 로그인 화면으로 이동할 링크 #}
-  <p><a href="/login">로그인</a></p>
+  <p class="auth-switch">이미 계정이 있나요? <a href="/login">로그인</a></p>
 </section>
 {% endblock %}
 {# 회원가입 폼의 제출 동작을 연결 #}

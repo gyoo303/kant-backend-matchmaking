@@ -274,33 +274,34 @@ function renderPagination(nav, page, size, total, makeHref) {
     // 이전에 표시한 페이지 이동 내용을 비움
     nav.textContent = '';
 
-    // 이전·다음 페이지의 링크 요소를 만듦
-    const previous = document.createElement('a');
-    previous.textContent = '이전';
-
-    const next = document.createElement('a');
-    next.textContent = '다음';
-
-    // 현재 페이지와 전체 페이지 수를 표시할 요소를 만듦
-    const current = document.createElement('span');
-    current.textContent = page + ' / ' + totalPages;
-
-    // 첫 페이지가 아니면 이전 페이지 주소를 설정
-    if (page > 1 ) {
-        previous.href = makeHref(page - 1);
-    } else {
-        previous.setAttribute('aria-disabled', 'true');
+    function pageStep(label, target, enabled, className) {
+        const step = document.createElement('a');
+        step.className = className;
+        step.setAttribute('aria-label', label);
+        if (enabled) {
+            step.href = makeHref(target);
+        } else {
+            step.setAttribute('aria-disabled', 'true');
+        }
+        return step;
     }
 
-    // 마지막 페이지가 아니면 다음 페이지 주소를 설정
-    if (page < totalPages) {
-        next.href = makeHref(page + 1);
-    } else {
-        next.setAttribute('aria-disabled', 'true');
+    nav.appendChild(pageStep('이전 페이지', page - 1, page > 1, 'page-step page-previous'));
+    const first = Math.max(1, Math.min(page - 2, totalPages - 4));
+    const last = Math.min(first + 4, totalPages);
+    for (let number = first; number <= last; number += 1) {
+        const isCurrent = number === page;
+        const item = document.createElement(isCurrent ? 'span' : 'a');
+        item.textContent = String(number);
+        item.setAttribute('aria-label', number + ' 페이지');
+        if (isCurrent) {
+            item.setAttribute('aria-current', 'page');
+        } else {
+            item.href = makeHref(number);
+        }
+        nav.appendChild(item);
     }
-
-    // 만든 요소를 페이지 이동 영역에 순서대로 넣음
-    nav.append(previous, current, next);
+    nav.appendChild(pageStep('다음 페이지', page + 1, page < totalPages, 'page-step'));
 
     // 페이지 이동 영역의 숨김 상태를 해제
     nav.hidden = false;
