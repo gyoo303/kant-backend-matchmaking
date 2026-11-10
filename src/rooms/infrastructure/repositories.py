@@ -26,6 +26,7 @@ from sqlalchemy.orm import selectinload
 
 from auth.infrastructure.models import UserModel
 from exceptions import ServiceBusyError
+from rooms.application.query_repository import RoomQueryRepository
 from rooms.application.read_models import (
     ArchivedRoom,
     HistoryItem,
@@ -37,6 +38,7 @@ from rooms.application.read_models import (
 )
 from rooms.domain.exceptions import AlreadyParticipatingError
 from rooms.domain.participation import Participation, TeamSide
+from rooms.domain.repository import RoomRepository
 from rooms.domain.room import DeleteReason, Room, RoomTitle
 from rooms.domain.team import Team
 from rooms.infrastructure.models import (
@@ -46,9 +48,6 @@ from rooms.infrastructure.models import (
     RoomModel,
     TeamModel,
 )
-from rooms.application.query_repository import RoomQueryRepository
-from rooms.domain.repository import RoomRepository
-
 
 # PostgreSQL 오류코드(SQLSTATE)
 # "55P03" -> "잠금을 lock_timeout 안에 못 얻었다"
@@ -145,7 +144,8 @@ class SqlAlchemyRoomRepository(RoomRepository):
                 stmt.with_for_update()
                 #### 주의: identity map과 populate_existing
                 # 세션은 한 번 읽은 행을 "identity map"에 객체로 기억해 두고,
-                # 같은 행을 다시 SELECT 하면 이미 가진 객체를 그대로 돌려준다 (값을 새로 덮어쓰지 않는다)
+                # 같은 행을 다시 SELECT 하면 이미 가진 객체를 그대로 돌려준다
+                # (값을 새로 덮어쓰지 않는다)
                 # 서비스가 잠금 전에 같은 방을 한 번 읽었다면 (빠른거절)
                 # 잠금 뒤에도 "잠금 전의 낡은 값"을 보게된다 -> 잠금을 걸어도 정합성 깨진다
                 #   populate_existing=True: identity map에 담은 객체라도

@@ -26,15 +26,14 @@ from fastapi.exceptions import RequestValidationError
 
 # JSONResponse: 상태코드/헤더를 직접 정해서 JSON 응답을 만드는 클래스
 from fastapi.responses import JSONResponse
-
 from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 
 from exceptions import (
-    AuthenticationError, 
-    DomainRuleError, 
-    GoneError, 
+    AuthenticationError,
+    DomainRuleError,
+    GoneError,
     NotFoundError,
-    ServiceBusyError
+    ServiceBusyError,
 )
 
 # 이 파일 전용 로거 (500 오류 로그 남길때 사용한다)

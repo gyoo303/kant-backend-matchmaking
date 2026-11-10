@@ -4,11 +4,11 @@
 from datetime import UTC, datetime
 
 import pytest
+from unit.fakes.repositories import FakeRoomRepository
 
 from rooms.application.service import RoomApplicationService
 from rooms.domain.exceptions import RoomFullError
 from rooms.domain.participation import TeamSide
-from unit.fakes.repositories import FakeRoomRepository
 
 NOW = datetime(2026, 11, 10, tzinfo=UTC)
 
