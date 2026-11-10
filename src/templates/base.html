@@ -4,28 +4,29 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   {# block = 자식 템플릿이 덮어쓰는 빈칸. 안 채우면 기본값을 쓴다 #}
-  <title>{% block title %}2vs2 매치메이킹{% endblock %}</title>
+  <title>{% block title %}TAG TEAM{% endblock %}</title>
   {# url_for('static', ...) = main.py의 name="static" 마운트로 주소를 만든다 #}
   <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
 </head>
 {# 로그인이 필요한 화면이면 true. api.js가 읽고 토큰이 없으면 /login으로 보낸다.
    로그인·회원가입 화면만 자식에서 false로 덮어쓴다 (공백 없이 true/false만) #}
-<body data-require-login="{% block require_login %}true{% endblock %}">
-  <header>
-    <div class="container">
-      <a href="/">2vs2 매치메이킹</a>
+<body class="{% block body_class %}{% endblock %}" data-require-login="{% block require_login %}true{% endblock %}">
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="/" class="brand"><span class="brand-mark" aria-hidden="true"></span>TAG TEAM</a>
       {# 서버는 로그인 여부를 모른다(토큰은 브라우저에만 있음).
          두 메뉴를 숨겨 두고 api.js의 initHeader()가 맞는 쪽을 보이게 한다 #}
-      <nav aria-label="주 메뉴">
-        <span id="nav-member" hidden>
-          <span id="nav-nickname"></span>
-          <a href="/me/history">내 기록</a>
-          <button type="button" class="secondary" id="nav-logout">로그아웃</button>
-        </span>
-        <span id="nav-guest" hidden>
-          <a href="/login">로그인</a>
-          <a href="/signup">회원가입</a>
-        </span>
+      <div id="nav-member" class="header-member" hidden>
+        <nav class="main-nav" aria-label="주 메뉴">
+          <a href="/" {% if request.url.path == '/' %}aria-current="page"{% elif request.url.path.startswith('/rooms/') %}aria-current="location"{% endif %}>공개 방 목록</a>
+          <a href="/me/history" {% if request.url.path == '/me/history' %}aria-current="page"{% elif request.url.path.startswith('/me/history/') %}aria-current="location"{% endif %}>내 기록</a>
+        </nav>
+        <span id="nav-nickname" class="account-name icon-user"></span>
+        <button type="button" class="secondary" id="nav-logout">로그아웃</button>
+      </div>
+      <nav id="nav-guest" class="header-guest" aria-label="계정" hidden>
+        {% if request.url.path != '/login' %}<a href="/login">로그인</a>{% endif %}
+        {% if request.url.path != '/signup' %}<a href="/signup">회원가입</a>{% endif %}
       </nav>
     </div>
   </header>
@@ -34,10 +35,6 @@
     {% include "partials/notice.html" %}
     {% block content %}{% endblock %}
   </main>
-
-  <footer>
-    <div class="container muted">2vs2 매치메이킹</div>
-  </footer>
 
   {# 스크립트는 body 끝에 둔다 — 요소가 다 만들어진 뒤 실행돼야 getElementById로 찾을 수 있다.
      화면별 스크립트(scripts 블록)는 api.js 다음에 와야 그 함수를 쓸 수 있다 #}
