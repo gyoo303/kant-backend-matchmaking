@@ -70,7 +70,15 @@ uv run python loadtest/bench_join.py s5 --rate 60 --duration 60 --hotspot-at 10 
 uv run python loadtest/bench_join.py s6 --rate 120 --duration 60 --hotspot-at 10 --users 300 --tag adr013
 ```
 
-s3는 3회 재서 중앙값을 쓴다(VC-03). 검증 기준(VC-01~08)과 판정 방법은 `docs/03-concurrency/02-criteria.md`에 있다.
+s3는 3회 재서 중앙값을 쓴다(VC-03). 결과 보고서는 `loadtest/adr013-report-2026-11-10.md`에 있다.
+
+클라이언트가 먼저 끊었을 때 서버가 끝까지 처리하는지 확인하는 보조 실험은 다음 명령으로 실행한다. 결과가 `saved_in_db=1`이면 서버가 끝까지 처리한 것이다.
+
+```bash
+uv run python loadtest/probe_disconnect.py
+```
+
+ 검증 기준(VC-01~08)과 판정 방법은 `docs/03-concurrency/02-criteria.md`에 있다.
 
 | 시나리오 | 내용 | 판정 |
 |---|---|---|

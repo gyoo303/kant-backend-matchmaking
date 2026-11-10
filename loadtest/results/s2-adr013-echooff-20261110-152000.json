@@ -1,0 +1,55 @@
+{
+  "scenario": "s2",
+  "tag": "adr013-echooff",
+  "measured_at": "2026-11-10T06:20:00.883340+00:00",
+  "args": {
+    "scenario": "s2",
+    "base_url": "http://127.0.0.1:8001",
+    "levels": [
+      10,
+      50,
+      100,
+      200
+    ],
+    "rooms": 1000,
+    "requests": 2000,
+    "users": 100,
+    "repeat": 1,
+    "dup": 3,
+    "rate": 60.0,
+    "duration": 60.0,
+    "hotspot_at": 10.0,
+    "timeout": 5.0,
+    "tag": "adr013-echooff"
+  },
+  "runs": [
+    {
+      "label": "s2-hotspot#1",
+      "concurrency": 100,
+      "requests": 100,
+      "elapsed_s": 0.539,
+      "tps": 185.4,
+      "p50_ms": 369.5,
+      "p95_ms": 462.5,
+      "p99_ms": 474.1,
+      "max_ms": 476.7,
+      "statuses": {
+        "200": 3,
+        "400": 97
+      },
+      "generator_cpu_pct": 92.7,
+      "over_3s": 0,
+      "over_4s": 0,
+      "integrity": {
+        "rooms_over_capacity": 0,
+        "teams_over_capacity": 0,
+        "duplicate_join_order": 0,
+        "last_join_order_mismatch": 0
+      },
+      "extra": {
+        "expected_success": 3,
+        "participants_in_room": 4
+      }
+    }
+  ]
+}

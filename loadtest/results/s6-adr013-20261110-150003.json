@@ -1,0 +1,115 @@
+{
+  "scenario": "s6",
+  "tag": "adr013",
+  "measured_at": "2026-11-10T06:00:03.510445+00:00",
+  "args": {
+    "scenario": "s6",
+    "base_url": "http://127.0.0.1:8001",
+    "levels": [
+      10,
+      50,
+      100,
+      200
+    ],
+    "rooms": 1000,
+    "requests": 2000,
+    "users": 300,
+    "repeat": 3,
+    "dup": 3,
+    "rate": 120.0,
+    "duration": 60.0,
+    "hotspot_at": 10.0,
+    "timeout": 5.0,
+    "tag": "adr013"
+  },
+  "runs": [
+    {
+      "label": "s6-background",
+      "concurrency": 0,
+      "requests": 7200,
+      "elapsed_s": 64.244,
+      "tps": 112.1,
+      "p50_ms": 4444.7,
+      "p95_ms": 5172.8,
+      "p99_ms": 5288.5,
+      "max_ms": 6156.8,
+      "statuses": {
+        "0": 3278,
+        "200": 3668,
+        "409": 254
+      },
+      "generator_cpu_pct": 90.7,
+      "over_3s": 4451,
+      "over_4s": 3842,
+      "integrity": {
+        "rooms_over_capacity": 0,
+        "teams_over_capacity": 0,
+        "duplicate_join_order": 0,
+        "last_join_order_mismatch": 0
+      },
+      "extra": {
+        "target_rate": 120.0,
+        "duration_s": 60.0,
+        "hotspot_users": 300,
+        "hotspot_at_s": 10.0,
+        "hotspot_window_s": 5.953
+      }
+    },
+    {
+      "label": "s6-bg-during-hot",
+      "concurrency": 0,
+      "requests": 708,
+      "elapsed_s": 5.953,
+      "tps": 118.9,
+      "p50_ms": 5061.6,
+      "p95_ms": 5284.2,
+      "p99_ms": 5298.7,
+      "max_ms": 5645.5,
+      "statuses": {
+        "0": 404,
+        "200": 303,
+        "409": 1
+      },
+      "generator_cpu_pct": 90.7,
+      "over_3s": 523,
+      "over_4s": 459,
+      "integrity": {},
+      "extra": {
+        "target_rate": 120.0,
+        "duration_s": 60.0,
+        "hotspot_users": 300,
+        "hotspot_at_s": 10.0,
+        "hotspot_window_s": 5.953
+      }
+    },
+    {
+      "label": "s6-hotspot",
+      "concurrency": 300,
+      "requests": 300,
+      "elapsed_s": 5.953,
+      "tps": 50.4,
+      "p50_ms": 5236.0,
+      "p95_ms": 5304.4,
+      "p99_ms": 5591.2,
+      "max_ms": 5660.1,
+      "statuses": {
+        "0": 275,
+        "200": 3,
+        "400": 22
+      },
+      "generator_cpu_pct": 90.7,
+      "over_3s": 285,
+      "over_4s": 280,
+      "integrity": {},
+      "extra": {
+        "target_rate": 120.0,
+        "duration_s": 60.0,
+        "hotspot_users": 300,
+        "hotspot_at_s": 10.0,
+        "hotspot_window_s": 5.953,
+        "expected_success": 3,
+        "participants_in_room": 4
+      }
+    }
+  ]
+}
