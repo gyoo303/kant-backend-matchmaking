@@ -91,6 +91,8 @@ flowchart LR
 | ADR-004 | 422 입력 검증 에러 형식 | `adr/ADR-004-validation-error-format.md` |
 | ADR-005 | 개발 도구 | `adr/ADR-005-dev-tools.md` |
 | ADR-006 | 동시성 제어 — Superseded by ADR-009 | `adr/ADR-006-concurrency.md` |
-| ADR-009 | 동시 요청 무결성을 도전 A로 이동 | `adr/ADR-009-concurrency-deferred.md` |
+| ADR-009 | 동시 요청 무결성을 도전 A로 이동 — Superseded by ADR-013 | `adr/ADR-009-concurrency-deferred.md` |
 | ADR-007 | 목록 캐시(CH-C) | `adr/ADR-007-list-cache.md` |
 | ADR-008 | 실행·배포 구성(CH-C) | `adr/ADR-008-deployment.md` |
+| ADR-013 | 동시 쓰기 정합성과 응답 시간 상한(도전 A, 2026-11-10) | `adr/ADR-013-concurrent-write-integrity.md` |
+| ADR-014 | 지연 중 화면 피드백(도전 A, 2026-11-10) | `adr/ADR-014-request-feedback-ui.md` |
