@@ -1,0 +1,111 @@
+{
+  "scenario": "s2",
+  "tag": "baseline-echooff",
+  "measured_at": "2026-11-10T06:40:03.605758+00:00",
+  "args": {
+    "scenario": "s2",
+    "base_url": "http://127.0.0.1:8001",
+    "levels": [
+      10,
+      50,
+      100,
+      200
+    ],
+    "rooms": 1000,
+    "requests": 2000,
+    "users": 100,
+    "repeat": 3,
+    "dup": 3,
+    "rate": 60.0,
+    "duration": 60.0,
+    "hotspot_at": 10.0,
+    "timeout": 5.0,
+    "tag": "baseline-echooff"
+  },
+  "runs": [
+    {
+      "label": "s2-hotspot#1",
+      "concurrency": 100,
+      "requests": 100,
+      "elapsed_s": 0.578,
+      "tps": 173.1,
+      "p50_ms": 397.8,
+      "p95_ms": 507.1,
+      "p99_ms": 533.5,
+      "max_ms": 544.2,
+      "statuses": {
+        "200": 8,
+        "400": 92
+      },
+      "generator_cpu_pct": 89.2,
+      "over_3s": 0,
+      "over_4s": 0,
+      "integrity": {
+        "rooms_over_capacity": 1,
+        "teams_over_capacity": 1,
+        "duplicate_join_order": 2,
+        "last_join_order_mismatch": 0
+      },
+      "extra": {
+        "expected_success": 3,
+        "participants_in_room": 9
+      }
+    },
+    {
+      "label": "s2-hotspot#2",
+      "concurrency": 100,
+      "requests": 100,
+      "elapsed_s": 0.556,
+      "tps": 179.8,
+      "p50_ms": 382.9,
+      "p95_ms": 474.7,
+      "p99_ms": 483.3,
+      "max_ms": 483.7,
+      "statuses": {
+        "200": 11,
+        "400": 89
+      },
+      "generator_cpu_pct": 92.7,
+      "over_3s": 0,
+      "over_4s": 0,
+      "integrity": {
+        "rooms_over_capacity": 1,
+        "teams_over_capacity": 1,
+        "duplicate_join_order": 2,
+        "last_join_order_mismatch": 0
+      },
+      "extra": {
+        "expected_success": 3,
+        "participants_in_room": 12
+      }
+    },
+    {
+      "label": "s2-hotspot#3",
+      "concurrency": 100,
+      "requests": 100,
+      "elapsed_s": 0.546,
+      "tps": 183.1,
+      "p50_ms": 363.8,
+      "p95_ms": 463.1,
+      "p99_ms": 498.2,
+      "max_ms": 500.9,
+      "statuses": {
+        "200": 8,
+        "400": 92
+      },
+      "generator_cpu_pct": 83.0,
+      "over_3s": 0,
+      "over_4s": 0,
+      "integrity": {
+        "rooms_over_capacity": 1,
+        "teams_over_capacity": 1,
+        "duplicate_join_order": 2,
+        "last_join_order_mismatch": 0
+      },
+      "extra": {
+        "expected_success": 3,
+        "participants_in_room": 9
+      }
+    }
+  ]
+}

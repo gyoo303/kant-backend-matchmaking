@@ -70,7 +70,9 @@ uv run python loadtest/bench_join.py s5 --rate 60 --duration 60 --hotspot-at 10 
 uv run python loadtest/bench_join.py s6 --rate 120 --duration 60 --hotspot-at 10 --users 300 --tag adr013
 ```
 
-s3는 3회 재서 중앙값을 쓴다(VC-03). 결과 보고서는 `loadtest/adr013-report-2026-11-10.md`에 있다.
+s3는 3회 재서 중앙값을 쓴다(VC-03). 결과 보고서는 1차 `loadtest/adr013-report-2026-11-10.md`(echo 켬), 2차 `loadtest/adr015-report-2026-11-10.md`(echo 끔 + 동시 처리 상한)에 있다. 2차부터 s6은 `--rate 160`(echo 끔 처리 한계의 1.3배)을 쓴다.
+
+> ⚠️ s6은 부하 발생기 프로세스 하나로는 초당 160건을 감당하지 못한다(발생기 CPU 93%, 앱 도착 약 47%). 결과 줄의 `gen_cpu`가 90%를 넘으면 그 회차는 앱 판정에 쓰지 않는다.
 
 클라이언트가 먼저 끊었을 때 서버가 끝까지 처리하는지 확인하는 보조 실험은 다음 명령으로 실행한다. 결과가 `saved_in_db=1`이면 서버가 끝까지 처리한 것이다.
 

@@ -1,0 +1,117 @@
+{
+  "scenario": "s4",
+  "tag": "adr015",
+  "measured_at": "2026-11-10T06:56:56.680997+00:00",
+  "args": {
+    "scenario": "s4",
+    "base_url": "http://127.0.0.1:8001",
+    "levels": [
+      10,
+      50,
+      100,
+      200
+    ],
+    "rooms": 1000,
+    "requests": 2000,
+    "users": 20,
+    "repeat": 3,
+    "dup": 3,
+    "rate": 60.0,
+    "duration": 60.0,
+    "hotspot_at": 10.0,
+    "timeout": 5.0,
+    "tag": "adr015"
+  },
+  "runs": [
+    {
+      "label": "s4-duplicate#1",
+      "concurrency": 120,
+      "requests": 120,
+      "elapsed_s": 1.033,
+      "tps": 116.2,
+      "p50_ms": 540.5,
+      "p95_ms": 948.8,
+      "p99_ms": 985.3,
+      "max_ms": 989.5,
+      "statuses": {
+        "200": 60,
+        "400": 60
+      },
+      "generator_cpu_pct": 93.8,
+      "over_3s": 0,
+      "over_4s": 0,
+      "integrity": {
+        "rooms_over_capacity": 0,
+        "teams_over_capacity": 0,
+        "duplicate_join_order": 0,
+        "last_join_order_mismatch": 0
+      },
+      "extra": {
+        "dup_per_room": 3,
+        "members": 20,
+        "members_without_room": 0,
+        "winner_room_not_200": {}
+      }
+    },
+    {
+      "label": "s4-duplicate#2",
+      "concurrency": 120,
+      "requests": 120,
+      "elapsed_s": 1.014,
+      "tps": 118.4,
+      "p50_ms": 533.7,
+      "p95_ms": 905.4,
+      "p99_ms": 930.0,
+      "max_ms": 931.1,
+      "statuses": {
+        "200": 60,
+        "400": 60
+      },
+      "generator_cpu_pct": 90.9,
+      "over_3s": 0,
+      "over_4s": 0,
+      "integrity": {
+        "rooms_over_capacity": 0,
+        "teams_over_capacity": 0,
+        "duplicate_join_order": 0,
+        "last_join_order_mismatch": 0
+      },
+      "extra": {
+        "dup_per_room": 3,
+        "members": 20,
+        "members_without_room": 0,
+        "winner_room_not_200": {}
+      }
+    },
+    {
+      "label": "s4-duplicate#3",
+      "concurrency": 120,
+      "requests": 120,
+      "elapsed_s": 1.05,
+      "tps": 114.3,
+      "p50_ms": 574.8,
+      "p95_ms": 930.9,
+      "p99_ms": 970.6,
+      "max_ms": 1002.3,
+      "statuses": {
+        "200": 60,
+        "400": 60
+      },
+      "generator_cpu_pct": 92.3,
+      "over_3s": 0,
+      "over_4s": 0,
+      "integrity": {
+        "rooms_over_capacity": 0,
+        "teams_over_capacity": 0,
+        "duplicate_join_order": 0,
+        "last_join_order_mismatch": 0
+      },
+      "extra": {
+        "dup_per_room": 3,
+        "members": 20,
+        "members_without_room": 0,
+        "winner_room_not_200": {}
+      }
+    }
+  ]
+}

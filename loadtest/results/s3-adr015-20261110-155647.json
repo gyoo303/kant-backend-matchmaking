@@ -1,0 +1,55 @@
+{
+  "scenario": "s3",
+  "tag": "adr015",
+  "measured_at": "2026-11-10T06:56:47.450729+00:00",
+  "args": {
+    "scenario": "s3",
+    "base_url": "http://127.0.0.1:8001",
+    "levels": [
+      10,
+      50,
+      100,
+      200
+    ],
+    "rooms": 1000,
+    "requests": 2000,
+    "users": 100,
+    "repeat": 3,
+    "dup": 3,
+    "rate": 60.0,
+    "duration": 60.0,
+    "hotspot_at": 10.0,
+    "timeout": 5.0,
+    "tag": "adr015"
+  },
+  "runs": [
+    {
+      "label": "s3-rate60",
+      "concurrency": 0,
+      "requests": 3600,
+      "elapsed_s": 60.016,
+      "tps": 60.0,
+      "p50_ms": 22.2,
+      "p95_ms": 26.8,
+      "p99_ms": 31.6,
+      "max_ms": 58.7,
+      "statuses": {
+        "200": 3600
+      },
+      "generator_cpu_pct": 19.1,
+      "over_3s": 0,
+      "over_4s": 0,
+      "integrity": {
+        "rooms_over_capacity": 0,
+        "teams_over_capacity": 0,
+        "duplicate_join_order": 0,
+        "last_join_order_mismatch": 0
+      },
+      "extra": {
+        "target_rate": 60.0,
+        "duration_s": 60.0,
+        "rooms": 1200
+      }
+    }
+  ]
+}

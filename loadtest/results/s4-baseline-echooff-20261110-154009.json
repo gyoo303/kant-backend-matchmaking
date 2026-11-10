@@ -1,0 +1,126 @@
+{
+  "scenario": "s4",
+  "tag": "baseline-echooff",
+  "measured_at": "2026-11-10T06:40:09.379254+00:00",
+  "args": {
+    "scenario": "s4",
+    "base_url": "http://127.0.0.1:8001",
+    "levels": [
+      10,
+      50,
+      100,
+      200
+    ],
+    "rooms": 1000,
+    "requests": 2000,
+    "users": 20,
+    "repeat": 3,
+    "dup": 3,
+    "rate": 60.0,
+    "duration": 60.0,
+    "hotspot_at": 10.0,
+    "timeout": 5.0,
+    "tag": "baseline-echooff"
+  },
+  "runs": [
+    {
+      "label": "s4-duplicate#1",
+      "concurrency": 120,
+      "requests": 120,
+      "elapsed_s": 1.112,
+      "tps": 107.9,
+      "p50_ms": 746.9,
+      "p95_ms": 994.2,
+      "p99_ms": 1015.2,
+      "max_ms": 1051.8,
+      "statuses": {
+        "200": 53,
+        "400": 38,
+        "500": 29
+      },
+      "generator_cpu_pct": 60.4,
+      "over_3s": 0,
+      "over_4s": 0,
+      "integrity": {
+        "rooms_over_capacity": 0,
+        "teams_over_capacity": 0,
+        "duplicate_join_order": 0,
+        "last_join_order_mismatch": 0
+      },
+      "extra": {
+        "dup_per_room": 3,
+        "members": 20,
+        "members_without_room": 0,
+        "winner_room_not_200": {
+          "500": 7
+        }
+      }
+    },
+    {
+      "label": "s4-duplicate#2",
+      "concurrency": 120,
+      "requests": 120,
+      "elapsed_s": 0.991,
+      "tps": 121.0,
+      "p50_ms": 630.6,
+      "p95_ms": 905.6,
+      "p99_ms": 954.6,
+      "max_ms": 973.0,
+      "statuses": {
+        "200": 53,
+        "400": 48,
+        "500": 19
+      },
+      "generator_cpu_pct": 78.8,
+      "over_3s": 0,
+      "over_4s": 0,
+      "integrity": {
+        "rooms_over_capacity": 0,
+        "teams_over_capacity": 0,
+        "duplicate_join_order": 0,
+        "last_join_order_mismatch": 0
+      },
+      "extra": {
+        "dup_per_room": 3,
+        "members": 20,
+        "members_without_room": 0,
+        "winner_room_not_200": {
+          "500": 7
+        }
+      }
+    },
+    {
+      "label": "s4-duplicate#3",
+      "concurrency": 120,
+      "requests": 120,
+      "elapsed_s": 1.111,
+      "tps": 108.0,
+      "p50_ms": 704.0,
+      "p95_ms": 1055.7,
+      "p99_ms": 1083.4,
+      "max_ms": 1091.2,
+      "statuses": {
+        "200": 49,
+        "400": 41,
+        "500": 30
+      },
+      "generator_cpu_pct": 59.1,
+      "over_3s": 0,
+      "over_4s": 0,
+      "integrity": {
+        "rooms_over_capacity": 0,
+        "teams_over_capacity": 0,
+        "duplicate_join_order": 0,
+        "last_join_order_mismatch": 0
+      },
+      "extra": {
+        "dup_per_room": 3,
+        "members": 20,
+        "members_without_room": 0,
+        "winner_room_not_200": {
+          "500": 11
+        }
+      }
+    }
+  ]
+}
