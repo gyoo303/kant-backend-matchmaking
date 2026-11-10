@@ -37,7 +37,7 @@ engine = create_async_engine(
     pool_timeout=_settings.db_pool_timeout,  # 커넥션 풀에서 연결을 가져올 때 대기 시간
     pool_recycle=_settings.db_pool_recycle,  # 커넥션 풀에서 연결을 재사용하기 전 최대 사용 시간
     pool_pre_ping=_settings.db_pool_pre_ping,  # 커넥션 풀에서 가져온 연결이 살아있는지 확인
-    echo=True,  # SQLAlchemy가 실행하는 SQL을 콘솔에 찍는다 (개발용)
+    echo=_settings.db_echo,  # 실행하는 SQL을 콘솔에 찍는다. 기본 끔, 필요할 때 DB_ECHO=true (D-036)
 )
 
 # AsyncSessionLocal

@@ -1,6 +1,6 @@
 # 앱 엔트리 — 조립만 한다. 실제 내용은 bootstrap/ 아래 파일이 담당한다 (D-028)
 #   bootstrap/lifespan.py        시작(create_all·seed)·종료(커넥션 풀 정리)
-#   bootstrap/middleware.py      요청 로깅, CORS
+#   bootstrap/middleware.py      요청 로깅, 동시 처리 상한(ADR-015), CORS
 #   bootstrap/error_handlers.py  전역 예외 핸들러 (400/401/404/410/422/500)
 #   bootstrap/routing.py         라우터, /static 마운트
 #   container.py                 의존성 조립 (D-031)

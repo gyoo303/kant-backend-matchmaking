@@ -288,7 +288,7 @@ class Participation:
 | 401 | `AuthenticationError`: 서명 오류·만료·refresh 토큰으로 API 접근·블랙리스트·회원 없음, 로그인 실패. 헤더 없음은 `OAuth2PasswordBearer` 기본 401 | 인증 의존성, `AuthApplicationService.login`·`refresh` |
 | 404 | `NotFoundError`: 없는 방, EMPTY로 삭제된 방 상세, 보관 정보 권한 없음 | 응용 서비스 |
 | 410 | `GoneError`: GAME_STARTED로 삭제된 방 상세 조회 (화면의 해산 신호, SEQ-13). 응답 헤더 `Cache-Control: no-store`(브라우저가 410을 캐시해 DB 재생성 뒤 재사용된 방 번호를 해산으로 보이는 것을 막음) | `RoomQueryService.get_room_detail` → 전역 핸들러 |
-| 409 | 바빠서 거절(D-034): `ServiceBusyError`(방 잠금 대기가 `db_lock_timeout_ms`=2초 초과), 커넥션 풀 대기가 `db_pool_timeout`=1초 초과. 처리하지 않았으므로 다시 시도해도 된다. 방을 바꾸는 API(API-ROOM-02·04~08)에서 생긴다. 화면은 상태 코드로 분기한다(ADR-014) | 저장소·DB 엔진 → 전역 핸들러 (ADR-013) |
+| 409 | 바빠서 거절(D-034): `ServiceBusyError`(방 잠금 대기가 `db_lock_timeout_ms`=2초 초과), 커넥션 풀 대기가 `db_pool_timeout`=1초 초과, `/api` 처리 중 요청이 `max_inflight_requests`=150에 닿음(ADR-015, 모든 `/api`). 처리하지 않았으므로 다시 시도해도 된다. 방을 바꾸는 API(API-ROOM-02·04~08)에서 생긴다. 화면은 상태 코드로 분기한다(ADR-014) | 저장소·DB 엔진 → 전역 핸들러 (ADR-013) |
 | 422 | `RequestValidationError` → `{"detail": "<loc 마지막>: <msg>; …"}`(최대 3개) | 전역 핸들러 (ADR-004) |
 | 500 | 처리하지 않은 예외 → `{"detail": "서버 오류가 발생했습니다"}`. 스택은 로그에만 | 전역 핸들러 (NFR-02) |
 

@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware  # 다른 출처(도메인/포트) 접근 허용 규칙
 
 from config import Settings
+from inflight_limit import InflightLimitMiddleware
 from logging_middleware import log_requests
 
 
@@ -15,7 +16,12 @@ def register_middleware(app: FastAPI, settings: Settings) -> None:
     #   log_requests(request, call_next) -> FastAPI가 request, call_next를 넣어 호출하고 응답을 반환
     app.middleware("http")(log_requests)
 
-    # 2) CORS 허용 ㅡ 나중 등록 : 바깥쪽
+    # 2) 진입 단계 동시 처리 상한 (ADR-015) ㅡ 로깅보다 바깥
+    #   거절은 로깅 미들웨어(무거움)를 거치지 않고 가장 싸게 끝난다.
+    #   거절 로그는 1초에 한 줄로 따로 남긴다
+    app.add_middleware(InflightLimitMiddleware, limit=settings.max_inflight_requests)
+
+    # 3) CORS 허용 ㅡ 나중 등록 : 바깥쪽 (상한 거절 응답에도 CORS 헤더가 붙는다)
     #   CORS(Cross-Origin Resource Sharing) :
     #   브라우저는 보안상 "다른 출처"(도메인/포트가 다른 곳)로 보내는 요청을 막는다.
     #   서버가 "이 출처는 허용해요"라고 응답 헤더에 넣어줘야 브라우저가 통과시킴

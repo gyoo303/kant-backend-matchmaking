@@ -96,3 +96,4 @@ flowchart LR
 | ADR-008 | 실행·배포 구성(CH-C) | `adr/ADR-008-deployment.md` |
 | ADR-013 | 동시 쓰기 정합성과 응답 시간 상한(도전 A, 2026-11-10) | `adr/ADR-013-concurrent-write-integrity.md` |
 | ADR-014 | 지연 중 화면 피드백(도전 A, 2026-11-10) | `adr/ADR-014-request-feedback-ui.md` |
+| ADR-015 | 진입 단계 동시 처리 상한 150(도전 A, 2026-11-10) | `adr/ADR-015-inflight-limit.md` |
