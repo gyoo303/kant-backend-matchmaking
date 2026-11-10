@@ -82,3 +82,25 @@ button:disabled { background: var(--color-disabled); color: var(--color-text-mut
 .teams { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--space-3); }
 .team-a { background: var(--color-team-a); }
 .team-b { background: var(--color-team-b); }
+
+/* 받은 메시지 목록의 표시 높이를 제한. */
+.chat-messages {
+  max-height: 18rem;
+  overflow-y: auto;
+  padding-left: var(--space-4);
+}
+
+/* 긴 메시지가 화면 밖으로 넘치지 않도록 표시 */
+.chat-messages li {
+  margin-bottom: var(--space-2);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* 입력 묶음의 기본 테두리와 여백을 제거 */
+.chat-controls {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
