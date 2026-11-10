@@ -52,6 +52,57 @@ function isLoadFailure(result) {
   return result.status === 0 || result.status >= 500;
 }
 
+// ----- 요청 진행 표시 (ADR-014)
+// 고객 요구(CQ-08~12): 누르는 즉시 "처리 중", 3초 지나면 "지연 안내", 5초 안에 결론.
+//   5초 시간 제한은 api.js의 apiRequest가 건다. 여기서는 화면에 무엇을 보여 줄지만 정한다.
+// 결론별 문구는 상태 코드로 고른다(문구 문자열로 분기하지 않는다, D-016 / D-034):
+//   409 = 서버가 바빠서 처리하지 못함, 0 = 결과 모름(시간 초과/통신 실패), 그 밖 = 서버가 준 사유
+
+// **진행 문구가 평소(약 20ms)에도 잠깐 깜빡일 수 있다
+// "감수할 점" "인지된 리스크" from ADR-014
+
+const SLOW_NOTICE_MS = 3000;
+const SLOW_TEXT = "사람이 많아 처리가 늦어지고 있습니다";
+const MESSAGES = {
+  // 참가 버튼(목록/상세) - 고객이 정한 문구.
+  join: {
+    progress: "입장 중...",
+    busy: "입장하지 못했습니다. 다시 시도해 주세요",
+    unknown: "입장 결과를 확인하지 못했습니다.",
+  },
+  // 그 밖의 쓰기 동작 (방 생성, 제목, 팀, 나가기, 게임시작)
+  // 동일 구조의 기본 문구를 사용
+  other: {
+    progress: "처리 중...",
+    busy: "처리하지 못했습니다. 다시 시도해 주세요",
+    unknown: "처리 결과를 확인하지 못했습니다.",
+  },
+};
+
+// 진행 표시를 "켜고" "끄는" 함수를 돌려준다
+//  const stop = startProgress(MESSAGES.join); ---요청--- stop();
+//  setTimeout -> 3초 뒤 문구를 한 번 바꾸는 "단발 타이머"다.
+//  서버에 다시 묻지 않는다, 자동 조회 금지
+function startProgress(texts) {
+  showNotice(texts.progress, "");
+  showingLoadError = false;
+  const slowTimer = setTimeout(() => showNotice(SLOW_TEXT, ""), SLOW_NOTICE_MS);
+  return () => clearTimeout(slowTimer);
+}
+
+// 실패 결과 -> 화면 문구
+function writeFailureMessage(result, texts) {
+  if (result.status === 409) {
+    return texts.busy;
+  }
+  if (result.status === 0) {
+    // 결과 모름: 서버가 실제론 처리했을 수도 있음, 서버는 다시 확인하지 않는다
+    // 사용자가 [새로고침] 하면 목록의 "현재 참가 방"에서 확인 가능!
+    return texts.unknown;
+  }
+  return errorMessage(result);
+}
+
 function setupRefreshButton(load) {
   const button = document.getElementById("refresh-button");
   button.addEventListener("click", async () => {
@@ -151,8 +202,13 @@ function renderRoomRows(rooms, currentRoomId) {
       const joinButton = document.createElement("button");
       joinButton.type = "button";
       joinButton.textContent = "참가";
-      joinButton.disabled = room.is_full;
-      joinButton.addEventListener("click", () => joinRoom(room.id, joinButton));
+
+      // 꽉 찬 방인지 버튼에 적어둔다 ㅡ 
+      // 처리 중 잠갔다가 풀때 "원래 꺼져 있던 버튼" 구분하기 위해
+      joinButton.dataset.full = String(room.is_full);
+      joinButton.disabled = room.is_full || listBusy;
+      joinButton.addEventListener("click", () => joinRoom(room.id));
+
       joinCell.appendChild(joinButton);
     }
 
@@ -213,29 +269,86 @@ async function loadRoomList(cond) {
   clearLoadError();
 }
 
-async function joinRoom(roomId, button) {
-  button.disabled = true;
-  const result = await apiRequest("POST", "/api/rooms/" + roomId + "/participants");
-  if (result.ok) {
-    location.href = "/rooms/" + roomId;
-    return;
+// 목록 화면에서 쓰기 요청(참가/ 방 만들기)을 보내는 중인지?
+// 상세 화면의 detailBusy와 같은 방식: 요청 하나가 끝날 때까지 
+//    "모든" 참가/만들기 버튼을 잠근다.
+// 누른 버튼만 잠그면 다른 방의 [참가]를 또 눌러 같은 회원의 중복 요청이 생긴다.
+let listBusy = false;
+
+function setListBusy(busy) {
+  listBusy = busy;
+  for (const button of document.querySelectorAll("#room-rows button")) {
+    // 꽉 찬 방의 버튼은 처리가 끝나도 계속 끈다
+    button.disabled = busy || button.dataset.full === "true";
   }
-  button.disabled = false;
-  showListFailure(result);
+  document.getElementById("create-button").disabled = busy;
 }
 
-async function createRoom(event) {
-  event.preventDefault();
-  const button = document.getElementById("create-button");
-  const title = document.getElementById("create-room-title").value;
-  button.disabled = true;
-  const result = await apiRequest("POST", "/api/rooms", { title });
+// 목록 화면 쓰기 요청의 공통 흐름: 잠금 -> 진행 표시 -> 요청 -> 결론
+// 성공하면 onSuccess(data)를 부르고(보통 화면 이동),
+// 실패하면 버튼 풀고 문구를 노출한다.
+async function sendListWrite(texts, method, url, body, onSuccess) {
+  if (listBusy) {
+    return; // 이미 처리 중이면 무시 (연타 방지)
+  }
+
+  // 즉시: 버튼 잠금 + 진행 표시 (요청을 보내기 "전"에 화면부터 바꾼다)
+  // (즉시 = startProgress를 apiRequest보다 먼저 부른다)
+  setListBusy(true); 
+
+  const stopProgress = startProgress(texts);
+  const result = await apiRequest(method, url, body); // 최대 5초 응답대기
+  stopProgress();
+
   if (result.ok) {
-    location.href = "/rooms/" + result.data.id;
+    onSuccess(result.data); // 성공: 화면 이동. 이동하는 동안 버튼은 잠근채로 둔다
     return;
   }
-  button.disabled = false;
-  showListFailure(result);
+  setListBusy(false); // 실패: 버튼을 풀고 결론(성공/실패) 노출
+  if (result.status !== 401) {
+    showError(writeFailureMessage(result, texts));
+  }
+}
+
+
+function joinRoom(roomId) {
+  return sendListWrite(MESSAGES.join, "POST", 
+    "/api/rooms/" + roomId + "/participants", undefined,
+    () => {
+      location.href = "/rooms/" + roomId;
+    }
+  );
+  // button.disabled = true;
+  // const result = await apiRequest("POST", "/api/rooms/" + roomId + "/participants");
+  // if (result.ok) {
+  //   location.href = "/rooms/" + roomId;
+  //   return;
+  // }
+  // button.disabled = false;
+  // showListFailure(result);
+}
+
+function createRoom(event) {
+  event.preventDefault();
+  const title = document.getElementById("create-room-title").value;
+  return sendListWrite(MESSAGES.other, 
+    "POST",
+    "/api/rooms",
+    { title },
+    (data) => {
+      location.href = "/rooms/" + data.id;
+    }
+  );
+  // const button = document.getElementById("create-button");
+  // const title = document.getElementById("create-room-title").value;
+  // button.disabled = true;
+  // const result = await apiRequest("POST", "/api/rooms", { title });
+  // if (result.ok) {
+  //   location.href = "/rooms/" + result.data.id;
+  //   return;
+  // }
+  // button.disabled = false;
+  // showListFailure(result);
 }
 
 function initRoomListPage() {
@@ -364,31 +477,44 @@ async function loadRoomDetail() {
   }
 }
 
-// 거부 사유를 보이고 상세를 1회 다시 읽는다. 해산된 방이면 400 뒤 조회가 410이라 목록으로 간다(AC-16-4).
-async function showChangeFailure(result) {
+// 거부 사유를 보이고 상세를 1회 다시 읽는다. 
+// 해산된 방이면 400 뒤 조회가 410이라 목록으로 간다(AC-16-4).
+
+// 단, 결과모름(status 0) 
+// -> 다시 읽지 않는다 (사용자가 직접 화면 진입으로 확인한다)
+async function showChangeFailure(result, texts) {
   if (result.status === 401) {
     return;
   }
-  showError(errorMessage(result));
-  await loadRoomDetail();
+  showError(writeFailureMessage(result, texts));
+  if (result.status !== 0) {
+    await loadRoomDetail();
+  }
+  // showError(errorMessage(result));
+  // await loadRoomDetail();
 }
 
-// 변경 요청 하나. 성공하면 응답 data를, 실패하면 null을 돌려준다. 성공 뒤에는 다시 조회하지 않는다.
-async function sendDetailChange(method, url, body) {
+// 변경 요청 하나. 성공하면 응답 data를, 실패하면 null을 돌려준다. 
+// 성공 뒤에는 다시 조회하지 않는다.
+//  texts: 진행/실패 문구 묶음
+// 참가 버튼 -> MESSAGES.join / 나머지 MESSAGES.other
+async function sendDetailChange(method, url, body, texts = MESSAGES.other) {
   if (detailBusy) {
     return null;
   }
   detailBusy = true;
   updateDetailButtons();
+  const stopProgress = startProgress(texts); // 즉시: 진행 표시를 켠다(요청 보내기 전)
   let result;
   try {
     result = await apiRequest(method, url, body);
   } finally {
+    stopProgress();
     detailBusy = false;
     updateDetailButtons();
   }
   if (!result.ok) {
-    await showChangeFailure(result);
+    await showChangeFailure(result, texts);
     return null;
   }
   hideNotice();
@@ -414,8 +540,14 @@ async function moveTeam() {
   }
 }
 
+// <상세 화면 참가 버튼>만 참가문구를 쓴다.
 async function joinFromDetail() {
-  const detail = await sendDetailChange("POST", detailUrl("/participants"));
+  const detail = await sendDetailChange(
+    "POST", 
+    detailUrl("/participants"),
+    undefined,
+    MESSAGES.join
+  );
   if (detail) {
     renderDetail(detail);
   }

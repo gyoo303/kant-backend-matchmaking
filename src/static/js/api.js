@@ -1,3 +1,16 @@
+// 요청 시간 제한
+// 사용자 동작 하나(클릭) -> 5초 안에 성공/실패 결과가 정해져야 한다
+// 서버는 4초 내에 결과를 결정한다 + 네트워크, 화면 렌더링 여유분 1초를 더해 5초로 끊는다
+const REQUEST_TIMEOUT_MS = 5000;
+
+// 개념: AbortController
+//  fetch에 "중단 스위치(signal)"를 넘겨두고, 나중에 controller.abort() 호출 시
+//  진행 중인 fetch가 AbortError로 즉시 종료.
+//  브라우저 fetch에는 시간 제한 옵션이 없으므로 
+//  setTimeout(() => controller.abort(), 5000)으로 "5초 뒤 스위치를 내린다"
+//  [참고] 브라우저 대기 상태를 종료할 뿐, 이미 서버에 넘어간 요청을 취소하는건 X (서버는 계속 돌아감)
+
+
 // 토큰을 보관할 localStorage 키를 정의
 const ACCESS_KEY = 'access_token'
 const REFRESH_KEY = 'refresh_token'
@@ -39,7 +52,8 @@ function requireLogin() {
 }
 
 // refresh 토큰으로 access 토큰을 재발급
-async function refreshAccessToken() {
+//   signal: 재발급도 "사용자 동작 하나"의 5초 안에 포함되므로 같은 중단 스위치를 받는다
+async function refreshAccessToken(signal) {
     const refreshToken = localStorage.getItem(REFRESH_KEY);
 
     // refresh 토큰이 없으면 재발급을 요청하지 않음
@@ -53,6 +67,7 @@ async function refreshAccessToken() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ refresh_token: refreshToken }),
+            signal: signal,
         });
 
         // 서버가 재발급을 거부하면 실패를 반환
@@ -70,13 +85,19 @@ async function refreshAccessToken() {
         saveTokens(data.access_token, null);
         return true;
     } catch (error) {
-        // 통신 또는 응답 해석에 실패하면 실패를 반환
+
+        // 시간 초과(AbortError) -> 그대로 다시 던져서 apiRequest가 "결과 모름"으로 처리하게 한다.
+        if (error.name === 'AbortError') {
+            throw error;
+        }
+        // 그 외 통신 또는 응답 해석에 실패하면 실패를 반환
         return false;
     }
+
 }
 
 // access 토큰을 붙여 API 요청을 한 번 보냄
-async function sendOnce(method, url, body) {
+async function sendOnce(method, url, body, signal) {
     // 요청에 사용할 헤더를 준비
     const headers = {};
     const token = getAccessToken();
@@ -86,8 +107,11 @@ async function sendOnce(method, url, body) {
         headers['Authorization'] = 'Bearer ' + token;
     }
 
-    // 요청 메서드와 헤더를 설정
-    const options = { method: method, headers: headers};
+    // 요청 메서드와 헤더를 설정 + 중단 스위치도 설정
+    const options = { method: method, 
+        headers: headers,
+        signal: signal
+    };
 
     // 본문을 전달받으면 JSON으로 변환
     if (body !== undefined) {
@@ -99,49 +123,64 @@ async function sendOnce(method, url, body) {
 }
 
 // api 요청 결과를 공통 형식으로 변환
+//  반환: {ok, status, data, timeOut}
+//  - status 0 = 결과 모름 (5초 시간 초과 또는 통신실패), timeOut이 true면 시간초과.
+//  - status 409 = 서버 바빠서 처리못함, 재시도 시 될 수도 있음
 async function apiRequest(method, url, body) {
-    let response;
+    // 사용자 요청에 따른 동작 전체(최초 요청 - 401이면 재발급 - 재요청)에 5초 제한을 하나만 건다.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-    try{
-        // 현재 access 토큰으로 요청
-        response = await sendOnce(method, url, body);
-
-        // 401이면 재발급 성공 후 원래 요청을 한번 더 보냄
-        if (response.status === 401 && (await refreshAccessToken())) {
-            response = await sendOnce(method, url, body);
-        }
-    } catch (error) {
-        // 통신 실패를 화면에서 구분 할 수 있는 결과로 바꿈
-        return {
-            ok: false,
-            status: 0,
-            data: { detail: '최신 정보를 불러오지 못했습니다' },
-        };
-    }
-    // 인증을 복구하지 못하면 토큰을 삭제하고 로그인 화면으로 이동
-    if (response.status === 401) {
-        clearTokens();
-        goToLogin(true);
-        return {
-            ok: false,
-            status: 401,
-            data: { detail: '로그인이 만료되었습니다. 다시 로그인해 주세요' },
-        };
-    }
-    // 응답 본문을 JSON으로 읽음
-    let data = null;
     try {
-        data = await response.json();
-    } catch (error) {
-        // JSON으로 읽을 수 없는 본문은 null로 둠
-        data = null;
-    }
+        let response;
+        try{
+        
+            // 현재 access 토큰으로 요청
+            response = await sendOnce(method, url, body, controller.signal);
 
-    return {
-        ok: response.ok,
-        status: response.status,
-        data: data,
-    };
+            // 401이면 재발급 성공 후 원래 요청을 한번 더 보냄
+            if (response.status === 401 && (await refreshAccessToken(controller.signal))) {
+                response = await sendOnce(method, url, body, controller.signal);
+            }
+        } catch (error) {
+            // 통신 실패를 화면에서 구분 할 수 있는 결과로 바꿈
+            return {
+                ok: false,
+                status: 0,
+                timeOut: error.name === 'AbortError',
+                data: { detail: '최신 정보를 불러오지 못했습니다' },
+            };
+        }
+    
+        // 인증을 복구하지 못하면 토큰을 삭제하고 로그인 화면으로 이동
+        if (response.status === 401) {
+            clearTokens();
+            goToLogin(true);
+            return {
+                ok: false,
+                status: 401,
+                data: { detail: '로그인이 만료되었습니다. 다시 로그인해 주세요' },
+            };
+        }
+        // 응답 본문을 JSON으로 읽음
+        let data = null;
+        try {
+            data = await response.json();
+        } catch (error) {
+            // JSON으로 읽을 수 없는 본문은 null로 둠
+            data = null;
+        }
+
+        return {
+            ok: response.ok,
+            status: response.status,
+            data: data,
+        };
+    } finally {
+        // 결론이 났으면 타이머를 반드시 정리
+        // 안 그러면 5초 뒤 쓸데없이 abort가 호출된다.
+        clearTimeout(timer);
+    }    
 }
 
 // 요청 결과에서 화면에 표시할 오류 문구를 꺼냄
