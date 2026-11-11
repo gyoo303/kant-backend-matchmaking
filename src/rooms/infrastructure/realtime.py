@@ -18,6 +18,7 @@ from rooms.application.realtime import (
     RoomRealtimeHub,
     SendMessage,
 )
+
 # 연결 처리 실패를 기록할 로거를 준비
 logger = logging.getLogger(__name__)
 

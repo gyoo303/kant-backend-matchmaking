@@ -9,8 +9,6 @@
 # - /me/room-history.csv(API-ROOM-12, 도전 B)는 필수 범위가 아니라 두지 않았다.
 #   넣을 때는 /me/room-history/{room_id}보다 먼저 등록해야 한다.
 
-from webbrowser import BackgroundBrowser
-from urllib import response
 from collections.abc import Callable
 from typing import Literal
 
@@ -20,8 +18,8 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from auth.presentation.dependencies import get_current_user_id
 from container import Container, DbSession
 from rooms.application.queries import RoomQueryService
-from rooms.application.realtime import RoomRealtimeService
 from rooms.application.read_models import RoomListCondition
+from rooms.application.realtime import RoomRealtimeService
 from rooms.application.service import RoomApplicationService
 from rooms.domain.participation import TeamSide
 from rooms.presentation.schemas import (

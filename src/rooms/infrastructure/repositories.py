@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from auth.infrastructure.models import UserModel
+from rooms.application.query_repository import RoomQueryRepository
 from rooms.application.read_models import (
     ArchivedRoom,
     HistoryItem,
@@ -34,6 +35,7 @@ from rooms.application.read_models import (
     RoomSummary,
 )
 from rooms.domain.participation import Participation, TeamSide
+from rooms.domain.repository import RoomRepository
 from rooms.domain.room import DeleteReason, Room, RoomTitle
 from rooms.domain.team import Team
 from rooms.infrastructure.models import (
@@ -42,8 +44,6 @@ from rooms.infrastructure.models import (
     RoomModel,
     TeamModel,
 )
-from rooms.application.query_repository import RoomQueryRepository
-from rooms.domain.repository import RoomRepository
 
 
 # RoomRepository

@@ -1,26 +1,22 @@
-from logging import exception
-from errno import errorcode
-from fastapi import Depends
 import asyncio
 import logging
-from collections import deque # 최근 채팅을 처리한 시각을 보관
+from collections import deque  # 최근 채팅을 처리한 시각을 보관
 from collections.abc import Callable
 from typing import Annotated
 
 from dependency_injector.wiring import Provide, inject
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from fastapi.websockets import WebSocketState
 from pydantic import Field, TypeAdapter, ValidationError
-from exceptions import AuthenticationError, DomainError
-from container import Container
 
+from container import Container
+from exceptions import AuthenticationError, DomainError
 from rooms.application.realtime import (
+    CloseConnection,
     RealtimeParticipant,
     RoomRealtimeService,
-    CloseConnection,
     SendMessage,
 )
-
 from rooms.presentation.schemas import (
     RoomWebSocketAuth,
     RoomWebSocketChat,
@@ -208,7 +204,7 @@ async def _receive_messages(
                 text = await _receive_text(websocket)
         except TimeoutError:
             if loop.time() - last_received >= IDLE_TIMEOUT_SECONDS:
-                raise _MessageError(1001, '연결 확인 응답이 없습니다')
+                raise _MessageError(1001, '연결 확인 응답이 없습니다') from None
             await send({'type':'ping'})
             continue
         

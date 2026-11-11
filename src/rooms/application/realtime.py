@@ -1,17 +1,17 @@
 # 방 실시간 처리에 사용하는 데이터와 계약
-from logging import exception
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
-from auth.application.service import AuthApplicationService
-from rooms.application.queries import RoomQueryService
-from rooms.domain.repository import RoomRepository
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import uuid4
+
+from auth.application.service import AuthApplicationService
 from exceptions import AuthenticationError
+from rooms.application.queries import RoomQueryService
 from rooms.domain.exceptions import NotParticipantError
+from rooms.domain.repository import RoomRepository
 
 # 방 변경 알림 실패의 종류를 기록할 로거를 준비
 logger = logging.getLogger(__name__)
