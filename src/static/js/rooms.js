@@ -482,19 +482,24 @@ function hideChatNotice() {
   document.getElementById('chat-notice').hidden = true;
 }
 
-// 현재 HTTPS 페이지와 같은 호스트의 WSS 주소를 만듦
+// 페이지의 전송 방식과 로컬 여부에 맞는 소켓 주소를 만듦
 function roomWebSocketUrl() {
-  // 비암호화 페이지에서는 실시간 연결을 시작하지 않음
-  if (location.protocol !== 'https:') {
-    throw new Error('실시간 연결에는 HTTPS 페이지가 필요합니다');
-  }
-
-  // 서버에 등록한 방별 경로로 주소를 구성
+  // 현재 페이지와 같은 호스트의 방별 주소를 준비
   const url = new URL(
     '/ws/rooms/' + encodeURIComponent(detailRoomId),
     location.origin,
   );
-  url.protocol = 'wss:';
+
+  // HTTPS에서는 암호화된 연결을 사용
+  if (location.protocol === "https:") {
+    url.protocol = 'wss:';
+  } else if (location.protocol === "http:") {
+    // HTTP 연결의 허용 여부는 서버의 개발 설정으로 검사
+    url.protocol = 'ws:';
+  } else {
+    throw new Error('지원하지 않는 페이지 전송 방식입니다')
+  }
+
   return url.href;
 }
 
@@ -1209,7 +1214,7 @@ function initRoomDetailPage() {
 
   // 새로고침 전에 시작한 조회 결과를 무효화
   detailViewVersion += 1;
-  
+
     return loadRoomDetail();
   });
 

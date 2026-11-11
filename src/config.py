@@ -24,7 +24,8 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
     cors_origins: list[str] = ["http://localhost:8000"]
-
+    # 개발 환경 안에서 비암호화 WebSocket 연결을 명시적으로 허용
+    allow_insecure_ws: bool = False
     db_pool_size: int = 10
     db_max_overflow: int = 10
 

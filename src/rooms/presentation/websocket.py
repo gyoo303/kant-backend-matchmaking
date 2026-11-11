@@ -177,6 +177,13 @@ def get_allowed_origins(
 ) -> list[str]:
     return origins
 
+# 개발용 비암호화 WebSocket 허용 설정을 받음
+@inject
+def get_allow_insecure_ws(
+    enabled: bool = Depends(Provide[Container.config.allow_insecure_ws]),
+) -> bool:
+    return enabled
+
 #인증한 연결의 채팅과 연결 확인 메시지를 계속 처리
 async def _receive_messages(
     websocket: WebSocket,
@@ -280,6 +287,7 @@ async def room_websocket(
     room_id: int,
     service: RoomRealtimeService = Depends(get_realtime_service),
     allowed_origins: list[str] = Depends(get_allowed_origins),
+    allow_insecure_ws: bool = Depends(get_allow_insecure_ws),
 ) -> None:
     # 전송과 종료가 함께 사용할 잠금과 종료 함수를 만듦
     socket_lock = asyncio.Lock()
@@ -290,9 +298,18 @@ async def room_websocket(
     close_reason = ""
 
     try:
-        # WSS와 허용한 페이지 출처를 모두 확인
+        # WSS 또는 명시적으로 허용한 개발용 WS인지 확인
+        transport_allowed = (
+            websocket.url.scheme == 'wss'
+            or (
+                websocket.url.scheme == 'ws'
+                and allow_insecure_ws
+            )
+        )
+
+        # 전송 방식이나 페이지 출처가 허용되지 않으면 거부
         if (
-            websocket.url.scheme != 'wss'
+            not transport_allowed
             or not _is_allowed_origin(websocket, allowed_origins)
         ):
             close_code = 1008
