@@ -13,12 +13,13 @@ from collections.abc import Callable
 from typing import Literal
 
 from dependency_injector.wiring import Provide, inject
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 
 from auth.presentation.dependencies import get_current_user_id
 from container import Container, DbSession
 from rooms.application.queries import RoomQueryService
 from rooms.application.read_models import RoomListCondition
+from rooms.application.realtime import RoomRealtimeService
 from rooms.application.service import RoomApplicationService
 from rooms.domain.participation import TeamSide
 from rooms.presentation.schemas import (
@@ -67,6 +68,15 @@ def get_query_service(
     두 저장소에 같은 요청 세션을 넣는다
     """
     return factory(room_repo__session=db, query_repo__session=db)
+
+# HTTP 변경 뒤 알림에 사용할 실시간 응용 서비스를 받음
+@inject
+def get_realtime_service(
+    factory: Callable[..., RoomRealtimeService] = Depends(
+        Provide[Container.room_realtime_service.provider]
+    ),
+) -> RoomRealtimeService:
+    return factory()
 
 
 # ---------------------------------------------------------------- rooms
@@ -146,13 +156,22 @@ async def rename_room(
 )
 async def join_room(
     room_id: int,
+    background_tasks: BackgroundTasks,
     user_id: int = Depends(get_current_user_id),
     service: RoomApplicationService = Depends(get_room_service),
     queries: RoomQueryService = Depends(get_query_service),
+    realtime: RoomRealtimeService = Depends(get_realtime_service),
 ) -> RoomDetailResponse:
+    # 기존 참가 처리를 실행
     await service.join_room(room_id, user_id)
+    # 기존 상세 조회 결과로 응답을 만듦
     detail = await queries.get_room_detail(room_id, user_id)
-    return RoomDetailResponse.model_validate(detail)
+    response = RoomDetailResponse.model_validate(detail)
+
+    # 응답 뒤에 실행할 방 변경 알림을 등록
+    background_tasks.add_task(realtime.notify_room_changed, room_id)
+
+    return response
 
 
 @router.patch(
@@ -164,13 +183,22 @@ async def join_room(
 async def change_team(
     room_id: int,
     body: TeamChangeRequest,
+    background_tasks: BackgroundTasks,
     user_id: int = Depends(get_current_user_id),
     service: RoomApplicationService = Depends(get_room_service),
     queries: RoomQueryService = Depends(get_query_service),
+    realtime: RoomRealtimeService = Depends(get_realtime_service),
 ) -> RoomDetailResponse:
+    # 기존 팀 변경 처리를 실행
     await service.change_team(room_id, user_id, TeamSide(body.team))
+    # 변경한 팀을 반영한 상세 응답을 만듦
     detail = await queries.get_room_detail(room_id, user_id)
-    return RoomDetailResponse.model_validate(detail)
+    response = RoomDetailResponse.model_validate(detail)
+
+    # 응답 뒤에 실행할 방 변경 알림을 등록
+    background_tasks.add_task(realtime.notify_room_changed, room_id)
+
+    return response
 
 
 @router.delete(
@@ -181,12 +209,22 @@ async def change_team(
 )
 async def leave_room(
     room_id: int,
+    background_tasks: BackgroundTasks,
     user_id: int = Depends(get_current_user_id),
     service: RoomApplicationService = Depends(get_room_service),
+    realtime: RoomRealtimeService = Depends(get_realtime_service),
 ) -> LeaveResponse:
     result = await service.leave_room(room_id, user_id)
-    return LeaveResponse.model_validate(result)
+    response = LeaveResponse.model_validate(result)
 
+    # 삭제된 방은 응답 뒤에 실시간 연결을 정리
+    if result.room_deleted:
+        background_tasks.add_task(realtime.close_room, room_id)
+    else:
+        # 남은 참가자에게 최신 상세 조회를 요청
+        background_tasks.add_task(realtime.notify_room_changed, room_id)
+    
+    return response
 
 @router.post(
     "/rooms/{room_id}/start",
@@ -196,16 +234,22 @@ async def leave_room(
 )
 async def start_game(
     room_id: int,
+    background_tasks: BackgroundTasks,
     user_id: int = Depends(get_current_user_id),
     service: RoomApplicationService = Depends(get_room_service),
+    realtime: RoomRealtimeService = Depends(get_realtime_service),
 ) -> GameStartResponse:
     result = await service.start_game(room_id, user_id)
-    return GameStartResponse(
+    response = GameStartResponse(
         room_id=result.room_id,
         dissolved_at=result.dissolved_at,
         message=GAME_START_MESSAGE,
     )
 
+    # 응답 뒤에 종료된 방의 실시간 연결을 정리
+    background_tasks.add_task(realtime.close_room, room_id)
+    
+    return response
 
 # ---------------------------------------------------------------- me
 

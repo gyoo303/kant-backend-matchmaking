@@ -8,6 +8,7 @@ from auth.presentation.pages import page_router as auth_page_router
 from auth.presentation.router import router as auth_router
 from rooms.presentation.pages import page_router as rooms_page_router
 from rooms.presentation.router import router as rooms_router
+from rooms.presentation.websocket import router as rooms_websocket_router
 
 # static 폴더 절대경로 만들기
 # __file__ : 현재 실행중인 파일(bootstrap/routing.py)의 절대경로
@@ -21,6 +22,8 @@ def register_routes(app: FastAPI) -> None:
     """API 라우터, 화면 라우터를 등록하고 /static을 마운트한다."""
     app.include_router(auth_router)
     app.include_router(rooms_router)
+    # 방 실시간 연결 경로를 앱에 등록
+    app.include_router(rooms_websocket_router)
     app.include_router(auth_page_router)
     app.include_router(rooms_page_router)
 

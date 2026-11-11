@@ -23,6 +23,9 @@
 #     container는 presentation을 import하면 안 된다
 #     -> wiring_config에 모듈을 문자열로 적는 이유!
 
+from collections.abc import AsyncIterator, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from functools import partial
 from typing import Annotated
 
 from dependency_injector import containers, providers
@@ -35,9 +38,12 @@ from auth.infrastructure.repositories import (
     SqlAlchemyUserRepository,
 )
 from auth.infrastructure.security import BcryptPasswordHasher, JwtTokenProvider
-from database import get_db
+from database import AsyncSessionLocal, get_db
 from rooms.application.queries import RoomQueryService
+from rooms.application.realtime import RealtimeServices, RoomRealtimeService
 from rooms.application.service import RoomApplicationService
+from rooms.domain.repository import RoomRepository
+from rooms.infrastructure.realtime import InMemoryRoomRealtimeHub
 from rooms.infrastructure.repositories import (
     SqlAlchemyRoomQueryRepository,
     SqlAlchemyRoomRepository,
@@ -59,7 +65,36 @@ DbSession = Annotated[AsyncSession, Depends(get_db, scope="function")]
 #   *get_db는 순수 비동기 제너레이터라 database.py에 그대로 유지
 #   (웹 요청과 세션을 잇는 별칭만 조립 지점으로 이동)
 
+# 짧은 인증·조회 작업에 필요한 세션과 부품을 준비
+@asynccontextmanager
+async def _room_realtime_scope(
+    *,
+    session_factory: Callable[[], AbstractAsyncContextManager[AsyncSession]],
+    auth_factory: Callable[..., AuthApplicationService],
+    rooms_factory: Callable[..., RoomRepository],
+    queries_factory: Callable[..., RoomQueryService],
+) -> AsyncIterator[RealtimeServices]:
+    # 작업마다 새 세션을 만들고 작업 종료 시 닫음
+    async with session_factory() as session:
+        # 인증과 방 조회에 같은 세션을 연결
+        auth = auth_factory(
+            users__session=session,
+            blacklist__session=session,
+        )
 
+        rooms = rooms_factory(session=session)
+        
+        queries = queries_factory(
+            room_repo__session=session,
+            query_repo__session=session,
+        )
+        # 준비한 부품을 작업 범위 안에서 사용하도록 전달
+        yield RealtimeServices(
+            auth=auth,
+            rooms=rooms,
+            queries=queries,
+        )
+        
 class Container(containers.DeclarativeContainer):
     # Provide[...]를 쓰는 모듈 목록. Container()를 만들 때 자동으로 연결(wire)된다
     #   wiring은 프로세스 전역: Container()를 또 만들면 연결이 새 컨테이너로 넘어간다
@@ -67,6 +102,7 @@ class Container(containers.DeclarativeContainer):
         modules=[
             "auth.presentation.dependencies",
             "rooms.presentation.router",
+            "rooms.presentation.websocket",
         ],
     )
 
@@ -80,6 +116,9 @@ class Container(containers.DeclarativeContainer):
         access_expire_minutes=config.access_token_expire_minutes,
         refresh_expire_days=config.refresh_token_expire_days,
     )
+
+    # 앱 안에서 방별 실시간 연결 상태를 공유
+    room_realtime_hub = providers.Singleton(InMemoryRoomRealtimeHub)
 
     # ---------------------------------------------------------- 저장소 (Factory, session은 호출 때)
     user_repository = providers.Factory(SqlAlchemyUserRepository)
@@ -111,3 +150,19 @@ class Container(containers.DeclarativeContainer):
         room_repo=room_repository,
         query_repo=room_query_repository,
     )
+    # 인증·조회 작업 범위를 만들 함수에 필요한 팩토리를 연결
+    room_realtime_scope = providers.Factory(
+        partial,
+        _room_realtime_scope,
+        session_factory=providers.Object(AsyncSessionLocal),
+        auth_factory=auth_service.provider,
+        rooms_factory=room_repository.provider,
+        queries_factory=room_query_service.provider,
+    )
+
+    # 실시간 응용 서비스에 연결 관리자와 작업 범위 함수를 전달
+    room_realtime_service = providers.Factory(
+            RoomRealtimeService,
+            hub=room_realtime_hub,
+            scope=room_realtime_scope,
+        )

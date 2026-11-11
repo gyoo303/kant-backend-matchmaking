@@ -580,3 +580,25 @@ td { color: var(--color-text-muted); }
   .lobby-filters { grid-template-columns: minmax(0, 1fr) auto; }
   .filter-submit { grid-column: 2; }
 }
+
+/* 받은 메시지 목록의 표시 높이를 제한 */
+.chat-messages {
+  max-height: 18rem;
+  overflow-y: auto;
+  padding-left: var(--space-4);
+}
+
+/* 긴 메시지의 줄바꿈과 본문 개행을 표시 */
+.chat-messages li {
+  margin-bottom: var(--space-2);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* 채팅 입력 묶음의 기본 테두리와 여백을 제거 */
+.chat-controls {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}

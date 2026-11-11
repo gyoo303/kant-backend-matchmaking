@@ -36,6 +36,55 @@
       <ul id="team-b-members"></ul>
     </section>
   </div>
+  
+  {# 현재 참가자에게 표시할 채팅 영역 #}
+  <section id="room-chat" aria-labelledby="chat-heading" hidden>
+    <h2 id="chat-heading">방 채팅</h2>
+    <p class="muted">
+      채팅은 저장되지 않으며 새로고침하면 사라집니다.
+    </p>
+
+    {# 이 화면의 실시간 연결 상태 #}
+    <p id="chat-status" class="muted" role="status">
+      실시간 연결이 필요합니다.
+    </p>
+
+    {# 현재 화면에서 받은 메시지 #}
+    <p id="chat-empty" class="muted">아직 받은 메시지가 없습니다.</p>
+    <ul
+      id="chat-messages"
+      class="chat-messages"
+      role="log"
+      aria-label="받은 채팅 메시지"
+      aria-live="polite"
+      aria-relevant="additions"
+    ></ul>
+
+    {# 채팅 처리 결과 안내 #}
+    <p id="chat-notice" class="notice" role="status" hidden></p>
+
+    {# 연결 준비 이후 사용할 메시지 입력 영역 #}
+    <form id="chat-form">
+      <fieldset
+        id="chat-controls"
+        class="form-row chat-controls"
+        aria-label="채팅 입력"
+        disabled
+      >
+        <div class="form-field">
+          <label for="chat-input">메시지</label>
+          <input
+            id="chat-input"
+            name="content"
+            type="text"
+            autocomplete="off"
+            required
+          >
+        </div>
+        <button type="submit" id="chat-send-button">전송</button>
+      </fieldset>
+    </form>
+  </section>
 
   <div class="room-actions">
     {# 참가자만 #}
