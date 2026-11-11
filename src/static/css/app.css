@@ -601,4 +601,7 @@ td { color: var(--color-text-muted); }
   margin: 0;
   padding: 0;
   min-width: 0;
+
+  /* 입력 묶음과 전송 버튼의 아래쪽을 맞춤 */
+  align-items: flex-end;
 }
